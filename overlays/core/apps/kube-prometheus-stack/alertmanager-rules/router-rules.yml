@@ -1,0 +1,106 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+    name: router
+    namespace: kube-prometheus-stack
+    labels:
+        release: kube-prometheus-stack
+spec:
+    groups:
+        - name: router
+          rules:
+              # An exporter that stops answering is already caught by the chart's TargetDown rule (the
+              # job is mktxp), these cover what it cannot see. The series carry cluster="core" only
+              # because of the default scrape class: the router is not part of a cluster.
+              #
+              # The job has no target at all (Deployment or ServiceMonitor gone): TargetDown needs a
+              # target to count, and the job exists only on core, so absent() is not masked by another
+              # cluster.
+              - alert: RouterExporterMissing
+                expr: absent(up{job="mktxp"})
+                for: 10m
+                labels:
+                    severity: warning
+                annotations:
+                    summary: "router: the MKTXP exporter is not scraped anymore"
+                    description: "Prometheus has no target for the job mktxp: check the mktxp Deployment and its ServiceMonitor. The router is not monitored."
+              # The exporter answers but reports nothing about the router (it exposes no mktxp_ series when
+              # it cannot log in). The wait covers a router reboot and the retry delay of the exporter after
+              # a failure, up to 15 minutes.
+              - alert: RouterUnreachable
+                expr: up{job="mktxp"} == 1 unless on (job) mktxp_system_identity_info
+                for: 15m
+                labels:
+                    severity: warning
+                annotations:
+                    summary: "router: the exporter cannot read the router API"
+                    description: "Check the api-ssl service of the router (enabled, certificate, source addresses), the input rule api-ssl-from-core, the mktxp user (enabled, password identical in the Network .env and the mktxp-credentials secret), then the exporter logs."
+              # The uptime restarts from zero: it is lower than 15 minutes ago only for the 15 minutes
+              # that follow a reboot.
+              - alert: RouterRestarted
+                expr: mktxp_system_uptime < mktxp_system_uptime offset 15m
+                labels:
+                    severity: warning
+                annotations:
+                    summary: "router: restarted {{ $value | humanizeDuration }} ago"
+                    description: "The router rebooted: a power cut, a RouterOS upgrade or a crash. Every VLAN, the NAT and the HAProxy container were interrupted."
+              # The router CA and its HTTPS certificate: OpenTofu and the exporter check them, so an
+              # expired one breaks both. Renew as in the runbook of the Network repository, then refresh
+              # certs/router-ca.pem and the router-ca.pem of the mktxp-config ConfigMap.
+              - alert: RouterCertificateExpiringSoon
+                expr: mktxp_certificate_expiration_timestamp_seconds - time() < 30 * 24 * 3600
+                for: 1h
+                labels:
+                    severity: warning
+                annotations:
+                    summary: "router: certificate {{ $labels.name }} expires soon"
+                    description: "The certificate expires in {{ $value | humanizeDuration }}."
+              - alert: RouterCertificateExpiringSoon
+                expr: mktxp_certificate_expiration_timestamp_seconds - time() < 7 * 24 * 3600
+                for: 1h
+                labels:
+                    severity: critical
+                annotations:
+                    summary: "router: certificate {{ $labels.name }} expires in less than a week"
+                    description: "The certificate expires in {{ $value | humanizeDuration }}: OpenTofu and the exporter will stop trusting the router."
+              - alert: RouterHighCpuLoad
+                expr: mktxp_system_cpu_load > 90
+                for: 15m
+                labels:
+                    severity: warning
+                annotations:
+                    summary: "router: CPU load at {{ $value }}%"
+                    description: "The router has been above 90% for 15 minutes: look at the firewall log rules and the HAProxy container."
+              - alert: RouterLowMemory
+                expr: mktxp_system_free_memory / mktxp_system_total_memory < 0.10
+                for: 15m
+                labels:
+                    severity: warning
+                annotations:
+                    summary: "router: {{ $value | humanizePercentage }} of the memory is free"
+                    description: "Less than 10% of the memory has been free for 15 minutes: check the HAProxy container."
+              # The flash holds the configuration and the container files: a write fails when it is full.
+              - alert: RouterLowStorage
+                expr: mktxp_system_free_hdd_space / mktxp_system_total_hdd_space < 0.10
+                for: 30m
+                labels:
+                    severity: warning
+                annotations:
+                    summary: "router: {{ $value | humanizePercentage }} of the storage is free"
+                    description: "Remove the old files and backups of the router (`/file print`)."
+              - alert: RouterTemperatureHigh
+                expr: mktxp_system_routerboard_temperature > 65
+                for: 10m
+                labels:
+                    severity: warning
+                annotations:
+                    summary: "router: board temperature at {{ $value }}°C"
+                    description: "The board has been above 65°C for 10 minutes: check the ventilation of the rack."
+              - alert: RouterTemperatureHigh
+                expr: mktxp_system_routerboard_temperature > 75
+                for: 10m
+                labels:
+                    severity: critical
+                annotations:
+                    summary: "router: board temperature at {{ $value }}°C"
+                    description: "The board has been above 75°C for 10 minutes: the router may shut down, check the ventilation of the rack."
