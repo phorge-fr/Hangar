@@ -6,5 +6,6 @@ resources:
     - kube-prometheus-stack
     - longhorn
     - loki
+    - mktxp
     - openfga
     - uptime-kuma

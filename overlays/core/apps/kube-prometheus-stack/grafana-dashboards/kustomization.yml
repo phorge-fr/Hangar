@@ -11,3 +11,4 @@ resources:
     - incus-logs-dashboard.yml
     - authentik-dashboard.yml
     - openfga-dashboard.yml
+    - mktxp-dashboard.yml
