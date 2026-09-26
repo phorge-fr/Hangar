@@ -6,3 +6,4 @@ resources:
     - flux-rules.yml
     - ceph-rules.yml
     - incus-rules.yml
+    - router-rules.yml
