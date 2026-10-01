@@ -22,7 +22,7 @@ spec:
     chart:
         spec:
             chart: traefik
-            version: 41.6.0
+            version: 41.6.1
             sourceRef:
                 kind: HelmRepository
                 name: traefik
@@ -70,7 +70,7 @@ spec:
     chart:
         spec:
             chart: traefik
-            version: 41.6.0
+            version: 41.6.1
             sourceRef:
                 kind: HelmRepository
                 name: traefik
