@@ -12,3 +12,4 @@ resources:
     - authentik-dashboard.yml
     - openfga-dashboard.yml
     - mktxp-dashboard.yml
+    - clusters-overview-dashboard.yml

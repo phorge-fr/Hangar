@@ -1,0 +1,646 @@
+# Single page to compare CPU, memory, disk and network traffic across every plan of the infra at a glance,
+# instead of opening each plan's own Kubernetes/node dashboard. Built on node-exporter only, since it is the
+# one set of metrics every plan reports (control/core/svc via kube-prometheus-stack, comp and stor via Alloy) -
+# kube_node_info and friends do not exist on comp/stor, which are not Kubernetes.
+#
+# Disk uses the largest non-pseudo filesystem per node (topk 1), not "/": stor's real capacity is its RAID
+# array at /mnt/main, not the boot SD card, and this picks the right one per node without hardcoding paths.
+# Network excludes loopback, pod veths (Cilium's lxc*, Incus/OVN's genev_sys_*/incusovn*/ovs-system) and
+# container bridges (docker0, br-*) - the same device list the alloy-compute.alloy config already excludes
+# for comp, extended to the k0s and stor interface names seen live.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: clusters-overview-dashboard
+    namespace: kube-prometheus-stack
+    annotations:
+        grafana_folder: "Cluster health"
+    labels:
+        grafana_dashboard: "1"
+data:
+    clusters-overview.json: |
+        {
+          "uid": "clusters-overview",
+          "title": "Clusters overview",
+          "description": "At-a-glance CPU, memory, disk and network traffic per plan of the infra (control, core, svc, comp, stor), aggregated from node-exporter so every plan reports the same way regardless of what runs on it.",
+          "tags": [
+            "overview"
+          ],
+          "schemaVersion": 39,
+          "version": 1,
+          "editable": true,
+          "graphTooltip": 1,
+          "refresh": "1m",
+          "time": {
+            "from": "now-6h",
+            "to": "now"
+          },
+          "timezone": "browser",
+          "annotations": {
+            "list": []
+          },
+          "links": [],
+          "panels": [
+            {
+              "id": 1,
+              "type": "row",
+              "title": "CPU",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 2,
+              "type": "bargauge",
+              "title": "CPU usage",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "100 * (1 - avg by (cluster) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+                  "range": false,
+                  "instant": true,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 70
+                      },
+                      {
+                        "color": "red",
+                        "value": 85
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 3,
+              "type": "timeseries",
+              "title": "CPU usage over time",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "100 * (1 - avg by (cluster) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 4,
+              "type": "row",
+              "title": "Memory",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 9
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 5,
+              "type": "bargauge",
+              "title": "Memory usage",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 10
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "100 * (1 - sum by (cluster) (node_memory_MemAvailable_bytes) / sum by (cluster) (node_memory_MemTotal_bytes))",
+                  "range": false,
+                  "instant": true,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 70
+                      },
+                      {
+                        "color": "red",
+                        "value": 85
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 6,
+              "type": "timeseries",
+              "title": "Memory usage over time",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 10
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "100 * (1 - sum by (cluster) (node_memory_MemAvailable_bytes) / sum by (cluster) (node_memory_MemTotal_bytes))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 7,
+              "type": "row",
+              "title": "Disk",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 18
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 8,
+              "type": "bargauge",
+              "title": "Disk usage (largest filesystem per node)",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 19
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "100 * (1 - (sum by (cluster) (topk by (cluster, instance) (1, node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|devtmpfs\"}))) / (sum by (cluster) (topk by (cluster, instance) (1, node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|devtmpfs\"}))))",
+                  "range": false,
+                  "instant": true,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 70
+                      },
+                      {
+                        "color": "red",
+                        "value": 85
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 9,
+              "type": "timeseries",
+              "title": "Disk usage over time",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 19
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "100 * (1 - (sum by (cluster) (topk by (cluster, instance) (1, node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs|devtmpfs\"}))) / (sum by (cluster) (topk by (cluster, instance) (1, node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs|devtmpfs\"}))))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "min": 0,
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 10,
+              "type": "row",
+              "title": "Network traffic",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 27
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 11,
+              "type": "bargauge",
+              "title": "Network in",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 6,
+                "x": 0,
+                "y": 28
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (cluster) (rate(node_network_receive_bytes_total{device!~\"^(lo|veth.+|tap.+|vnet.+|genev_sys_.+|ovs-system|br-.+|incusovn.+|docker0|cilium_.+|lxc[0-9a-f]+|lxc_health)$\"}[5m]))",
+                  "range": false,
+                  "instant": true,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 12,
+              "type": "bargauge",
+              "title": "Network out",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 6,
+                "x": 6,
+                "y": 28
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (cluster) (rate(node_network_transmit_bytes_total{device!~\"^(lo|veth.+|tap.+|vnet.+|genev_sys_.+|ovs-system|br-.+|incusovn.+|docker0|cilium_.+|lxc[0-9a-f]+|lxc_health)$\"}[5m]))",
+                  "range": false,
+                  "instant": true,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "orientation": "horizontal",
+                "displayMode": "gradient",
+                "showUnfilled": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 13,
+              "type": "timeseries",
+              "title": "Network in over time",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 6,
+                "x": 12,
+                "y": 28
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (cluster) (rate(node_network_receive_bytes_total{device!~\"^(lo|veth.+|tap.+|vnet.+|genev_sys_.+|ovs-system|br-.+|incusovn.+|docker0|cilium_.+|lxc[0-9a-f]+|lxc_health)$\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "min": 0,
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 14,
+              "type": "timeseries",
+              "title": "Network out over time",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 6,
+                "x": 18,
+                "y": 28
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (cluster) (rate(node_network_transmit_bytes_total{device!~\"^(lo|veth.+|tap.+|vnet.+|genev_sys_.+|ovs-system|br-.+|incusovn.+|docker0|cilium_.+|lxc[0-9a-f]+|lxc_health)$\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{cluster}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "min": 0,
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            }
+          ]
+        }
