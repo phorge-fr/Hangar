@@ -5,7 +5,7 @@
         ":semanticCommits"
     ],
     "baseBranchPatterns": [
-        "dev"
+        "main"
     ],
     "prHourlyLimit": 0,
     "prConcurrentLimit": 0,
@@ -39,6 +39,19 @@
                 "code.forgejo.org/forgejo/forgejo"
             ],
             "groupName": "forgejo image"
+        },
+        {
+            "description": "Chart/CRD bumps on stateful or cluster-critical apps: never automerge, even if config:recommended's defaults change, since a schema/values change here needs a live test before merging (see docs/runbook or the Flux-suspend-decrypt-apply convention).",
+            "matchPackageNames": [
+                "kube-prometheus-stack",
+                "prometheus-operator-crds",
+                "cert-manager",
+                "crossplane",
+                "longhorn",
+                "loki",
+                "alloy"
+            ],
+            "automerge": false
         }
     ]
 }
