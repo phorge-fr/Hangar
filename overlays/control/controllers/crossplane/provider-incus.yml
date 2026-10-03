@@ -9,3 +9,5 @@ metadata:
     name: provider-incus
 spec:
     package: xpkg.upbound.io/l-nmch/provider-incus:v0.1.3
+    runtimeConfigRef:
+        name: provider-incus

@@ -5,3 +5,4 @@ resources:
     - provider-incus.yml
     - provider-incus-secret.yml
     - provider-incus-providerconfig.yml
+    - provider-incus-runtimeconfig.yml
