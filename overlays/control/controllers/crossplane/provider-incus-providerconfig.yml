@@ -1,0 +1,33 @@
+# ProviderConfig for provider-incus (provider-incus.yml). Points at the public iaas.phorge.fr
+# endpoint on its normal HTTPS port, not comp-ew directly: the router dst-NATs public 443 to
+# HAProxy's own :8443 listener (templates/haproxy.cfg.tftpl in the Network repo), which then
+# routes by SNI straight to the Incus cluster's TLS - dialing the node's real 8443 from outside
+# the containers network just times out, nothing forwards it there.
+#
+# Using this hostname also means the certificate's one DNS SAN (iaas.phorge.fr) actually matches,
+# so the connection gets normal CA-verified TLS. accept_remote_certificate is still required
+# anyway: provider-incus always runs its own trust-on-first-use check regardless of the
+# certificate being otherwise valid, so this is about using the right name, not skipping
+# verification that would otherwise happen.
+#
+# Trade-off accepted: control-to-comp Crossplane traffic leaves the network and comes back in
+# through the router instead of staying east-west, and depends on the WAN link being up. Revisit
+# with a direct comp-ew route if that ever matters.
+#
+# Trust itself comes from the client certificate (added to the cluster's trust store by hand, not
+# via Ansible/Terraform yet): any TLS client holding it is already authorized, same model as the
+# "students-provisioner" certificate already trusted on this cluster.
+#
+# Verified live (2026-10-03): a throwaway Project reconciled Ready=True through this
+# ProviderConfig and showed up in `incus project list`, then cleaned up the same way.
+apiVersion: incus.crossplane.io/v1beta1
+kind: ProviderConfig
+metadata:
+    name: default
+spec:
+    credentials:
+        source: Secret
+        secretRef:
+            namespace: crossplane-system
+            name: provider-incus-creds
+            key: credentials
