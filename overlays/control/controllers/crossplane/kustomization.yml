@@ -6,3 +6,4 @@ resources:
     - provider-incus-secret.yml
     - provider-incus-providerconfig.yml
     - provider-incus-runtimeconfig.yml
+    - provider-incus-podmonitor.yml

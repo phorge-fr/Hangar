@@ -1,0 +1,23 @@
+# provider-incus's own Service only exposes its webhook port (9443) - it's generated and owned by
+# Crossplane's ProviderRevision controller, DeploymentRuntimeConfig's serviceTemplate can only
+# override its metadata, not add a port, and hand-editing it would just get reverted. A PodMonitor
+# scrapes the pod directly instead, no Service needed. Alloy on control watches PodMonitor CRDs
+# cluster-wide with no label filter (base/controllers/alloy/alloy.yml) and forwards to core, same
+# mechanism already used for comp.
+#
+# Selects on pkg.crossplane.io/provider rather than pkg.crossplane.io/revision: the revision label
+# changes on every new package revision (an upgrade, a RuntimeConfig change like #124), the
+# provider name does not.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+    name: provider-incus
+    namespace: crossplane-system
+spec:
+    selector:
+        matchLabels:
+            pkg.crossplane.io/provider: provider-incus
+    podMetricsEndpoints:
+        - port: metrics
+          path: /metrics
+          interval: 30s
