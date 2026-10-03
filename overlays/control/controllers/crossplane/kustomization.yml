@@ -3,3 +3,5 @@ kind: Kustomization
 resources:
     - crossplane.yml
     - provider-incus.yml
+    - provider-incus-secret.yml
+    - provider-incus-providerconfig.yml
