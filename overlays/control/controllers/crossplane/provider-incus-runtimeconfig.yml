@@ -1,0 +1,24 @@
+# Tunes provider-incus specifically, so other providers added later don't inherit this (the
+# cluster's "default" DeploymentRuntimeConfig, which provider-incus used before this file, stays
+# untouched and empty).
+#
+# --poll (cmd/provider/main.go in l-nmch/provider-incus) defaults to 10m: how often each managed
+# resource is re-observed for drift against the real Incus state. That is very conservative for an
+# interactive/demo workload - deleting an instance by hand on Incus directly took up to 10 minutes
+# to be noticed and recreated (verified live, 2026-10-03). 1m matches the Crossplane-wide
+# convention used elsewhere in this repo without adding a meaningful amount of API load on
+# iaas.phorge.fr.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+    name: provider-incus
+spec:
+    deploymentTemplate:
+        spec:
+            selector: {}
+            template:
+                spec:
+                    containers:
+                        - name: package-runtime
+                          args:
+                              - --poll=1m
