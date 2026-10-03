@@ -19,7 +19,7 @@ metadata:
     name: rustfs-dashboard
     namespace: kube-prometheus-stack
     annotations:
-        grafana_folder: "Compute"
+        grafana_folder: "Storage"
     labels:
         grafana_dashboard: "1"
 data:
