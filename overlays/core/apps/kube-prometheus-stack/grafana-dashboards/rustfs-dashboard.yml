@@ -1,0 +1,1563 @@
+# RustFS (S3-compatible object store on stor-rpi5-01, the Longhorn/Forgejo backup target).
+#
+# Adapted from RustFS's own dashboard (github.com/rustfs/rustfs, .docker/observability/grafana/dashboards/rustfs.json,
+# schemaVersion 42/version 16 at the time): checked every one of its 142 panels against what this exporter actually
+# serves (358 series, 2026-10-03). Only ~14 transplant as-is (uptime, bucket size/objects, CPU, memory, host network,
+# process disk I/O, replication, object lock). The other ~128 need metrics this build does not export: S3 operation
+# counters (rustfs_s3_*, rustfs_http_server_*), compression, the scanner, the log cleaner, the bytes pool, and a
+# rustfs:storage:current/rustfs:storage_snapshot:fresh recording-rule pair with collection_scope/observer/source_metric
+# labels that RustFS's own Prometheus rules file would need to generate it - not deployed here. Re-check the upstream
+# file if the image version or rustfs_config changes and more of that instrumentation turns up live.
+#
+# The remaining panels (capacity, drive and erasure set health, per-bucket size) are hand-written against the
+# metrics this exporter actually has, since the upstream equivalents all depend on that missing recording-rule set.
+# stor-rpi5-01 has one RustFS "drive" (/data, the RAID array) and one erasure set (pool 0, set 0): multi-drive panels
+# will need revisiting if that changes.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: rustfs-dashboard
+    namespace: kube-prometheus-stack
+    annotations:
+        grafana_folder: "Compute"
+    labels:
+        grafana_dashboard: "1"
+data:
+    rustfs.json: |
+        {
+          "uid": "rustfs",
+          "title": "RustFS",
+          "description": "The S3-compatible object store on stor-rpi5-01: cluster capacity, drive and erasure set health, buckets, node CPU/memory/network, and replication (not configured yet). Adapted from RustFS's own dashboard (github.com/rustfs/rustfs/.docker/observability/grafana/dashboards/rustfs.json): most of its 142 panels need metrics this build doesn't export (S3 operation counters, compression, scanner, log-cleaner, a storage-snapshot recording-rule set) - see the comment at the top of this file.",
+          "tags": [
+            "rustfs"
+          ],
+          "schemaVersion": 39,
+          "version": 1,
+          "editable": true,
+          "graphTooltip": 1,
+          "refresh": "1m",
+          "time": {
+            "from": "now-6h",
+            "to": "now"
+          },
+          "timezone": "browser",
+          "annotations": {
+            "list": []
+          },
+          "links": [],
+          "panels": [
+            {
+              "id": 1,
+              "type": "row",
+              "title": "Overview",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 2,
+              "type": "stat",
+              "title": "Uptime",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_system_process_uptime_seconds{job=\"rustfs\"}",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 3,
+              "type": "stat",
+              "title": "Drives online",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_cluster_health_drives_online_count{job=\"rustfs\"}",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "red",
+                        "value": null
+                      },
+                      {
+                        "color": "green",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 4,
+              "type": "stat",
+              "title": "Drives offline",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_cluster_health_drives_offline_count{job=\"rustfs\"}",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 5,
+              "type": "stat",
+              "title": "Object lock diagnostics",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "max(rustfs_object_lock_diag_enabled{job=\"rustfs\"})",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "mappings": [
+                    {
+                      "type": "value",
+                      "options": {
+                        "0": {
+                          "text": "Disabled"
+                        },
+                        "1": {
+                          "text": "Enabled"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 6,
+              "type": "row",
+              "title": "Capacity & buckets",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 5
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 7,
+              "type": "gauge",
+              "title": "Capacity used",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 6
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_cluster_capacity_used_bytes{job=\"rustfs\"} / rustfs_cluster_capacity_raw_total_bytes{job=\"rustfs\"}",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "min": 0,
+                  "max": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 0.7
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.85
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showThresholdLabels": false,
+                "showThresholdMarkers": true,
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 8,
+              "type": "stat",
+              "title": "Buckets",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 8,
+                "y": 6
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_cluster_buckets_total{job=\"rustfs\"}",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 9,
+              "type": "stat",
+              "title": "Objects",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 12,
+                "y": 6
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_cluster_objects_total{job=\"rustfs\"}",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 10,
+              "type": "stat",
+              "title": "Capacity free",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 8,
+                "y": 10
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_cluster_capacity_free_bytes{job=\"rustfs\"}",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 11,
+              "type": "stat",
+              "title": "Capacity total (raw)",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 12,
+                "y": 10
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_cluster_capacity_raw_total_bytes{job=\"rustfs\"}",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 12,
+              "type": "timeseries",
+              "title": "Bucket size",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 6
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "max by (bucket) (rustfs_cluster_usage_buckets_total_bytes{job=\"rustfs\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{bucket}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never",
+                    "stacking": {
+                      "mode": "none"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 13,
+              "type": "row",
+              "title": "Drives",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 14
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 14,
+              "type": "timeseries",
+              "title": "Drive capacity",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 15
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_system_drive_used_bytes{job=\"rustfs\"}",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{drive}} used"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_system_drive_free_bytes{job=\"rustfs\"}",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{drive}} free"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never",
+                    "stacking": {
+                      "mode": "normal"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 15,
+              "type": "timeseries",
+              "title": "Drive utilization and errors",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 15
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_system_drive_perc_util{job=\"rustfs\"}",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{drive}} util %"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rate(rustfs_system_drive_io_errors_total{job=\"rustfs\"}[5m])",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{drive}} errors/s"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never",
+                    "stacking": {
+                      "mode": "none"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 16,
+              "type": "table",
+              "title": "Drive and erasure set health",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 6,
+                "w": 24,
+                "x": 0,
+                "y": 23
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "label_replace(rustfs_system_drive_health{job=\"rustfs\"}, \"check\", \"drive\", \"\", \"\") or label_replace(rustfs_cluster_erasure_set_health{job=\"rustfs\"}, \"check\", \"erasure_set\", \"\", \"\") or label_replace(rustfs_cluster_erasure_set_read_health{job=\"rustfs\"}, \"check\", \"erasure_set_read\", \"\", \"\") or label_replace(rustfs_cluster_erasure_set_write_health{job=\"rustfs\"}, \"check\", \"erasure_set_write\", \"\", \"\")",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": false
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Unhealthy",
+                                "color": "red"
+                              },
+                              "1": {
+                                "text": "Healthy",
+                                "color": "green"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      },
+                      {
+                        "id": "thresholds",
+                        "value": {
+                          "mode": "absolute",
+                          "steps": [
+                            {
+                              "color": "red",
+                              "value": null
+                            },
+                            {
+                              "color": "green",
+                              "value": 1
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "transformations": [
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true,
+                      "__name__": true,
+                      "cluster": true,
+                      "job": true
+                    },
+                    "renameByName": {
+                      "Value": "Value",
+                      "drive": "Drive",
+                      "instance": "Node",
+                      "server": ""
+                    }
+                  }
+                }
+              ],
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              }
+            },
+            {
+              "id": 17,
+              "type": "row",
+              "title": "CPU & memory",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 29
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 18,
+              "type": "timeseries",
+              "title": "CPU usage and load",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 30
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(rustfs_system_process_cpu_usage{job=\"rustfs\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "process cpu usage %"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "rustfs_system_cpu_load_perc{job=\"rustfs\"}",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "system load %"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percent",
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never",
+                    "stacking": {
+                      "mode": "none"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 19,
+              "type": "timeseries",
+              "title": "Memory split",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 30
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(rustfs_memory_process_resident_bytes{job=\"rustfs\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "resident"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(rustfs_memory_process_virtual_bytes{job=\"rustfs\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "virtual"
+                },
+                {
+                  "refId": "C",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(rustfs_memory_cgroup_anon_bytes{job=\"rustfs\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "cgroup anon"
+                },
+                {
+                  "refId": "D",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(rustfs_memory_cgroup_file_bytes{job=\"rustfs\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "cgroup file"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never",
+                    "stacking": {
+                      "mode": "none"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 20,
+              "type": "row",
+              "title": "Network & disk I/O",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 38
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 21,
+              "type": "timeseries",
+              "title": "Host network throughput",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 39
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(rate(rustfs_system_network_host_network_io{job=\"rustfs\", direction=\"received\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "received"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(rate(rustfs_system_network_host_network_io{job=\"rustfs\", direction=\"transmitted\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "transmitted"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never",
+                    "stacking": {
+                      "mode": "none"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 22,
+              "type": "timeseries",
+              "title": "Host network by interface",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 39
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (interface) (rate(rustfs_system_network_host_network_io_per_interface{job=\"rustfs\", direction=\"received\", interface!=\"lo\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{interface}} rx"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (interface) (rate(rustfs_system_network_host_network_io_per_interface{job=\"rustfs\", direction=\"transmitted\", interface!=\"lo\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{interface}} tx"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "Bps",
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never",
+                    "stacking": {
+                      "mode": "none"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 23,
+              "type": "timeseries",
+              "title": "Process disk I/O",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 39
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (direction) (rustfs_system_process_disk_io{job=\"rustfs\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{direction}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "custom": {
+                    "fillOpacity": 10,
+                    "lineWidth": 2,
+                    "showPoints": "never",
+                    "stacking": {
+                      "mode": "none"
+                    }
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi"
+                }
+              }
+            },
+            {
+              "id": 24,
+              "type": "row",
+              "title": "Replication (not configured yet)",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 47
+              },
+              "collapsed": true,
+              "panels": [
+                {
+                  "id": 25,
+                  "type": "timeseries",
+                  "title": "Replication workers",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 0
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_current_active_workers{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "current"
+                    },
+                    {
+                      "refId": "B",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_average_active_workers{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "average"
+                    },
+                    {
+                      "refId": "C",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_max_active_workers{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "max"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "short",
+                      "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "stacking": {
+                          "mode": "none"
+                        }
+                      }
+                    },
+                    "overrides": []
+                  },
+                  "options": {
+                    "legend": {
+                      "displayMode": "list",
+                      "placement": "bottom"
+                    },
+                    "tooltip": {
+                      "mode": "multi"
+                    }
+                  }
+                },
+                {
+                  "id": 26,
+                  "type": "timeseries",
+                  "title": "Replication data transfer rate",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 0
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_current_data_transfer_rate{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "current"
+                    },
+                    {
+                      "refId": "B",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_average_data_transfer_rate{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "average"
+                    },
+                    {
+                      "refId": "C",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_max_data_transfer_rate{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "max"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "binBps",
+                      "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "stacking": {
+                          "mode": "none"
+                        }
+                      }
+                    },
+                    "overrides": []
+                  },
+                  "options": {
+                    "legend": {
+                      "displayMode": "list",
+                      "placement": "bottom"
+                    },
+                    "tooltip": {
+                      "mode": "multi"
+                    }
+                  }
+                },
+                {
+                  "id": 27,
+                  "type": "timeseries",
+                  "title": "Replication queue count",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_last_minute_queued_count{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "last minute"
+                    },
+                    {
+                      "refId": "B",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_average_queued_count{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "average"
+                    },
+                    {
+                      "refId": "C",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_max_queued_count{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "max"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "short",
+                      "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "stacking": {
+                          "mode": "none"
+                        }
+                      }
+                    },
+                    "overrides": []
+                  },
+                  "options": {
+                    "legend": {
+                      "displayMode": "list",
+                      "placement": "bottom"
+                    },
+                    "tooltip": {
+                      "mode": "multi"
+                    }
+                  }
+                },
+                {
+                  "id": 28,
+                  "type": "timeseries",
+                  "title": "Replication queue bytes and backlog",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 8
+                  },
+                  "targets": [
+                    {
+                      "refId": "A",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_last_minute_queued_bytes{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "last minute bytes"
+                    },
+                    {
+                      "refId": "B",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_average_queued_bytes{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "average bytes"
+                    },
+                    {
+                      "refId": "C",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_max_queued_bytes{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "max bytes"
+                    },
+                    {
+                      "refId": "D",
+                      "datasource": {
+                        "type": "prometheus",
+                        "uid": "prometheus"
+                      },
+                      "expr": "rustfs_replication_recent_backlog_count{job=\"rustfs\"}",
+                      "range": true,
+                      "instant": false,
+                      "legendFormat": "recent backlog count"
+                    }
+                  ],
+                  "fieldConfig": {
+                    "defaults": {
+                      "unit": "bytes",
+                      "custom": {
+                        "fillOpacity": 10,
+                        "lineWidth": 2,
+                        "showPoints": "never",
+                        "stacking": {
+                          "mode": "none"
+                        }
+                      }
+                    },
+                    "overrides": []
+                  },
+                  "options": {
+                    "legend": {
+                      "displayMode": "list",
+                      "placement": "bottom"
+                    },
+                    "tooltip": {
+                      "mode": "multi"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }

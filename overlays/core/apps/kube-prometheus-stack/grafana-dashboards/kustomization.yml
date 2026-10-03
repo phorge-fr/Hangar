@@ -13,3 +13,4 @@ resources:
     - openfga-dashboard.yml
     - mktxp-dashboard.yml
     - clusters-overview-dashboard.yml
+    - rustfs-dashboard.yml
