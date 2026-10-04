@@ -1,0 +1,22 @@
+# Same reasoning as provider-incus-podmonitor.yml: Crossplane core's own metrics port (8080,
+# confirmed live by probing the pod) is not declared as a named container port (only "readyz" and
+# "webhooks" are). Selector/path/interval are right (confirmed: they match the pod, same as
+# provider-incus's working PodMonitor), but as of 2026-10-04 this does not actually scrape -
+# neither portNumber (below) nor targetPort got picked up by Alloy's native PodMonitor
+# interpretation (base/controllers/alloy/alloy.yml), unlike provider-incus's named "metrics" port.
+# Left in place since it's harmless and the fix might just be an Alloy version bump; the
+# "Crossplane core reconcile errors" panel on the Crossplane dashboard has no data until this
+# actually works. Tracked in #125.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+    name: crossplane
+    namespace: crossplane-system
+spec:
+    selector:
+        matchLabels:
+            app: crossplane
+    podMetricsEndpoints:
+        - portNumber: 8080
+          path: /metrics
+          interval: 30s

@@ -7,3 +7,4 @@ resources:
     - provider-incus-providerconfig.yml
     - provider-incus-runtimeconfig.yml
     - provider-incus-podmonitor.yml
+    - crossplane-podmonitor.yml

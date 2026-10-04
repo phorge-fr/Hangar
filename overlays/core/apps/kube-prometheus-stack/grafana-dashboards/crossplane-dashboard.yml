@@ -1,0 +1,960 @@
+# Crossplane core and its providers (control only, today just provider-incus): managed resource
+# state, controller reconcile health, work queues, and (provider-incus is Upjet-based) the
+# Terraform CLI subprocess calls behind every resource - the exact signal that would have shown
+# Hangar#95/#124's 10-minute poll interval directly, instead of needing to read the provider's
+# source and compare timestamps by hand.
+#
+# Scraped via a PodMonitor (overlays/control/controllers/crossplane/provider-incus-podmonitor.yml):
+# the provider's own Service is Crossplane-managed and only exposes its webhook port, so a
+# ServiceMonitor was not an option. Crossplane core itself is not scraped yet (Hangar#125).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: crossplane-dashboard
+    namespace: kube-prometheus-stack
+    annotations:
+        grafana_folder: "Cluster health"
+    labels:
+        grafana_dashboard: "1"
+data:
+    crossplane.json: |
+        {
+          "uid": "crossplane",
+          "title": "Crossplane",
+          "description": "State of Crossplane's managed resources and health of Crossplane core and its providers, on control (the only cluster running Crossplane today). Mirrors the Flux dashboard's layout. Panels under Managed resources/Upjet show no data until at least one managed resource has been reconciled at least once in the current process lifetime - these are client-side metrics with no series until first use, not a scrape problem.",
+          "tags": [
+            "crossplane"
+          ],
+          "schemaVersion": 39,
+          "version": 1,
+          "editable": true,
+          "graphTooltip": 1,
+          "refresh": "1m",
+          "time": {
+            "from": "now-6h",
+            "to": "now"
+          },
+          "timezone": "browser",
+          "annotations": {
+            "list": []
+          },
+          "links": [],
+          "panels": [
+            {
+              "id": 1,
+              "type": "row",
+              "title": "Overview",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 2,
+              "type": "stat",
+              "title": "Crossplane core reconcile errors (1h)",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(increase(controller_runtime_reconcile_total{job=\"crossplane-system/crossplane\", result=\"error\"}[1h])) or vector(0)",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "0",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 3,
+              "type": "stat",
+              "title": "provider-incus reconcile errors (1h)",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum(increase(controller_runtime_reconcile_total{job=\"crossplane-system/provider-incus\", result=\"error\"}[1h])) or vector(0)",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "0",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 4,
+              "type": "stat",
+              "title": "Managed resources not ready",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "count(crossplane_managed_resource_ready == 0) or vector(0)",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "0",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 5,
+              "type": "stat",
+              "title": "Managed resources not synced",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "count(crossplane_managed_resource_synced == 0) or vector(0)",
+                  "range": false,
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "noValue": "0",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 6,
+              "type": "row",
+              "title": "Managed resources",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 5
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 7,
+              "type": "table",
+              "title": "Managed resources by kind",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 6
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "max by (controller) (crossplane_managed_resource_exists)",
+                  "range": true,
+                  "instant": false
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "max by (controller) (crossplane_managed_resource_ready)",
+                  "range": true,
+                  "instant": false
+                },
+                {
+                  "refId": "C",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "max by (controller) (crossplane_managed_resource_synced)",
+                  "range": true,
+                  "instant": false
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": true
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value #B"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Not ready",
+                                "color": "red"
+                              },
+                              "1": {
+                                "text": "Ready",
+                                "color": "green"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value #C"
+                    },
+                    "properties": [
+                      {
+                        "id": "mappings",
+                        "value": [
+                          {
+                            "type": "value",
+                            "options": {
+                              "0": {
+                                "text": "Not ready",
+                                "color": "red"
+                              },
+                              "1": {
+                                "text": "Ready",
+                                "color": "green"
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "id": "custom.cellOptions",
+                        "value": {
+                          "type": "color-background"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "transformations": [
+                {
+                  "id": "merge",
+                  "options": {}
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "renameByName": {
+                      "controller": "Kind",
+                      "Value #A": "Exists",
+                      "Value #B": "Ready",
+                      "Value #C": "Synced"
+                    }
+                  }
+                }
+              ],
+              "options": {
+                "cellHeight": "sm",
+                "showHeader": true
+              }
+            },
+            {
+              "id": 8,
+              "type": "row",
+              "title": "Reconcile health",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 14
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 9,
+              "type": "timeseries",
+              "title": "Reconciliations per second, by controller and result",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 15
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (controller, result) (rate(controller_runtime_reconcile_total{job=~\"crossplane-system/.+\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{controller}} {{result}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 10,
+              "type": "timeseries",
+              "title": "Reconcile duration (p95), by controller",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 15
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "histogram_quantile(0.95, sum by (controller, le) (rate(controller_runtime_reconcile_time_seconds_bucket{job=~\"crossplane-system/.+\"}[5m])))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{controller}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 11,
+              "type": "timeseries",
+              "title": "Reconcile errors per second, by controller",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 23
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (controller) (rate(controller_runtime_reconcile_total{job=~\"crossplane-system/.+\", result=\"error\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{controller}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 12,
+              "type": "timeseries",
+              "title": "Work queue depth, by controller",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 23
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (controller) (workqueue_depth{job=~\"crossplane-system/.+\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{controller}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 13,
+              "type": "row",
+              "title": "Upjet / Terraform CLI (provider-incus)",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 31
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 14,
+              "type": "timeseries",
+              "title": "Active Terraform CLI invocations",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 0,
+                "y": 32
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "upjet_terraform_active_cli_invocations{job=\"crossplane-system/provider-incus\"}",
+                  "range": true,
+                  "instant": false
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 15,
+              "type": "timeseries",
+              "title": "Terraform CLI duration (p95)",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 8,
+                "y": 32
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "histogram_quantile(0.95, sum by (le) (rate(upjet_terraform_cli_duration_bucket{job=\"crossplane-system/provider-incus\"}[5m])))",
+                  "range": true,
+                  "instant": false
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 16,
+              "type": "timeseries",
+              "title": "Time to readiness (p95), by kind",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 8,
+                "x": 16,
+                "y": 32
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "histogram_quantile(0.95, sum by (controller, le) (rate(upjet_resource_ttr_bucket{job=\"crossplane-system/provider-incus\"}[30m])))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{controller}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 17,
+              "type": "row",
+              "title": "Resource usage",
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 40
+              },
+              "collapsed": false,
+              "panels": []
+            },
+            {
+              "id": 18,
+              "type": "timeseries",
+              "title": "Memory, by pod",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 41
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (job, pod) (process_resident_memory_bytes{job=~\"crossplane-system/.+\"})",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{job}} {{pod}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "bytes",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 19,
+              "type": "timeseries",
+              "title": "CPU, by pod",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 41
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "prometheus"
+                  },
+                  "expr": "sum by (job, pod) (rate(process_cpu_seconds_total{job=~\"crossplane-system/.+\"}[5m]))",
+                  "range": true,
+                  "instant": false,
+                  "legendFormat": "{{job}} {{pod}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "short",
+                  "min": 0,
+                  "custom": {
+                    "drawStyle": "line",
+                    "lineWidth": 1,
+                    "fillOpacity": 10,
+                    "showPoints": "never",
+                    "spanNulls": false
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            }
+          ]
+        }
