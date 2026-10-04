@@ -14,3 +14,4 @@ resources:
     - mktxp-dashboard.yml
     - clusters-overview-dashboard.yml
     - rustfs-dashboard.yml
+    - crossplane-dashboard.yml
