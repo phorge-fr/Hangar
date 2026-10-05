@@ -1,0 +1,22 @@
+# ProviderConfig for provider-openfga. OpenFGA on core authenticates with a pre-shared key
+# (authn.method: preshared in overlays/core/apps/openfga/openfga.yml) - same key already used by
+# Incus (authorization.client.oidc: openfga in Ansible). ca_cert pins local-root-ca (cert-manager's
+# ClusterIssuer "local-issuer", secret local-root-ca-secret in cert-manager on core): the
+# openfga.core.phorge certificate is issued by it, not a public CA, so normal verification fails
+# without it ("unable to get local issuer certificate", confirmed live) - unlike provider-incus,
+# which had no choice but accept_remote_certificate.
+#
+# Reachable from control today only because of a too-broad firewall rule (ctrl-nodes to core's
+# ingress IP on 443, meant for Alloy - see phorge-fr/Network#11), not because of a rule meant for
+# this. Revisit once that issue is resolved.
+apiVersion: openfga.crossplane.io/v1beta1
+kind: ProviderConfig
+metadata:
+    name: default
+spec:
+    credentials:
+        source: Secret
+        secretRef:
+            namespace: crossplane-system
+            name: provider-openfga-creds
+            key: credentials
