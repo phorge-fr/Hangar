@@ -1,0 +1,81 @@
+# Profile for GitHub Actions self-hosted runners: 2 vCPU, 2 GiB RAM, 64 GiB root disk, 1 NIC on
+# the dedicated gh-runners OVN network. Scaling is meant to be "create another Instance using this
+# profile and images:alpine/edge/cloud" - nothing instance-specific lives here.
+#
+# NOT fully wired yet, two things to sort out before this actually registers a runner:
+#
+# 1. github-act-runner, not the official actions/runner: the official one is .NET-based and known
+#    broken on musl/Alpine - actions/runner#801 (never supported) and actions/runner#3852 (musl
+#    detection in the Node-based actions it shells out to fails: "exec ... node: no such file or
+#    directory", the dynamic linker path glibc actions expect doesn't exist on musl). github-act-runner
+#    (github.com/ChristopherHX/github-act-runner, packaged for Alpine) is a Go reimplementation with
+#    no such dependency - but it does mean the workflows that run here need to tolerate a non-official
+#    runner (shell/container-based steps are fine, actions that assume a glibc Node toolchain on the
+#    host may not be).
+# 2. The registration token in the cloud-init below is a literal placeholder
+#    (CHANGE_ME_RUNNER_REGISTRATION_TOKEN). Registration tokens expire in about an hour, so baking a
+#    real one into this file would go stale immediately - this needs a real design (fetched at boot
+#    from somewhere that isn't this git repo, e.g. a small script calling the GitHub API with a
+#    fine-grained PAT) before this profile can actually bring up a working runner unattended. Until
+#    then, launching an instance from this profile boots a VM that fails to register and does nothing.
+#
+# NOT verified live (unlike the rest of this repo's Crossplane resources): no real registration token
+# was available to test an actual runner coming online.
+apiVersion: profile.incus.crossplane.io/v1alpha1
+kind: Profile
+metadata:
+    name: gh-runner
+    annotations:
+        crossplane.io/external-name: gh-runner
+spec:
+    forProvider:
+        config:
+            limits.cpu: "2"
+            limits.memory: "2GiB"
+            security.secureboot: "false"
+            cloud-init.user-data: |
+                #cloud-config
+                package_update: true
+                packages:
+                    - github-act-runner
+                write_files:
+                    - path: /etc/init.d/gh-runner
+                      permissions: '0755'
+                      content: |
+                          #!/sbin/openrc-run
+                          name="gh-runner"
+                          description="GitHub Actions self-hosted runner (github-act-runner)"
+                          command="/usr/bin/github-act-runner"
+                          command_args="run"
+                          command_background=true
+                          command_user="ghrunner"
+                          directory="/home/ghrunner"
+                          pidfile="/run/gh-runner.pid"
+                          output_log="/var/log/gh-runner.log"
+                          error_log="/var/log/gh-runner.log"
+                          depend() {
+                              need net
+                              after firewall
+                          }
+                runcmd:
+                    - adduser -D -h /home/ghrunner ghrunner
+                    # Registration token: placeholder, see the comment in this profile's YAML. Not wired to a
+                    # real secret yet - this VM will not actually register a runner until this is replaced.
+                    - su ghrunner -c "cd /home/ghrunner && github-act-runner new --url https://github.com/phorge-fr --name $(hostname) --labels self-hosted,phorge,alpine --token CHANGE_ME_RUNNER_REGISTRATION_TOKEN"
+                    - rc-update add gh-runner default
+                    - rc-service gh-runner start
+        device:
+            - name: root
+              type: disk
+              properties:
+                  pool: remote
+                  path: /
+                  size: 64GiB
+            - name: eth0
+              type: nic
+              properties:
+                  network: gh-runners
+        projectRef:
+            name: gh-runners
+    providerConfigRef:
+        name: default

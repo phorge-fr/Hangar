@@ -1,0 +1,32 @@
+# A tenant dedicated to GitHub Actions self-hosted runners: VM-only (limits.containers=0), its own
+# OVN network. Scaling runners is meant to be "create another Instance using the gh-runner profile"
+# - nothing here is tied to a specific runner count.
+apiVersion: project.incus.crossplane.io/v1alpha1
+kind: Project
+metadata:
+    name: gh-runners
+    annotations:
+        crossplane.io/external-name: gh-runners
+spec:
+    forProvider:
+        description: "GitHub Actions self-hosted runners"
+        config:
+            limits.containers: "0"
+            features.networks: "true"
+    providerConfigRef:
+        name: default
+---
+apiVersion: network.incus.crossplane.io/v1alpha1
+kind: Network
+metadata:
+    name: gh-runners
+spec:
+    forProvider:
+        name: gh-runners
+        type: ovn
+        config:
+            network: UPLINK
+        projectRef:
+            name: gh-runners
+    providerConfigRef:
+        name: default
