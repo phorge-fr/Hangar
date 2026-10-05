@@ -15,7 +15,7 @@ jobs:
                   ref: main
 
             - name: Self-hosted Renovate
-              uses: renovatebot/github-action@v46.3.6
+              uses: renovatebot/github-action@v46.3.7
               env:
                   RENOVATE_REPOSITORIES: '["phorge-fr/Hangar"]'
               with:
