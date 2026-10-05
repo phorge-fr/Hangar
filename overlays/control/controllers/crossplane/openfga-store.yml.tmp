@@ -5,9 +5,9 @@
 apiVersion: store.openfga.crossplane.io/v1alpha1
 kind: Store
 metadata:
-    name: iaas
+    name: hangar
 spec:
     forProvider:
-        name: iaas
+        name: hangar
     providerConfigRef:
         name: default
