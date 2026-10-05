@@ -1,68 +1,53 @@
-# A tenant dedicated to GitHub Actions self-hosted runners: VM-only (limits.containers=0), its own
-# OVN network. Scaling runners is meant to be "create another Instance using the gh-runner profile"
-# - nothing here is tied to a specific runner count.
-apiVersion: project.incus.crossplane.io/v1alpha1
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: iaas-gh-runners
+---
+apiVersion: project.incus.m.crossplane.io/v1alpha1
 kind: Project
 metadata:
     name: gh-runners
+    namespace: iaas-gh-runners
     annotations:
         crossplane.io/external-name: gh-runners
 spec:
     forProvider:
-        description: "GitHub Actions self-hosted runners"
+        description: "crossplane;;; GitHub Actions self-hosted runners"
         config:
             limits.containers: "0"
             features.networks: "true"
     providerConfigRef:
+        kind: ClusterProviderConfig
         name: default
 ---
-apiVersion: network.incus.crossplane.io/v1alpha1
+apiVersion: network.incus.m.crossplane.io/v1alpha1
 kind: Network
 metadata:
     name: gh-runners
+    namespace: iaas-gh-runners
 spec:
     forProvider:
         name: gh-runners
         type: ovn
+        description: "crossplane;;; GitHub Actions self-hosted runners"
         config:
             network: UPLINK
         projectRef:
             name: gh-runners
     providerConfigRef:
+        kind: ClusterProviderConfig
         name: default
 ---
-# Profile for GitHub Actions self-hosted runners: 2 vCPU, 2 GiB RAM, 64 GiB root disk, 1 NIC on
-# the dedicated gh-runners OVN network. Debian 13 (trixie), matching the OS already used on the k0s
-# nodes elsewhere in this infra, and the official actions/runner (github.com/actions/runner) -
-# unlike Alpine, glibc-based Debian has no compatibility problem with it.
-#
-# Scaling is meant to be "create another Instance using this profile and images:debian/13/cloud" -
-# nothing instance-specific lives here.
-#
-# cloud-init.vendor-data (static, shared by every runner: downloads and unpacks the runner binary)
-# vs cloud-init.user-data (per-instance, set on the Instance itself - see
-# gh-runner-instance.yml.example): Incus merges the two at boot. This vendor-data's own "runcmd"
-# only unpacks the runner (identical for every instance); the registration itself
-# ("config.sh ... && svc.sh install && svc.sh start", which needs the per-instance token) is the one
-# and only "runcmd" in user-data. Deliberately not combined into a single runcmd here: cloud-init's
-# default list merge strategy REPLACES lists rather than appending them, so if both vendor-data and
-# user-data defined "runcmd" the instance's would silently wipe this one instead of running after it.
-#
-# NOT fully wired yet - the registration token has nowhere safe to come from. Registration tokens
-# expire in about an hour, so baking a real one into a committed user-data would go stale
-# immediately - needs fetching at boot from somewhere that isn't this git repo before this is usable
-# unattended. See gh-runner-instance.yml.example.
-#
-# NOT verified live (unlike the rest of this repo's Crossplane resources): no real registration
-# token was available to test an actual runner coming online.
-apiVersion: profile.incus.crossplane.io/v1alpha1
+apiVersion: profile.incus.m.crossplane.io/v1alpha1
 kind: Profile
 metadata:
     name: gh-runner
+    namespace: iaas-gh-runners
     annotations:
         crossplane.io/external-name: gh-runner
 spec:
     forProvider:
+        description: "crossplane;;; GitHub Actions self-hosted runners"
         config:
             limits.cpu: "2"
             limits.memory: "2GiB"
@@ -104,4 +89,5 @@ spec:
         projectRef:
             name: gh-runners
     providerConfigRef:
+        kind: ClusterProviderConfig
         name: default
