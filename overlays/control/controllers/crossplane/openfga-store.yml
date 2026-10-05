@@ -1,0 +1,13 @@
+# A second OpenFGA store, managed declaratively via Crossplane - distinct from the one Incus
+# already uses on its own (authorization.openfga.store.id in its server config, set by hand, not
+# by this repo). Not yet used by anything; create the authorization model and relationship tuples
+# for it once there is a real consumer.
+apiVersion: store.openfga.crossplane.io/v1alpha1
+kind: Store
+metadata:
+    name: hangar
+spec:
+    forProvider:
+        name: hangar
+    providerConfigRef:
+        name: default
