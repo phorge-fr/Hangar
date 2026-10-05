@@ -4,3 +4,4 @@ resources:
     - overlay-controllers.yml
     - overlay-configs.yml
     - apps.yml
+    - resources.yml

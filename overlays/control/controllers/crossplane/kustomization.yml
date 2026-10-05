@@ -8,7 +8,7 @@ resources:
     - provider-openfga-providerconfig.yml
     - provider-incus-secret.yml
     - provider-incus-providerconfig.yml
+    - provider-incus-clusterproviderconfig.yml
     - provider-incus-runtimeconfig.yml
     - provider-incus-podmonitor.yml
     - crossplane-podmonitor.yml
-    - openfga-store.yml

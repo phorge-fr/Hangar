@@ -1,0 +1,47 @@
+# EXAMPLE, not applied by Flux (.example extension, not listed in kustomization.yml): this is
+# the "create another VM to scale runners" step the gh-runners Project/Network/Profile exist for.
+# Copy this to a real .yml, give it a unique metadata.name/external-name, and fill in a registration
+# token before applying - see the caveats in gh-runners.yml's Profile about where that token should
+# really come from (not hardcoded here for real use, this file is illustrative).
+#
+# Registration tokens expire in about an hour: generate one right before applying this
+# (Settings > Actions > Runners > New runner, on the phorge-fr org/repo), not in advance. A real
+# token was briefly pasted into a working copy of this example while writing it and had to be purged
+# before committing - never put a real one in anything that reaches git, even this example.
+#
+# ./config.sh/./svc.sh are the official runner's own setup scripts (unpacked by the profile's
+# vendor-data into /opt/actions-runner) - svc.sh installs and manages the systemd unit itself,
+# nothing hand-rolled here unlike the earlier Alpine/github-act-runner/OpenRC attempt.
+apiVersion: instance.incus.m.crossplane.io/v1alpha1
+kind: Instance
+metadata:
+    name: gh-runner-1
+    namespace: iaas-gh-runners
+    annotations:
+        crossplane.io/external-name: gh-runner-1
+spec:
+    forProvider:
+        type: virtual-machine
+        description: "crossplane;;; GitHub Actions self-hosted runner"
+        image: images:debian/13/cloud
+        profiles:
+            - gh-runner
+        config:
+            cloud-init.user-data: |
+                #cloud-config
+                runcmd:
+                    - mkdir -p /etc/actions-runner-token
+                    - |
+                      cd /opt/actions-runner && ./config.sh --unattended \
+                          --url https://github.com/phorge-fr \
+                          --token REPLACE_WITH_A_FRESH_REGISTRATION_TOKEN \
+                          --name $(hostname) \
+                          --labels self-hosted,phorge,debian \
+                          --runasservice
+                    - cd /opt/actions-runner && ./svc.sh install
+                    - cd /opt/actions-runner && ./svc.sh start
+        projectRef:
+            name: gh-runners
+    providerConfigRef:
+        kind: ClusterProviderConfig
+        name: default

@@ -20,6 +20,16 @@ clusters/      # Per-cluster Flux entrypoints and setup guides
 overlays/      # Per-cluster Kustomize overlays
 ```
 
+Each cluster's overlay is split into up to four categories, each its own Flux `Kustomization`
+with its own dependency on the previous one (`overlay-controllers` -> `overlay-configs` -> `apps`):
+
+| Category | Content |
+|----------|---------|
+| `controllers/` | Cluster-wide operators and platform components (Traefik, Alloy, Crossplane...) |
+| `configs/` | Configuration objects for controllers already installed (ClusterIssuers, StorageClasses...) |
+| `apps/` | Workloads that run in this cluster |
+| `resources/` | Resources Crossplane provisions outside this cluster (Incus, OpenFGA...), not Kubernetes workloads. Depends on `overlay-controllers` directly, not the full chain - its only real prerequisite is Crossplane and its providers being installed |
+
 ## Metrics labels
 
 Every series in the central Prometheus (on core) carries the same labels, whether it was scraped natively on core or pushed by Alloy from the other clusters and the storage node:

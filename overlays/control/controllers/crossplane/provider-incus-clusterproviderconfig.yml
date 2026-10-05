@@ -1,0 +1,17 @@
+# Namespaced managed resources (the *.incus.m.crossplane.io CRDs, scope: Namespaced) reference a
+# ClusterProviderConfig, not the plain ProviderConfig the rest of this repo's (cluster-scoped)
+# Incus resources use - confirmed live, the namespaced Project CRD's providerConfigRef defaults to
+# {kind: ClusterProviderConfig, name: default}. Same credentials, just a different config object
+# type to satisfy that reference: reuses the existing provider-incus-creds Secret, nothing new to
+# manage.
+apiVersion: incus.m.crossplane.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+    name: default
+spec:
+    credentials:
+        source: Secret
+        secretRef:
+            namespace: crossplane-system
+            name: provider-incus-creds
+            key: credentials

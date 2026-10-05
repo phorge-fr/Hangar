@@ -1,0 +1,25 @@
+# Resources that Crossplane provisions outside this cluster (Incus, OpenFGA...) - distinct from
+# overlay-controllers (the Crossplane install and its Providers/ProviderConfigs) and from apps
+# (workloads that actually run in this cluster). Depends on overlay-controllers directly, not the
+# full apps/configs chain: the only real prerequisite is Crossplane and its providers being
+# installed and healthy.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+    name: resources
+    namespace: flux-system
+spec:
+    interval: 10m0s
+    path: ./overlays/control/resources
+    sourceRef:
+        kind: GitRepository
+        name: flux-system
+    prune: true
+    wait: true
+    timeout: 5m0s
+    dependsOn:
+        - name: overlay-controllers
+    decryption:
+        provider: sops
+        secretRef:
+            name: sops-age
