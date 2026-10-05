@@ -1,0 +1,11 @@
+# Crossplane provider for OpenFGA (github.com/l-nmch/provider-openfga, published to the Upbound
+# marketplace), an Upjet port of openfga/terraform-provider-openfga. Same purpose as
+# provider-incus: no existing Crossplane provider covered OpenFGA, so this one was built the same
+# way. Credentials/ProviderConfig not set up yet: nothing in this repo creates an actual
+# *.openfga.crossplane.io resource until then.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+    name: provider-openfga
+spec:
+    package: xpkg.upbound.io/l-nmch/provider-openfga:v0.1.0

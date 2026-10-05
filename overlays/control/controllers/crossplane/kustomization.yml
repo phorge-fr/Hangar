@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
     - crossplane.yml
     - provider-incus.yml
+    - provider-openfga.yml
     - provider-incus-secret.yml
     - provider-incus-providerconfig.yml
     - provider-incus-runtimeconfig.yml
