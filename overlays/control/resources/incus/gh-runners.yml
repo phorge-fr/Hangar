@@ -2,6 +2,21 @@ apiVersion: v1
 kind: Namespace
 metadata:
     name: iaas-gh-runners
+sops:
+    age:
+        - recipient: age1ae6yk6xtlt8h40272xqxegz3t3zpvvuxj0jwy489xs6e34k0y9xsvpmt03
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBOZGZmVUR6a0lWQ3ZhMGpp
+            NzJqUjFNM3MxWU9wNWJnZG92TU9YSWNYdkZrCjlyNTBnSmZINVJTdGNCWEVhSFZ1
+            eFdjc3RtYjB3Mnd0Y0FRWmhMSUlkOHcKLS0tIEwrMDNZM3lTU0RnNnAwS1ErOVg1
+            dGdLeStaTEg0dGpFNWdkaURtQkZVd1UKBcD31vSmxsrggkTqEgXHxntubuFIJYB9
+            7jUdgH/V2hXvmph419jdwGn/xW7PqpbIkDazyzaFYiZkKFlWCC31aQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-05T22:19:41Z"
+    mac: ENC[AES256_GCM,data:0xJpbi+nu8POB4Xa1+TmPXmi3tDg8qrKaN0OiZVXmfAddQfGsEeNZ7BrsD8ACCukGl+oIYtFM6yuZpoeA7xKjrC/Vf4BBKF4BfHSNB7GDZJQh3JVTk3PPjJSfBs32IHUB+Z7ZgGQlYpQl+PSpJkxJSkJHx1ZWEFXSznSd0Uf9vU=,iv:lpuKnufOsAXsxu9hYsjgTG0yykZ8cgyF0z9DAOiqrjs=,tag:NSkqEb0O+eyGRodGfiuqjQ==,type:str]
+    encrypted_regex: ^(email|password|secret_key|data|stringData|ca|crt|key|id|secret|token|aggregatorCA|serviceAccount|bootstraptoken|secretboxencryptionsecret|secretboxEncryptionSecret|clientSecret|clientId|clientID|external-dns.alpha.kubernetes.io/target|adminPassword|metrics.crt|metrics.key|ca.crt|uri|postgresPassword|preshared|username|cloud-init.user-data|access_key|secret_key|authPass)$
+    version: 3.11.0
 ---
 apiVersion: project.incus.m.crossplane.io/v1alpha1
 kind: Project
@@ -12,13 +27,28 @@ metadata:
         crossplane.io/external-name: gh-runners
 spec:
     forProvider:
-        description: "crossplane;;; GitHub Actions self-hosted runners"
+        description: crossplane;;; GitHub Actions self-hosted runners
         config:
             limits.containers: "0"
             features.networks: "true"
     providerConfigRef:
         kind: ClusterProviderConfig
         name: default
+sops:
+    age:
+        - recipient: age1ae6yk6xtlt8h40272xqxegz3t3zpvvuxj0jwy489xs6e34k0y9xsvpmt03
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBOZGZmVUR6a0lWQ3ZhMGpp
+            NzJqUjFNM3MxWU9wNWJnZG92TU9YSWNYdkZrCjlyNTBnSmZINVJTdGNCWEVhSFZ1
+            eFdjc3RtYjB3Mnd0Y0FRWmhMSUlkOHcKLS0tIEwrMDNZM3lTU0RnNnAwS1ErOVg1
+            dGdLeStaTEg0dGpFNWdkaURtQkZVd1UKBcD31vSmxsrggkTqEgXHxntubuFIJYB9
+            7jUdgH/V2hXvmph419jdwGn/xW7PqpbIkDazyzaFYiZkKFlWCC31aQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-05T22:19:41Z"
+    mac: ENC[AES256_GCM,data:0xJpbi+nu8POB4Xa1+TmPXmi3tDg8qrKaN0OiZVXmfAddQfGsEeNZ7BrsD8ACCukGl+oIYtFM6yuZpoeA7xKjrC/Vf4BBKF4BfHSNB7GDZJQh3JVTk3PPjJSfBs32IHUB+Z7ZgGQlYpQl+PSpJkxJSkJHx1ZWEFXSznSd0Uf9vU=,iv:lpuKnufOsAXsxu9hYsjgTG0yykZ8cgyF0z9DAOiqrjs=,tag:NSkqEb0O+eyGRodGfiuqjQ==,type:str]
+    encrypted_regex: ^(email|password|secret_key|data|stringData|ca|crt|key|id|secret|token|aggregatorCA|serviceAccount|bootstraptoken|secretboxencryptionsecret|secretboxEncryptionSecret|clientSecret|clientId|clientID|external-dns.alpha.kubernetes.io/target|adminPassword|metrics.crt|metrics.key|ca.crt|uri|postgresPassword|preshared|username|cloud-init.user-data|access_key|secret_key|authPass)$
+    version: 3.11.0
 ---
 apiVersion: network.incus.m.crossplane.io/v1alpha1
 kind: Network
@@ -29,7 +59,7 @@ spec:
     forProvider:
         name: gh-runners
         type: ovn
-        description: "crossplane;;; GitHub Actions self-hosted runners"
+        description: crossplane;;; GitHub Actions self-hosted runners
         config:
             network: UPLINK
         projectRef:
@@ -37,6 +67,21 @@ spec:
     providerConfigRef:
         kind: ClusterProviderConfig
         name: default
+sops:
+    age:
+        - recipient: age1ae6yk6xtlt8h40272xqxegz3t3zpvvuxj0jwy489xs6e34k0y9xsvpmt03
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBOZGZmVUR6a0lWQ3ZhMGpp
+            NzJqUjFNM3MxWU9wNWJnZG92TU9YSWNYdkZrCjlyNTBnSmZINVJTdGNCWEVhSFZ1
+            eFdjc3RtYjB3Mnd0Y0FRWmhMSUlkOHcKLS0tIEwrMDNZM3lTU0RnNnAwS1ErOVg1
+            dGdLeStaTEg0dGpFNWdkaURtQkZVd1UKBcD31vSmxsrggkTqEgXHxntubuFIJYB9
+            7jUdgH/V2hXvmph419jdwGn/xW7PqpbIkDazyzaFYiZkKFlWCC31aQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-05T22:19:41Z"
+    mac: ENC[AES256_GCM,data:0xJpbi+nu8POB4Xa1+TmPXmi3tDg8qrKaN0OiZVXmfAddQfGsEeNZ7BrsD8ACCukGl+oIYtFM6yuZpoeA7xKjrC/Vf4BBKF4BfHSNB7GDZJQh3JVTk3PPjJSfBs32IHUB+Z7ZgGQlYpQl+PSpJkxJSkJHx1ZWEFXSznSd0Uf9vU=,iv:lpuKnufOsAXsxu9hYsjgTG0yykZ8cgyF0z9DAOiqrjs=,tag:NSkqEb0O+eyGRodGfiuqjQ==,type:str]
+    encrypted_regex: ^(email|password|secret_key|data|stringData|ca|crt|key|id|secret|token|aggregatorCA|serviceAccount|bootstraptoken|secretboxencryptionsecret|secretboxEncryptionSecret|clientSecret|clientId|clientID|external-dns.alpha.kubernetes.io/target|adminPassword|metrics.crt|metrics.key|ca.crt|uri|postgresPassword|preshared|username|cloud-init.user-data|access_key|secret_key|authPass)$
+    version: 3.11.0
 ---
 apiVersion: profile.incus.m.crossplane.io/v1alpha1
 kind: Profile
@@ -47,10 +92,10 @@ metadata:
         crossplane.io/external-name: gh-runner
 spec:
     forProvider:
-        description: "crossplane;;; GitHub Actions self-hosted runners"
+        description: crossplane;;; GitHub Actions self-hosted runners
         config:
             limits.cpu: "2"
-            limits.memory: "2GiB"
+            limits.memory: 2GiB
             security.secureboot: "false"
             cloud-init.vendor-data: |
                 #cloud-config
@@ -79,15 +124,67 @@ spec:
             - name: root
               type: disk
               properties:
-                  pool: remote
-                  path: /
-                  size: 64GiB
+                pool: remote
+                path: /
+                size: 64GiB
             - name: eth0
               type: nic
               properties:
-                  network: gh-runners
+                network: gh-runners
         projectRef:
             name: gh-runners
     providerConfigRef:
         kind: ClusterProviderConfig
         name: default
+sops:
+    age:
+        - recipient: age1ae6yk6xtlt8h40272xqxegz3t3zpvvuxj0jwy489xs6e34k0y9xsvpmt03
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBOZGZmVUR6a0lWQ3ZhMGpp
+            NzJqUjFNM3MxWU9wNWJnZG92TU9YSWNYdkZrCjlyNTBnSmZINVJTdGNCWEVhSFZ1
+            eFdjc3RtYjB3Mnd0Y0FRWmhMSUlkOHcKLS0tIEwrMDNZM3lTU0RnNnAwS1ErOVg1
+            dGdLeStaTEg0dGpFNWdkaURtQkZVd1UKBcD31vSmxsrggkTqEgXHxntubuFIJYB9
+            7jUdgH/V2hXvmph419jdwGn/xW7PqpbIkDazyzaFYiZkKFlWCC31aQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-05T22:19:41Z"
+    mac: ENC[AES256_GCM,data:0xJpbi+nu8POB4Xa1+TmPXmi3tDg8qrKaN0OiZVXmfAddQfGsEeNZ7BrsD8ACCukGl+oIYtFM6yuZpoeA7xKjrC/Vf4BBKF4BfHSNB7GDZJQh3JVTk3PPjJSfBs32IHUB+Z7ZgGQlYpQl+PSpJkxJSkJHx1ZWEFXSznSd0Uf9vU=,iv:lpuKnufOsAXsxu9hYsjgTG0yykZ8cgyF0z9DAOiqrjs=,tag:NSkqEb0O+eyGRodGfiuqjQ==,type:str]
+    encrypted_regex: ^(email|password|secret_key|data|stringData|ca|crt|key|id|secret|token|aggregatorCA|serviceAccount|bootstraptoken|secretboxencryptionsecret|secretboxEncryptionSecret|clientSecret|clientId|clientID|external-dns.alpha.kubernetes.io/target|adminPassword|metrics.crt|metrics.key|ca.crt|uri|postgresPassword|preshared|username|cloud-init.user-data|access_key|secret_key|authPass)$
+    version: 3.11.0
+---
+apiVersion: instance.incus.m.crossplane.io/v1alpha1
+kind: Instance
+metadata:
+    name: gh-runner-1
+    namespace: iaas-gh-runners
+    annotations:
+        crossplane.io/external-name: gh-runner-1
+spec:
+    forProvider:
+        type: virtual-machine
+        description: crossplane;;; GitHub Actions self-hosted runner
+        image: images:debian/13/cloud
+        profiles:
+            - gh-runner
+        config:
+            cloud-init.user-data: ENC[AES256_GCM,data:/SFsKpjnYxTUBWLnWY6rXwExg+33ThjSYeO+VkFNOfDPA35RWplUSWKhoCjDJ5ONcj518rhIOCiHradPXx3o6fEN3SzstGERZAzRy6yuvyPtZVR6HQ92jlGMp0f4kRkejA/MpPIvykR9HQv5tTq7B7CS5teh5V9X1pm1hL9udeEdKGjIAolhxkvjfjPL1ISYYjnB0rJ0rpnG9hoUJ444P3MMh3q9N+8JfUOGoaWQh9dTTG1AlDMQmNtXAp135mZCvHhV+b4cSjdGYjqCbaGXsomgtULH1PBRGsf7DqUs8dmUvTz+lcRMXxfFyEFxES5HKTxL78rk+swMwFS2ZNhsaXcVMFLgyQFcRFIAm7WP6STbZGW4+dYSC5dhFChrcDLsLV11vPixA9KpOBehQYWcU1elrL84IS/6bB9bpzKl7bjISbv3oFWp+9vuoDsI3xCk65jeHYE9KPeNMXBdCCG1BqUugZswlBXEzso+8Nl2YnEwECFeZJdats594CCJCXtckSsXEqi6UWaDVUoG3kv90t4rF6NWWyMy6OC3OTlR7pVp6M/YR0dHAWTjhzabfbrLgiwWedR3IP6Br5k45V64Zhf2wvqURMJPqAQnu9I=,iv:+iDQcdOLrgWGEDpFfys/rjzz9724lP9kyQra0GtzvX4=,tag:17x8E64T3dKDgRnKNhXwFw==,type:str]
+        projectRef:
+            name: gh-runners
+    providerConfigRef:
+        kind: ClusterProviderConfig
+        name: default
+sops:
+    age:
+        - recipient: age1ae6yk6xtlt8h40272xqxegz3t3zpvvuxj0jwy489xs6e34k0y9xsvpmt03
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBOZGZmVUR6a0lWQ3ZhMGpp
+            NzJqUjFNM3MxWU9wNWJnZG92TU9YSWNYdkZrCjlyNTBnSmZINVJTdGNCWEVhSFZ1
+            eFdjc3RtYjB3Mnd0Y0FRWmhMSUlkOHcKLS0tIEwrMDNZM3lTU0RnNnAwS1ErOVg1
+            dGdLeStaTEg0dGpFNWdkaURtQkZVd1UKBcD31vSmxsrggkTqEgXHxntubuFIJYB9
+            7jUdgH/V2hXvmph419jdwGn/xW7PqpbIkDazyzaFYiZkKFlWCC31aQ==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-10-05T22:19:41Z"
+    mac: ENC[AES256_GCM,data:0xJpbi+nu8POB4Xa1+TmPXmi3tDg8qrKaN0OiZVXmfAddQfGsEeNZ7BrsD8ACCukGl+oIYtFM6yuZpoeA7xKjrC/Vf4BBKF4BfHSNB7GDZJQh3JVTk3PPjJSfBs32IHUB+Z7ZgGQlYpQl+PSpJkxJSkJHx1ZWEFXSznSd0Uf9vU=,iv:lpuKnufOsAXsxu9hYsjgTG0yykZ8cgyF0z9DAOiqrjs=,tag:NSkqEb0O+eyGRodGfiuqjQ==,type:str]
+    encrypted_regex: ^(email|password|secret_key|data|stringData|ca|crt|key|id|secret|token|aggregatorCA|serviceAccount|bootstraptoken|secretboxencryptionsecret|secretboxEncryptionSecret|clientSecret|clientId|clientID|external-dns.alpha.kubernetes.io/target|adminPassword|metrics.crt|metrics.key|ca.crt|uri|postgresPassword|preshared|username|cloud-init.user-data|access_key|secret_key|authPass)$
+    version: 3.11.0
