@@ -3,6 +3,11 @@ extends: default
 ignore: |
     .ignore/
     clusters/*/flux-system/gotk-components.yaml
+    # SOPS re-serializes the whole file on encrypt and always emits 2-space
+    # indentation for maps nested under a sequence item, regardless of the
+    # source formatting - a structural SOPS quirk, not something fixable by
+    # reformatting the plaintext before encrypting.
+    overlays/control/resources/incus/gh-runners.yml
 
 rules:
     indentation:
