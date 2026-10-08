@@ -116,7 +116,7 @@ spec:
     chart:
         spec:
             chart: openfga
-            version: 0.3.15
+            version: 0.3.16
             sourceRef:
                 kind: HelmRepository
                 name: openfga
