@@ -1,0 +1,73 @@
+# An Instance is a virtual machine in a tenant's Incus project (containers are blocked). It runs from an
+# Image of the same tenant (spec.imageRef), never from a bare image name, see xrd-image.yml.
+# The cpu, memory and disk bounds are per instance, the tenant's plan (Tenant.spec.plan) limits are
+# enforced on top of them by the Incus project limits.
+#
+# Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+    name: instances.phorge.fr
+spec:
+    scope: Namespaced
+    group: phorge.fr
+    names:
+        kind: Instance
+        plural: instances
+    versions:
+        - name: v1alpha1
+          served: true
+          referenceable: true
+          schema:
+              openAPIV3Schema:
+                  type: object
+                  properties:
+                      spec:
+                          type: object
+                          properties:
+                              imageRef:
+                                  description: Image of the same tenant to start from.
+                                  type: object
+                                  properties:
+                                      name:
+                                          type: string
+                                          minLength: 1
+                                  required:
+                                      - name
+                              nesting:
+                                  description: Allow running VMs or containers inside this VM (security.nesting).
+                                  type: boolean
+                                  default: false
+                              cpu:
+                                  type: integer
+                                  default: 1
+                                  minimum: 1
+                                  maximum: 16
+                              memoryMiB:
+                                  type: integer
+                                  default: 1024
+                                  minimum: 256
+                                  maximum: 65536
+                              diskGiB:
+                                  type: integer
+                                  default: 10
+                                  minimum: 1
+                                  maximum: 500
+                              running:
+                                  type: boolean
+                                  default: true
+                              sshPublicKeys:
+                                  description: Injected with cloud-init, so the image must be a cloud variant (e.g. debian/13/cloud).
+                                  type: array
+                                  items:
+                                      type: string
+                                  default: []
+                          required:
+                              - imageRef
+                      status:
+                          type: object
+                          properties:
+                              state:
+                                  type: string
+                              ipv4:
+                                  type: string
