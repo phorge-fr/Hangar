@@ -1,0 +1,65 @@
+# An Image is an image pulled into a tenant's Incus project, managed by Crossplane. Instances
+# reference it (Instance.spec.imageRef) instead of naming a remote image: an instance created from a
+# bare "images:..." string makes Incus pull and cache that image in the project outside of any
+# managed resource, which then makes the project non-empty and impossible to delete.
+#
+# Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+    name: images.phorge.fr
+spec:
+    scope: Namespaced
+    group: phorge.fr
+    names:
+        kind: Image
+        plural: images
+    versions:
+        - name: v1alpha1
+          served: true
+          referenceable: true
+          schema:
+              openAPIV3Schema:
+                  type: object
+                  properties:
+                      spec:
+                          type: object
+                          properties:
+                              source:
+                                  type: object
+                                  properties:
+                                      remote:
+                                          description: Incus image remote, "images" is the linuxcontainers.org server.
+                                          type: string
+                                          default: images
+                                      name:
+                                          description: Image name on that remote, e.g. debian/13/cloud or alpine/3.22.
+                                          type: string
+                                          minLength: 1
+                                      type:
+                                          description: Tenants run virtual machines only, see composition-tenant.yml.
+                                          type: string
+                                          enum: [virtual-machine]
+                                          default: virtual-machine
+                                      architecture:
+                                          description: >-
+                                              Defaults to x86_64, the compute nodes' architecture. It has to be set
+                                              here: the provider runs on the arm64 control nodes and Incus pulls
+                                              the image for the client's architecture otherwise, which no compute
+                                              node can run ("Couldn't find a cluster member for the instance").
+                                          type: string
+                                          default: x86_64
+                                  required:
+                                      - name
+                              aliases:
+                                  type: array
+                                  items:
+                                      type: string
+                                  default: []
+                          required:
+                              - source
+                      status:
+                          type: object
+                          properties:
+                              fingerprint:
+                                  type: string

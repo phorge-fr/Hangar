@@ -18,6 +18,7 @@ GitOps repository for all Phorge Kubernetes clusters, managed with [FluxCD](http
 base/          # Shared base manifests (controllers, configs, apps)
 clusters/      # Per-cluster Flux entrypoints and setup guides
 overlays/      # Per-cluster Kustomize overlays
+docs/          # Reference pages, e.g. the phorge.fr API kinds
 ```
 
 Each cluster's overlay is split into up to four categories, each its own Flux `Kustomization`
@@ -29,6 +30,8 @@ with its own dependency on the previous one (`overlay-controllers` -> `overlay-c
 | `configs/` | Configuration objects for controllers already installed (ClusterIssuers, StorageClasses...) |
 | `apps/` | Workloads that run in this cluster |
 | `resources/` | Resources Crossplane provisions outside this cluster (Incus, OpenFGA...), not Kubernetes workloads. Depends on `overlay-controllers` directly, not the full chain - its only real prerequisite is Crossplane and its providers being installed |
+
+The multi-tenant API kinds (`Tenant`, `Image`, `Instance`, `Membership`) are documented in [docs/phorge-api.md](docs/phorge-api.md).
 
 ## Metrics labels
 

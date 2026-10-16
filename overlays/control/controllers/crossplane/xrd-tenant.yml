@@ -1,0 +1,60 @@
+# A Tenant is the isolation and quota boundary of the phorge.fr API: one Kubernetes namespace
+# ("t-<name>", where its Membership/Instance/Image resources live) backed by one Incus project of
+# the same name. The owner gets the Incus "admin" role on that project through an OpenFGA tuple in
+# the store Incus authorizes against, so the same rights apply through this API and through Incus
+# itself. The plan becomes the project's limits.* keys, enforced by Incus.
+#
+# The project is deny-by-default (restricted=true plus explicit restricted.* keys, see
+# composition-tenant.yml): VMs only, no host devices, one storage pool, one image source, no node
+# targeting, no forwards or load balancers.
+#
+# Lives in phorge-system. Namespaced XRs can only compose namespaced resources of their own
+# namespace, which is why the Namespace goes through a namespaced provider-kubernetes Object.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+    name: tenants.phorge.fr
+spec:
+    scope: Namespaced
+    group: phorge.fr
+    names:
+        kind: Tenant
+        plural: tenants
+    versions:
+        - name: v1alpha1
+          served: true
+          referenceable: true
+          schema:
+              openAPIV3Schema:
+                  type: object
+                  x-kubernetes-validations:
+                      - rule: "self.metadata.name.matches('^[a-z][a-z0-9-]{1,27}$')"
+                        message: "name must be 2 to 28 characters: lowercase letters, digits and hyphens, starting with a letter"
+                  properties:
+                      spec:
+                          type: object
+                          properties:
+                              displayName:
+                                  type: string
+                                  maxLength: 100
+                              owner:
+                                  description: Email of the owner, the OIDC claim Incus identifies users by (oidc.claim).
+                                  type: string
+                                  pattern: '^[^@\s]+@[^@\s]+$'
+                              plan:
+                                  description: >-
+                                      Quota plan, mapped to the Incus project limits by the composition:
+                                      small 1 VM / 2 vCPU / 4 GiB / 20 GiB / 1 network,
+                                      medium 3 / 4 / 8 / 100 / 2, large 6 / 8 / 16 / 250 / 3.
+                                  type: string
+                                  enum: [small, medium, large]
+                                  default: small
+                          required:
+                              - owner
+                      status:
+                          type: object
+                          properties:
+                              namespace:
+                                  type: string
+                              incusProject:
+                                  type: string
