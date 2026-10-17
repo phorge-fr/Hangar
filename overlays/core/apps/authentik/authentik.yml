@@ -25,7 +25,7 @@ spec:
             sourceRef:
                 kind: HelmRepository
                 name: authentik
-            version: 2026.8.3
+            version: 2026.8.4
     interval: 1m0s
     timeout: 10m0s
     valuesFrom:
