@@ -1,0 +1,75 @@
+# Renders the Incus Instance of an Instance, see xrd-instance.yml. It lists the tenant's "phorge"
+# profile explicitly (created by the Tenant composition): the project's own default profile is empty.
+# The root disk is overridden on the instance to apply spec.diskGiB.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+    name: instance.phorge.fr
+spec:
+    compositeTypeRef:
+        apiVersion: phorge.fr/v1alpha1
+        kind: Instance
+    mode: Pipeline
+    pipeline:
+        - step: render
+          functionRef:
+              name: function-go-templating
+          input:
+              apiVersion: gotemplating.fn.crossplane.io/v1beta1
+              kind: GoTemplate
+              source: Inline
+              inline:
+                  template: |
+                      {{- define "ready" -}}
+                      {{- $r := "False" -}}
+                      {{- range (dig "resource" "status" "conditions" (list) .) -}}
+                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $r = "True" -}}{{- end -}}
+                      {{- end -}}
+                      {{- $r -}}
+                      {{- end -}}
+                      {{- $xr := .observed.composite.resource -}}
+                      {{- if not (hasPrefix "t-" $xr.metadata.namespace) -}}
+                      {{- fail (printf "an Instance belongs in a tenant namespace (t-<name>), not %q" $xr.metadata.namespace) -}}
+                      {{- end -}}
+                      {{- $name := $xr.metadata.name -}}
+                      {{- $spec := $xr.spec -}}
+                      {{- $obs := default (dict) .observed.resources -}}
+                      {{- $inst := default (dict) (index $obs "instance") -}}
+                      {{- $ud := "#cloud-config\nssh_authorized_keys:\n" -}}
+                      {{- range $spec.sshPublicKeys }}{{ $ud = printf "%s  - %s\n" $ud . }}{{ end -}}
+                      apiVersion: instance.incus.m.crossplane.io/v1alpha1
+                      kind: Instance
+                      metadata:
+                        name: {{ $name }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: instance
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" $inst }}"
+                      spec:
+                        forProvider:
+                          project: {{ $xr.metadata.namespace }}
+                          type: virtual-machine
+                          running: {{ $spec.running }}
+                          imageRef:
+                            name: {{ $spec.imageRef.name }}
+                          profiles:
+                            - phorge
+                          config:
+                            security.nesting: {{ $spec.nesting | quote }}
+                            limits.cpu: {{ $spec.cpu | quote }}
+                            limits.memory: {{ printf "%dMiB" (int $spec.memoryMiB) | quote }}
+                            {{- if $spec.sshPublicKeys }}
+                            cloud-init.user-data: {{ $ud | quote }}
+                            {{- end }}
+                          device:
+                            - name: root
+                              type: disk
+                              properties:
+                                path: /
+                                pool: remote
+                                size: {{ printf "%dGiB" (int $spec.diskGiB) | quote }}
+                      ---
+                      apiVersion: phorge.fr/v1alpha1
+                      kind: Instance
+                      status:
+                        state: {{ dig "resource" "status" "atProvider" "status" "" $inst | quote }}
+                        ipv4: {{ dig "resource" "status" "atProvider" "ipv4Address" "" $inst | quote }}

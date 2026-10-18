@@ -1,0 +1,10 @@
+# Composition Function that loads EnvironmentConfigs into the pipeline context (crossplane-contrib,
+# upstream maintained). The phorge.fr compositions use it to read the OpenFGA store ID once,
+# instead of repeating it in each composition: a namespaced resource cannot reference the Store in
+# phorge-system by name from a tenant namespace.
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+    name: function-environment-configs
+spec:
+    package: xpkg.upbound.io/crossplane-contrib/function-environment-configs:v0.9.1

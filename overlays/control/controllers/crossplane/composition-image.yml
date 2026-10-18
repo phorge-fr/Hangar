@@ -1,0 +1,64 @@
+# Renders the Incus Image of an Image, see xrd-image.yml. The project is the namespace's own name:
+# a tenant "demo" is the namespace "t-demo" and the Incus project "t-demo".
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+    name: image.phorge.fr
+spec:
+    compositeTypeRef:
+        apiVersion: phorge.fr/v1alpha1
+        kind: Image
+    mode: Pipeline
+    pipeline:
+        - step: render
+          functionRef:
+              name: function-go-templating
+          input:
+              apiVersion: gotemplating.fn.crossplane.io/v1beta1
+              kind: GoTemplate
+              source: Inline
+              inline:
+                  template: |
+                      {{- define "ready" -}}
+                      {{- $r := "False" -}}
+                      {{- range (dig "resource" "status" "conditions" (list) .) -}}
+                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $r = "True" -}}{{- end -}}
+                      {{- end -}}
+                      {{- $r -}}
+                      {{- end -}}
+                      {{- $xr := .observed.composite.resource -}}
+                      {{- if not (hasPrefix "t-" $xr.metadata.namespace) -}}
+                      {{- fail (printf "an Image belongs in a tenant namespace (t-<name>), not %q" $xr.metadata.namespace) -}}
+                      {{- end -}}
+                      {{- $name := $xr.metadata.name -}}
+                      {{- $src := $xr.spec.source -}}
+                      {{- $obs := default (dict) .observed.resources -}}
+                      {{- $img := default (dict) (index $obs "image") -}}
+                      apiVersion: image.incus.m.crossplane.io/v1alpha1
+                      kind: Image
+                      metadata:
+                        name: {{ $name }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: image
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" $img }}"
+                      spec:
+                        forProvider:
+                          project: {{ $xr.metadata.namespace }}
+                          sourceImage:
+                            remote: {{ $src.remote }}
+                            name: {{ $src.name }}
+                            type: {{ $src.type }}
+                            {{- if $src.architecture }}
+                            architecture: {{ $src.architecture }}
+                            {{- end }}
+                          {{- if $xr.spec.aliases }}
+                          alias:
+                            {{- range $xr.spec.aliases }}
+                            - name: {{ . | quote }}
+                            {{- end }}
+                          {{- end }}
+                      ---
+                      apiVersion: phorge.fr/v1alpha1
+                      kind: Image
+                      status:
+                        fingerprint: {{ dig "resource" "status" "atProvider" "fingerprint" "" $img | quote }}
