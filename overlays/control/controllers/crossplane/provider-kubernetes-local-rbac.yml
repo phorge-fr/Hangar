@@ -1,0 +1,24 @@
+# What provider-kubernetes may do on THIS cluster (control) through the "local" ClusterProviderConfig
+# (InjectedIdentity, i.e. its own ServiceAccount): create and own the "t-<name>" namespaces of the
+# Tenant composition, nothing else. The "core" ProviderConfig has its own, separate credentials.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: provider-kubernetes-tenant-namespaces
+rules:
+    - apiGroups: [""]
+      resources: ["namespaces"]
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    name: provider-kubernetes-tenant-namespaces
+subjects:
+    - kind: ServiceAccount
+      name: provider-kubernetes
+      namespace: crossplane-system
+roleRef:
+    kind: ClusterRole
+    name: provider-kubernetes-tenant-namespaces
+    apiGroup: rbac.authorization.k8s.io

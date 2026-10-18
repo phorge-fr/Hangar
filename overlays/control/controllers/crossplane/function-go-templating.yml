@@ -1,0 +1,9 @@
+# Composition Function that renders composed resources from Go templates (crossplane-contrib,
+# upstream maintained). The phorge.fr compositions (Tenant, Image, Instance, Membership) use it to
+# template their composed Incus, OpenFGA and Kubernetes resources from the XR's spec.
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+    name: function-go-templating
+spec:
+    package: xpkg.upbound.io/crossplane-contrib/function-go-templating:v0.13.1

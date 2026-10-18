@@ -1,0 +1,72 @@
+# Renders one tuple per scope of an ApiKey, see xrd-apikey.yml. The key is the OpenFGA object
+# apikey:<tenant>.<name>, a scope "instances:write" the relation key_instances_write on
+# tenant:<tenant>.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+    name: apikey.phorge.fr
+spec:
+    compositeTypeRef:
+        apiVersion: phorge.fr/v1alpha1
+        kind: ApiKey
+    mode: Pipeline
+    pipeline:
+        - step: load-environment
+          functionRef:
+              name: function-environment-configs
+          input:
+              apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+              kind: Input
+              spec:
+                  environmentConfigs:
+                      - type: Reference
+                        ref:
+                            name: phorge
+        - step: render
+          functionRef:
+              name: function-go-templating
+          input:
+              apiVersion: gotemplating.fn.crossplane.io/v1beta1
+              kind: GoTemplate
+              source: Inline
+              inline:
+                  template: |
+                      {{- define "ready" -}}
+                      {{- $r := "False" -}}
+                      {{- range (dig "resource" "status" "conditions" (list) .) -}}
+                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $r = "True" -}}{{- end -}}
+                      {{- end -}}
+                      {{- $r -}}
+                      {{- end -}}
+                      {{- $xr := .observed.composite.resource -}}
+                      {{- $ns := $xr.metadata.namespace -}}
+                      {{- if not (hasPrefix "t-" $ns) -}}
+                      {{- fail (printf "an ApiKey belongs in a tenant namespace (t-<name>), not %q" $ns) -}}
+                      {{- end -}}
+                      {{- $tenant := trimPrefix "t-" $ns -}}
+                      {{- $keyId := printf "%s.%s" $tenant $xr.metadata.name -}}
+                      {{- $env := index .context "apiextensions.crossplane.io/environment" -}}
+                      {{- $obs := default (dict) .observed.resources -}}
+                      {{- range $scope := $xr.spec.scopes }}
+                      {{- $rel := printf "key_%s" (replace ":" "_" $scope) }}
+                      {{- $rname := printf "scope-%s" (replace ":" "-" $scope) }}
+                      ---
+                      apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
+                      kind: RelationshipTuple
+                      metadata:
+                        name: {{ $xr.metadata.name }}-{{ replace ":" "-" $scope }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: {{ $rname }}
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs $rname)) }}"
+                      spec:
+                        forProvider:
+                          storeId: {{ $env.phorgeStoreId | quote }}
+                          user: {{ printf "apikey:%s" $keyId | quote }}
+                          relation: {{ $rel }}
+                          object: {{ printf "tenant:%s" $tenant | quote }}
+                      {{- end }}
+                      ---
+                      apiVersion: phorge.fr/v1alpha1
+                      kind: ApiKey
+                      status:
+                        keyId: {{ $keyId | quote }}
