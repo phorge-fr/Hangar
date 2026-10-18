@@ -1,0 +1,14 @@
+# Same reasoning as provider-incus-clusterproviderconfig.yml: the namespaced OpenFGA resources
+# (*.openfga.m.crossplane.io, used by the phorge.fr compositions) reference a ClusterProviderConfig,
+# not the plain ProviderConfig. Same credentials, nothing new to manage.
+apiVersion: openfga.m.crossplane.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+    name: default
+spec:
+    credentials:
+        source: Secret
+        secretRef:
+            namespace: crossplane-system
+            name: provider-openfga-creds
+            key: credentials

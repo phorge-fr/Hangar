@@ -1,0 +1,56 @@
+# Authorization model of the Phorge API store, see openfga-phorge-store.yml.
+#
+# Needs provider-openfga >= v0.1.1: its image builds terraform-provider-openfga with the patch that
+# lets Crossplane create the first model of an empty store (the released 0.5.1 binary cannot, the
+# resource stays Synced=False).
+#
+# Roles mirror the Incus project roles. A scope of an API key is a relation of its own on the
+# tenant (key_<resource>_<action>), written as a tuple per scope by the ApiKey composition; the
+# can_* relations are what the API checks, for a user (through a role) or for a key (through a
+# scope). A key never exceeds what its creator held: the API checks that when it creates the key.
+#
+# Models are immutable and versioned: changing modelDsl writes a new version, tuples are written
+# without a model ID so OpenFGA always evaluates them against the latest one.
+apiVersion: model.openfga.m.crossplane.io/v1alpha1
+kind: AuthorizationModel
+metadata:
+    name: phorge-api
+    namespace: phorge-system
+spec:
+    forProvider:
+        storeIdRef:
+            name: phorge-api
+        modelDsl: |
+            model
+              schema 1.1
+
+            type user
+
+            type apikey
+
+            type group
+              relations
+                define member: [user]
+
+            type tenant
+              relations
+                define admin: [user, group#member]
+                define operator: [user, group#member] or admin
+                define user: [user, group#member] or operator
+                define viewer: [user, group#member] or user
+
+                define key_tenant_read: [apikey]
+                define key_instances_read: [apikey]
+                define key_instances_write: [apikey]
+                define key_images_read: [apikey]
+                define key_images_write: [apikey]
+                define key_memberships_read: [apikey]
+                define key_memberships_write: [apikey]
+
+                define can_read_tenant: viewer or key_tenant_read
+                define can_read_instances: viewer or key_instances_read
+                define can_write_instances: user or key_instances_write
+                define can_read_images: viewer or key_images_read
+                define can_write_images: operator or key_images_write
+                define can_read_memberships: admin or key_memberships_read
+                define can_write_memberships: admin or key_memberships_write

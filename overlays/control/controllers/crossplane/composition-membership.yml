@@ -1,0 +1,60 @@
+# Renders the OpenFGA tuple of a Membership, see xrd-membership.yml. The tenant is the namespace
+# the Membership lives in, which is also the Incus project name.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+    name: membership.phorge.fr
+spec:
+    compositeTypeRef:
+        apiVersion: phorge.fr/v1alpha1
+        kind: Membership
+    mode: Pipeline
+    pipeline:
+        - step: load-environment
+          functionRef:
+              name: function-environment-configs
+          input:
+              apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+              kind: Input
+              spec:
+                  environmentConfigs:
+                      - type: Reference
+                        ref:
+                            name: phorge
+        - step: render
+          functionRef:
+              name: function-go-templating
+          input:
+              apiVersion: gotemplating.fn.crossplane.io/v1beta1
+              kind: GoTemplate
+              source: Inline
+              inline:
+                  template: |
+                      {{- define "ready" -}}
+                      {{- $r := "False" -}}
+                      {{- range (dig "resource" "status" "conditions" (list) .) -}}
+                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $r = "True" -}}{{- end -}}
+                      {{- end -}}
+                      {{- $r -}}
+                      {{- end -}}
+                      {{- $xr := .observed.composite.resource -}}
+                      {{- $ns := $xr.metadata.namespace -}}
+                      {{- if not (hasPrefix "t-" $ns) -}}
+                      {{- fail (printf "a Membership belongs in a tenant namespace (t-<name>), not %q" $ns) -}}
+                      {{- end -}}
+                      {{- $env := index .context "apiextensions.crossplane.io/environment" -}}
+                      {{- $obs := default (dict) .observed.resources -}}
+                      {{- $subject := ternary (printf "user:%s" $xr.spec.subject.name) (printf "group:%s#member" $xr.spec.subject.name) (eq $xr.spec.subject.kind "User") -}}
+                      apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
+                      kind: RelationshipTuple
+                      metadata:
+                        name: {{ $xr.metadata.name }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: tuple
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "tuple")) }}"
+                      spec:
+                        forProvider:
+                          storeId: {{ $env.openfgaStoreId | quote }}
+                          user: {{ $subject | quote }}
+                          relation: {{ $xr.spec.role }}
+                          object: {{ printf "project:%s" $ns | quote }}
