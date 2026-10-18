@@ -25,7 +25,7 @@ spec:
             sourceRef:
                 kind: HelmRepository
                 name: authentik
-            version: 2026.8.3
+            version: 2026.8.4
     interval: 1m0s
     timeout: 10m0s
     valuesFrom:
@@ -47,7 +47,7 @@ spec:
                 allowInsecureImages: true
             image:
                 repository: ghcr.io/goauthentik/server
-                tag: 2026.8.3
+                tag: 2026.8.4
             addPrometheusAnnotations: false
             env: []
             envFrom: []

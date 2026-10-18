@@ -1,0 +1,11 @@
+# Gives provider-kubernetes a fixed ServiceAccount name. Crossplane otherwise names it after the
+# provider revision (provider-kubernetes-<hash>), which changes on every upgrade and would silently
+# orphan the ClusterRoleBinding in provider-kubernetes-local-rbac.yml.
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+    name: provider-kubernetes
+spec:
+    serviceAccountTemplate:
+        metadata:
+            name: provider-kubernetes

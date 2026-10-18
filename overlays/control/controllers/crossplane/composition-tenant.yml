@@ -1,0 +1,199 @@
+# Renders the five resources of a Tenant, see xrd-tenant.yml.
+#
+# - The Project is deny-by-default: restricted=true and every restricted.* key set explicitly, so a
+#   default changing in a later Incus release cannot silently open something. Allowed on purpose:
+#   VMs (with nesting), managed disks and NICs, the "remote" pool, the UPLINK as network uplink,
+#   snapshots and backups. Everything else is blocked,
+#   containers included (limits.containers=0).
+# - restricted.images.servers is NOT set although only linuxcontainers.org is wanted: provider-incus
+#   sends the image server without a scheme, Incus parses its host as "" and refuses every pull
+#   ("Image server \"\" isn't allowed in this project", verified live 2026-10-15 with both the bare
+#   host and the URL as the allowed value). Images only come from the Image kind and tenants have
+#   no write access to Incus directly, so the Image XRD is the gate until that is fixed upstream.
+# - restricted.networks.subnets and restricted.networks.zones are left unset on purpose: unset
+#   means blocked, and Incus rejects the literal value "block" for them (they take lists).
+# - It is never force-destroyed: Incus refusing to delete a project that still holds instances,
+#   images, networks or profiles is the safety, and the retry converges once they are gone.
+# - Egress to the other Phorge networks is not an Incus matter: the router drops phorge-to-phorge
+#   forwards (Network repo, drop-phorge-to-phorge), tenant traffic leaves through comp-ns.
+# - Its profile is named "phorge", not "default": a new project's default profile is empty, so an
+#   instance would fail with "No root device could be found", and adopting "default" by name would
+#   make Crossplane try to delete a profile Incus won't let go. Instances list it explicitly.
+# - features.networks=true gives the project its own networks, so the tenant gets a "default" OVN
+#   network of its own on the UPLINK (NATed, addresses chosen by Incus) instead of sharing one.
+# - Every composed resource sets its own ready annotation: function-go-templating leaves readiness
+#   unspecified otherwise and the XR then stays Ready=False even though everything is up.
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+    name: tenant.phorge.fr
+spec:
+    compositeTypeRef:
+        apiVersion: phorge.fr/v1alpha1
+        kind: Tenant
+    mode: Pipeline
+    pipeline:
+        - step: load-environment
+          functionRef:
+              name: function-environment-configs
+          input:
+              apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+              kind: Input
+              spec:
+                  environmentConfigs:
+                      - type: Reference
+                        ref:
+                            name: phorge
+        - step: render
+          functionRef:
+              name: function-go-templating
+          input:
+              apiVersion: gotemplating.fn.crossplane.io/v1beta1
+              kind: GoTemplate
+              source: Inline
+              inline:
+                  template: |
+                      {{- define "ready" -}}
+                      {{- $r := "False" -}}
+                      {{- range (dig "resource" "status" "conditions" (list) .) -}}
+                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $r = "True" -}}{{- end -}}
+                      {{- end -}}
+                      {{- $r -}}
+                      {{- end -}}
+                      {{- $xr := .observed.composite.resource -}}
+                      {{- if ne $xr.metadata.namespace "phorge-system" -}}
+                      {{- fail (printf "a Tenant belongs in phorge-system, not %q" $xr.metadata.namespace) -}}
+                      {{- end -}}
+                      {{- $name := $xr.metadata.name -}}
+                      {{- $plans := dict "small" (dict "vms" 1 "cpu" 2 "mem" 4 "disk" 20 "nets" 1) "medium" (dict "vms" 3 "cpu" 4 "mem" 8 "disk" 100 "nets" 2) "large" (dict "vms" 6 "cpu" 8 "mem" 16 "disk" 250 "nets" 3) -}}
+                      {{- $p := index $plans $xr.spec.plan -}}
+                      {{- $obs := default (dict) .observed.resources -}}
+                      {{- $env := index .context "apiextensions.crossplane.io/environment" -}}
+                      apiVersion: kubernetes.m.crossplane.io/v1alpha1
+                      kind: Object
+                      metadata:
+                        name: t-{{ $name }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: namespace
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace")) }}"
+                      spec:
+                        providerConfigRef:
+                          kind: ClusterProviderConfig
+                          name: local
+                        forProvider:
+                          manifest:
+                            apiVersion: v1
+                            kind: Namespace
+                            metadata:
+                              name: t-{{ $name }}
+                              labels:
+                                phorge.fr/tenant: {{ $name }}
+                      ---
+                      apiVersion: project.incus.m.crossplane.io/v1alpha1
+                      kind: Project
+                      metadata:
+                        name: t-{{ $name }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: project
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "project")) }}"
+                      spec:
+                        forProvider:
+                          description: {{ default $name $xr.spec.displayName | quote }}
+                          forceDestroy: false
+                          config:
+                            restricted: "true"
+                            features.images: "true"
+                            features.profiles: "true"
+                            features.networks: "true"
+                            features.storage.volumes: "true"
+                            limits.instances: {{ $p.vms | quote }}
+                            limits.virtual-machines: {{ $p.vms | quote }}
+                            limits.containers: "0"
+                            limits.cpu: {{ $p.cpu | quote }}
+                            limits.memory: {{ printf "%dGiB" (int $p.mem) | quote }}
+                            limits.disk: {{ printf "%dGiB" (int $p.disk) | quote }}
+                            limits.networks: {{ $p.nets | quote }}
+                            restricted.cluster.target: block
+                            restricted.containers.interception: block
+                            restricted.containers.lowlevel: block
+                            restricted.containers.nesting: block
+                            restricted.containers.privilege: isolated
+                            restricted.virtual-machines.lowlevel: block
+                            restricted.virtual-machines.nesting: allow
+                            restricted.devices.disk: managed
+                            restricted.devices.nic: managed
+                            restricted.devices.gpu: block
+                            restricted.devices.infiniband: block
+                            restricted.devices.pci: block
+                            restricted.devices.proxy: block
+                            restricted.devices.unix-block: block
+                            restricted.devices.unix-char: block
+                            restricted.devices.unix-hotplug: block
+                            restricted.devices.usb: block
+                            restricted.storage-pools.access: remote
+                            restricted.networks.uplinks: UPLINK
+                            restricted.snapshots: allow
+                            restricted.backups: allow
+                      ---
+                      apiVersion: network.incus.m.crossplane.io/v1alpha1
+                      kind: Network
+                      metadata:
+                        name: t-{{ $name }}-default
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: network
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "network")) }}"
+                      spec:
+                        forProvider:
+                          name: default
+                          type: ovn
+                          projectRef:
+                            name: t-{{ $name }}
+                          description: Default network of the tenant
+                          config:
+                            network: UPLINK
+                            ipv4.nat: "true"
+                      ---
+                      apiVersion: profile.incus.m.crossplane.io/v1alpha1
+                      kind: Profile
+                      metadata:
+                        name: t-{{ $name }}-phorge
+                        annotations:
+                          crossplane.io/external-name: phorge
+                          gotemplating.fn.crossplane.io/composition-resource-name: profile
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "profile")) }}"
+                      spec:
+                        forProvider:
+                          projectRef:
+                            name: t-{{ $name }}
+                          description: Root disk and network of the tenant's instances
+                          device:
+                            - name: root
+                              type: disk
+                              properties:
+                                path: /
+                                pool: remote
+                            - name: eth0
+                              type: nic
+                              properties:
+                                network: default
+                                name: eth0
+                      ---
+                      apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
+                      kind: RelationshipTuple
+                      metadata:
+                        name: t-{{ $name }}-owner
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: owner
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "owner")) }}"
+                      spec:
+                        forProvider:
+                          storeId: {{ $env.openfgaStoreId | quote }}
+                          user: {{ printf "user:%s" $xr.spec.owner | quote }}
+                          relation: admin
+                          object: {{ printf "project:t-%s" $name | quote }}
+                      ---
+                      apiVersion: phorge.fr/v1alpha1
+                      kind: Tenant
+                      status:
+                        namespace: t-{{ $name }}
+                        incusProject: t-{{ $name }}

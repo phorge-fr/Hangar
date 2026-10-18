@@ -1,0 +1,19 @@
+# Values shared by the phorge.fr compositions, read through function-environment-configs.
+#
+# openfgaStoreId is the "iaas" Store (overlays/control/resources/openfga/store.yml), the store Incus
+# itself authorizes against (authorization.openfga.store.id, incus_openfga_store_id in the Ansible
+# compute group_vars). Tenants are Incus projects, so the tuples that give a user a role on a
+# tenant's project go there and Incus enforces them natively.
+#
+# phorgeStoreId is the "phorge-api" Store (openfga-phorge-store.yml): the roles and API key scopes
+# the Phorge API checks.
+#
+# Neither is a secret. A namespaced resource cannot reference a Store by name across namespaces,
+# hence the copy here.
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
+    name: phorge
+data:
+    openfgaStoreId: "01M46QWWZKD17137T1AB0V6V0Q"
+    phorgeStoreId: "01M50R0P12MY8JHNKP3ATYSJC2"
