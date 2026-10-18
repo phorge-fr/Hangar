@@ -1,0 +1,53 @@
+# A Membership gives one user, or one group, a role on a tenant. The role is an Incus project role
+# (OpenFGA relation on project:t-<name> in the store Incus authorizes against), so Incus enforces it
+# itself, through this API as well as through its own UI and CLI:
+#   admin    everything in the project, including its configuration
+#   operator manage the project's instances, images and networks
+#   user     use and create instances
+#   viewer   read-only
+#
+# Lives in the tenant's own namespace ("t-<name>"): the tenant is that namespace. A User is
+# identified by its email, the OIDC claim Incus matches users on (oidc.claim). Group members are
+# resolved by Incus from the token's groups claim when oidc.groups.claim is set on the cluster.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+    name: memberships.phorge.fr
+spec:
+    scope: Namespaced
+    group: phorge.fr
+    names:
+        kind: Membership
+        plural: memberships
+    versions:
+        - name: v1alpha1
+          served: true
+          referenceable: true
+          schema:
+              openAPIV3Schema:
+                  type: object
+                  properties:
+                      spec:
+                          type: object
+                          properties:
+                              subject:
+                                  type: object
+                                  x-kubernetes-validations:
+                                      - rule: "self.kind != 'User' || self.name.matches('^[^@\\\\s]+@[^@\\\\s]+$')"
+                                        message: "a User subject is identified by its email address"
+                                  properties:
+                                      kind:
+                                          type: string
+                                          enum: [User, Group]
+                                      name:
+                                          type: string
+                                          minLength: 1
+                                  required:
+                                      - kind
+                                      - name
+                              role:
+                                  type: string
+                                  enum: [admin, operator, user, viewer]
+                          required:
+                              - subject
+                              - role

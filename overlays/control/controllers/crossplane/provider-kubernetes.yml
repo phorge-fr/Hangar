@@ -1,0 +1,13 @@
+# Official Crossplane provider for managing arbitrary Kubernetes objects. Used by the Tenant
+# composition to create the tenant's namespace on this cluster, through the "local"
+# ClusterProviderConfig (provider-kubernetes-local-clusterproviderconfig.yml). Its ServiceAccount
+# is named by provider-kubernetes-runtimeconfig.yml and only allowed to manage namespaces
+# (provider-kubernetes-local-rbac.yml).
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+    name: provider-kubernetes
+spec:
+    package: xpkg.upbound.io/crossplane-contrib/provider-kubernetes:v1.4.1
+    runtimeConfigRef:
+        name: provider-kubernetes

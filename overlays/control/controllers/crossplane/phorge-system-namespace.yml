@@ -1,0 +1,8 @@
+# Control namespace of Phorge's own API group (phorge.fr): the cluster-wide kinds (Tenant, User,
+# Group) live here, the per-tenant kinds (Membership, Instance, Image) live in each tenant's own
+# "t-<name>" namespace, which a Tenant creates. Namespaced XRs can only compose namespaced
+# resources of their own namespace, which is why everything under phorge.fr is namespaced.
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: phorge-system

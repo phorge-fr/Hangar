@@ -12,3 +12,24 @@ resources:
     - provider-incus-runtimeconfig.yml
     - provider-incus-podmonitor.yml
     - crossplane-podmonitor.yml
+    - function-go-templating.yml
+    - provider-kubernetes.yml
+    - phorge-system-namespace.yml
+    - provider-kubernetes-runtimeconfig.yml
+    - provider-kubernetes-local-rbac.yml
+    - provider-kubernetes-local-clusterproviderconfig.yml
+    - provider-openfga-clusterproviderconfig.yml
+    - function-environment-configs.yml
+    - environmentconfig-phorge.yml
+    - xrd-tenant.yml
+    - composition-tenant.yml
+    - xrd-image.yml
+    - composition-image.yml
+    - xrd-instance.yml
+    - composition-instance.yml
+    - xrd-membership.yml
+    - composition-membership.yml
+    - openfga-phorge-store.yml
+    - openfga-phorge-model.yml
+    - xrd-apikey.yml
+    - composition-apikey.yml

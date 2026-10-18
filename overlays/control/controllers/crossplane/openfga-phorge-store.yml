@@ -1,0 +1,14 @@
+# OpenFGA store of the Phorge API: the roles users and groups hold on a tenant, and the scopes of
+# API keys (xrd-apikey.yml). Separate from the "iaas" store (overlays/control/resources/openfga),
+# which Incus authorizes against with a model Incus writes itself. Tenant users only get `viewer`
+# there; what they may do through the API is decided here.
+#
+# The model is openfga-phorge-model.yml.
+apiVersion: store.openfga.m.crossplane.io/v1alpha1
+kind: Store
+metadata:
+    name: phorge-api
+    namespace: phorge-system
+spec:
+    forProvider:
+        name: phorge-api
