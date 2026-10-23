@@ -41,6 +41,13 @@ spec:
                                   description: Email of the owner, the OIDC claim Incus identifies users by (oidc.claim).
                                   type: string
                                   pattern: '^[^@\s]+@[^@\s]+$'
+                                  # The owner is written as an OpenFGA tuple, which cannot be edited (see
+                                  # xrd-membership.yml): a new owner would stay Synced=False on the tuple while the
+                                  # Tenant reads Ready and the old owner stays admin. To hand a tenant over, create
+                                  # a Membership for the new admin.
+                                  x-kubernetes-validations:
+                                      - rule: "self == oldSelf"
+                                        message: "owner cannot change: create a Membership with the admin role for the new owner instead"
                               plan:
                                   description: >-
                                       Quota plan, mapped to the Incus project limits by the composition:
