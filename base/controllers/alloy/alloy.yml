@@ -376,48 +376,23 @@ spec:
                         level = "info"
                     }
 
-                    // Scraped through each replica of the `kubernetes` Endpoints rather than
-                    // through the service IP: that one lands on a random replica on every
-                    // new connection and mixes their counters into a single series.
-                    discovery.kubernetes "apiserver" {
-                        role = "endpoints"
-
-                        namespaces {
-                            names = ["default"]
-                        }
-
-                        selectors {
-                            role  = "endpoints"
-                            field = "metadata.name=kubernetes"
-                        }
-                    }
-
-                    prometheus.scrape "apiserver" {
-                        job_name          = "apiserver"
-                        targets           = discovery.kubernetes.apiserver.targets
-                        scheme            = "https"
-                        bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
-
-                        tls_config {
-                            ca_file     = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-                            server_name = "kubernetes"
-                        }
-
-                        forward_to = [prometheus.relabel.apiserver_filter.receiver]
-                    }
-
-                    // apiserver/etcd histogram _bucket series are the dominant source of
-                    // cardinality (~36k of ~72k total series observed on a 3-node cluster).
-                    // Drop them, keep _sum/_count so rate/average latency stays available.
-                    // kubernetes_feature_enabled isn't a _bucket metric but is just as unused
-                    // (a static per-feature-gate boolean, ~726 series on its own).
-                    prometheus.relabel "apiserver_filter" {
+                    // Scraped through each replica of the `kubernetes` Endpoints rather than through the
+                    // service IP (that one lands on a random replica on every new connection and mixes their
+                    // counters into a single series): see apiserver-servicemonitor.yml. It has to be a
+                    // ServiceMonitor because prometheus.scrape has no metric_relabel_configs, and a
+                    // prometheus.relabel after it only drops the series once the scrape cache tracks them:
+                    // the histogram buckets are most of what the apiserver exposes (measured on control:
+                    // ~259k series scraped, ~44k kept).
+                    prometheus.operator.servicemonitors "apiserver" {
                         forward_to = [prometheus.remote_write.core.receiver]
 
-                        rule {
-                            source_labels = ["__name__"]
-                            regex         = ".*_bucket|kubernetes_feature_enabled"
-                            action        = "drop"
+                        // The ServiceMonitor reads the pod's service account token and CA from
+                        // the filesystem. That is only safe because of the selector below: only
+                        // ServiceMonitors that carry its label are picked up.
+                        allow_arbitrary_file_access = true
+
+                        selector {
+                            match_labels = {"phorge.fr/scrape" = "alloy-cluster"}
                         }
                     }
 
@@ -489,6 +464,15 @@ spec:
             envFrom:
                 - secretRef:
                       name: alloy-secrets
+            # The live heap is ~200 MiB, mostly the apiserver scrape cache; without a limit the Go
+            # runtime keeps up to twice that between two GCs. GOMEMLIMIT (post-renderer below)
+            # makes the GC reclaim before the container limit is reached.
+            resources:
+                requests:
+                    cpu: 50m
+                    memory: 256Mi
+                limits:
+                    memory: 384Mi
             mounts:
                 extra:
                     - name: alloy-ca-cert
@@ -517,3 +501,8 @@ spec:
                         - op: add
                           path: /spec/template/spec/containers/0/readinessProbe/httpGet/host
                           value: 127.0.0.1
+                        - op: add
+                          path: /spec/template/spec/containers/0/env/-
+                          value:
+                              name: GOMEMLIMIT
+                              value: 256MiB
