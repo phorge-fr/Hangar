@@ -53,6 +53,7 @@ The isolation and quota boundary. `metadata.name` is the tenant slug: 2 to 28 ch
 | `spec.owner` | string, required | Email of the owner, the OIDC claim Incus identifies users by. Gets the Incus `admin` role on the project |
 | `spec.displayName` | string | Up to 100 characters. Used as the project description |
 | `spec.plan` | enum | `small` (default), `medium`, `large` |
+| `spec.subnet` | integer, required | 1 to 254, immutable. The tenant network is `10.20.<subnet>.0/24`, out of the `10.20.0.0/16` reserved for tenants. Must be unique: the XRD cannot check it, whoever creates tenants allocates it |
 | `status.namespace` | string | `t-<name>` |
 | `status.incusProject` | string | `t-<name>` |
 
@@ -75,6 +76,7 @@ metadata:
 spec:
   owner: alice@example.org
   plan: small
+  subnet: 1
 ```
 
 ## Image
@@ -158,5 +160,5 @@ Users authenticate with Authentik (OIDC). Incus identifies them by the `email` c
 - **Read-only direct access.** The intent is that tenant users only read through Incus and write through the API, which needs an OpenFGA store of its own for the API roles. OpenFGA's `CreateStore` takes only a name, so the model needs a patch of `provider-openfga`. Until then `Membership` writes the full Incus roles.
 - **`Expose`** (publishing an instance), forward address blocks per tenant.
 - **Image source restriction.** `restricted.images.servers` cannot be set: the provider sends the image server without a scheme and Incus refuses every pull. The `Image` kind is the only gate.
-- **Network addressing.** Tenant networks get Incus's automatic subnet, which can overlap the Phorge ranges. A dedicated range should be reserved.
+- **Subnet allocation.** `spec.subnet` is typed by hand and uniqueness is not checked. The API that creates tenants should allocate it. `10.20.0.0/16` is not yet written in the Network repo's addressing docs.
 - **Per-tenant network isolation inside a tenant, ACLs, metering.**
