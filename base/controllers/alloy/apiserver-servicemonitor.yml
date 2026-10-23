@@ -1,0 +1,38 @@
+# Scraped by alloy-cluster (prometheus.operator.servicemonitors "apiserver"). The drops live
+# here, in metricRelabelings, because they are applied before the scrape cache; see the
+# comment on that component in alloy.yml.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+    name: apiserver
+    namespace: default
+    labels:
+        phorge.fr/scrape: alloy-cluster
+spec:
+    selector:
+        matchLabels:
+            component: apiserver
+            provider: kubernetes
+    namespaceSelector:
+        matchNames:
+            - default
+    endpoints:
+        - port: https
+          scheme: https
+          bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+          tlsConfig:
+              caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              serverName: kubernetes
+          relabelings:
+              - action: replace
+                targetLabel: job
+                replacement: apiserver
+          # apiserver/etcd histogram _bucket series are the dominant source of cardinality
+          # (~36k of ~72k total series observed on a 3-node cluster). Drop them, keep
+          # _sum/_count so rate/average latency stays available. kubernetes_feature_enabled
+          # isn't a _bucket metric but is just as unused (a static per-feature-gate boolean,
+          # ~726 series on its own).
+          metricRelabelings:
+              - action: drop
+                sourceLabels: [__name__]
+                regex: ".*_bucket|kubernetes_feature_enabled"
