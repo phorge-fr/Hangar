@@ -88,11 +88,13 @@ group_deletion() {
 
   section "deletion: an Image that an Instance still uses"
   ensure_instance "$TA" vm1 deb || return
-  K -n "$a" delete images.phorge.fr deb --wait=true --timeout=200s >/dev/null 2>&1
-  if gone images.phorge.fr deb "$a"; then
-    note "the Image was deleted although vm1 was created from it: Incus does not refuse, the Instance is $(cond instances.phorge.fr vm1 "$a" Ready | sed 's/True/still Ready/;s/False/not Ready/')"
-  else
-    note "deleting an Image that vm1 uses is held back: $(cond_msg images.phorge.fr deb "$a" Synced | cut -c1-160)"
-  fi
-  eq "in both cases the VM keeps running" "RUNNING" "$(INCUS list vm1 --project "$a" -f csv -c s)"
+  local out; out=$(K -n "$a" delete images.phorge.fr deb --wait=false 2>&1)
+  match "deleting an Image used by a VM is refused by the Usage" 'in-use by' "$out"
+  eq "the Image is still there" deb "$(sget images.phorge.fr "$a" deb '{.metadata.name}')"
+  eq "and the VM keeps running" "RUNNING" "$(INCUS list vm1 --project "$a" -f csv -c s)"
+  K -n "$a" delete instances.phorge.fr vm1 --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
+  check "the Instance is deleted in the foreground without blocking on its own Usage" gone instances.phorge.fr vm1 "$a"
+  # the Usage lingers a few seconds after the VM, so the Image delete may be refused once more
+  local ok=0 i; for i in $(seq 1 20); do K -n "$a" delete images.phorge.fr deb --wait=true --timeout=120s >/dev/null 2>&1 && { ok=1; break; }; sleep 5; done
+  eq "once the VM is gone the Image can be deleted (took $i attempt(s) of 5 s)" 1 "$ok"
 }
