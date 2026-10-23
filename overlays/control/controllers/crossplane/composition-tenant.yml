@@ -24,6 +24,9 @@
 #   ("auto") and Incus is relied on to avoid the subnets of the other networks it manages. It cannot
 #   know the router's VLANs, so a subnet inside 10.1-10.5 or 10.10-10.12 stays possible; the e2e suite
 #   (tests/e2e, group tenant) asserts that tenant networks are distinct and outside those ranges.
+# - The owner is "viewer" of the project in the Incus store (the Incus UI is read-only: Crossplane owns every
+#   object and reconciles back anything changed by hand) and "admin" of the tenant in the Phorge API store,
+#   the role the API checks. A Membership for the owner is refused (see composition-membership.yml).
 # - Every composed resource sets its own ready annotation: function-go-templating leaves readiness
 #   unspecified otherwise and the XR then stays Ready=False even though everything is up.
 apiVersion: apiextensions.crossplane.io/v1
@@ -205,8 +208,22 @@ spec:
                         forProvider:
                           storeId: {{ $env.openfgaStoreId | quote }}
                           user: {{ printf "user:%s" $xr.spec.owner | quote }}
-                          relation: admin
+                          relation: viewer
                           object: {{ printf "project:t-%s" $name | quote }}
+                      ---
+                      apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
+                      kind: RelationshipTuple
+                      metadata:
+                        name: t-{{ $name }}-owner-api
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: owner-api
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "owner-api")) }}"
+                      spec:
+                        forProvider:
+                          storeId: {{ $env.phorgeStoreId | quote }}
+                          user: {{ printf "user:%s" $xr.spec.owner | quote }}
+                          relation: admin
+                          object: {{ printf "tenant:%s" $name | quote }}
                       ---
                       apiVersion: phorge.fr/v1alpha1
                       kind: Tenant

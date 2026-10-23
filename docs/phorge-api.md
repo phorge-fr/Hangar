@@ -122,14 +122,27 @@ A `Membership` cannot be edited: changing the subject or the role is refused. An
 | `spec.subject.name` | string, required | The user's email, or the group name |
 | `spec.role` | enum, required | `admin`, `operator`, `user`, `viewer` |
 
-The roles are Incus project roles, written as an OpenFGA tuple in the store Incus authorizes against:
+A `Membership` writes two OpenFGA tuples:
 
-| Role | Meaning |
+| Store | Tuple | Why |
+|---|---|---|
+| `iaas` (the one Incus authorizes against) | the subject is `viewer` of the Incus project, **whatever the role** | The Incus UI (`iaas.phorge.fr`) is read-only. Crossplane owns every Incus object and reconciles back anything changed by hand |
+| `phorge-api` | the subject has the real role on `tenant:<name>` | This is what the Phorge API checks before it writes |
+
+| Role | Meaning for the API |
 |---|---|
-| `admin` | Everything in the project, including its configuration |
-| `operator` | Manage instances, images and networks |
-| `user` | Use and create instances |
+| `admin` | Everything on the tenant, including memberships |
+| `operator` | Manage instances, images (and read the rest) |
+| `user` | Create and use instances |
 | `viewer` | Read-only |
+
+There is one `Membership` per subject in a tenant: the tuples are named after a hash of the subject, so a second `Membership` for the same user or group (with any role) is not composed and stays `Ready=False`, instead of silently sharing, and on deletion removing, the tuple of the first. To change a role, delete the `Membership` and create another. A `Membership` for the tenant's owner is refused: the owner already has the `admin` role from the `Tenant`.
+
+Like every kind that lives in a tenant namespace, it is only composed if a `Tenant` of that name exists in `phorge-system`: a namespace named `t-<x>` created by hand gets nothing, so it cannot be used to grant rights on a future tenant.
+
+## ApiKey
+
+A key for the API, scoped to a tenant. It stores the SHA-256 of the key, never the key. Each scope (`tenant:read`, `instances:read`, `instances:write`, `images:read`, `images:write`, `memberships:read`, `memberships:write`) is one tuple in the `phorge-api` store. Removing a scope removes its tuple at once. `expiresAt` is enforced: once it has passed, `status.expired` is true and the key has no tuple, so it grants nothing (within about a minute of the date). The API should check the date too.
 
 ## What a tenant can and cannot do
 
@@ -158,11 +171,15 @@ Traffic from a tenant leaves through the `comp-ns` VLAN. The router drops traffi
 
 ## Authorization
 
-Users authenticate with Authentik (OIDC). Incus identifies them by the `email` claim, so the email is the key of every tuple, and the Authentik enrollment flow must make it mandatory. Tuples are written by Crossplane in the `iaas` OpenFGA store (`overlays/control/resources/openfga/store.yml`); Incus owns that store's model and enforces the roles itself. No users or groups are stored in Crossplane: Authentik owns identities.
+Users authenticate with Authentik (OIDC). Incus identifies them by the `email` claim, so the email is the key of every tuple, and the Authentik enrollment flow must make it mandatory. Tuples are written by Crossplane in two OpenFGA stores:
+
+- `iaas` (`overlays/control/resources/openfga/store.yml`): the one Incus enforces. Users and groups are only `viewer` there: the Incus UI is read-only for everybody, the tenant owner included. Crossplane reconciles an Incus object back as soon as it is changed by hand, and a VM deleted in Incus is recreated blank.
+- `phorge-api`: the roles and API key scopes the Phorge API checks (`can_read_*`, `can_write_*`). Writing goes through the API.
+
+No users or groups are stored in Crossplane: Authentik owns identities.
 
 ## Not done yet
 
-- **Read-only direct access.** The intent is that tenant users only read through Incus and write through the API, which needs an OpenFGA store of its own for the API roles. OpenFGA's `CreateStore` takes only a name, so the model needs a patch of `provider-openfga`. Until then `Membership` writes the full Incus roles.
 - **`Expose`** (publishing an instance), forward address blocks per tenant.
 - **Image source restriction.** `restricted.images.servers` cannot be set: the provider sends the image server without a scheme and Incus refuses every pull. The `Image` kind is the only gate.
 - **Network addressing.** Tenant networks get the subnet Incus picks (`ipv4.address: auto`), which Incus is relied on to keep distinct from its other networks. It knows nothing of the router VLANs, so a subnet inside `10.1` to `10.5` or `10.10` to `10.12` is possible, if unlikely: the e2e suite checks it, nothing prevents it. The provider only returns the keys that were declared, not the address Incus picked, so a `Tenant` cannot check it itself: whatever creates tenants should read `ipv4.address` of the `default` network from Incus once the tenant is `Ready`, and recreate the tenant if it lands in one of those ranges.
