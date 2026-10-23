@@ -20,10 +20,10 @@
 #   instance would fail with "No root device could be found", and adopting "default" by name would
 #   make Crossplane try to delete a profile Incus won't let go. Instances list it explicitly.
 # - features.networks=true gives the project its own networks, so the tenant gets a "default" OVN
-#   network of its own on the UPLINK (NATed) instead of sharing one. Its subnet is 10.20.<spec.subnet>.0/24,
-#   out of the 10.20.0.0/16 reserved for tenants: left to Incus ("auto"), a random 10.x.y.0/24 could land
-#   on a Phorge VLAN (10.1-10.5, 10.10-10.12) and the VM would then route towards its own network instead
-#   of the real one. NAT hides it from the router, so only the inside of OVN sees it.
+#   network of its own on the UPLINK (NATed) instead of sharing one. ipv4.address is left to Incus
+#   ("auto") and Incus is relied on to avoid the subnets of the other networks it manages. It cannot
+#   know the router's VLANs, so a subnet inside 10.1-10.5 or 10.10-10.12 stays possible; the e2e suite
+#   (tests/e2e, group tenant) asserts that tenant networks are distinct and outside those ranges.
 # - Every composed resource sets its own ready annotation: function-go-templating leaves readiness
 #   unspecified otherwise and the XR then stays Ready=False even though everything is up.
 apiVersion: apiextensions.crossplane.io/v1
@@ -154,7 +154,6 @@ spec:
                           description: Default network of the tenant
                           config:
                             network: UPLINK
-                            ipv4.address: {{ printf "10.20.%d.1/24" (int $xr.spec.subnet) | quote }}
                             ipv4.nat: "true"
                       ---
                       apiVersion: profile.incus.m.crossplane.io/v1alpha1
