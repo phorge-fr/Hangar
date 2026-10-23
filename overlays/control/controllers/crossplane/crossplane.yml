@@ -25,5 +25,5 @@ spec:
             sourceRef:
                 kind: HelmRepository
                 name: crossplane
-            version: '2.4.2'
+            version: '2.4.3'
     interval: 1m0s
