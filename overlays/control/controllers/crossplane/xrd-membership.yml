@@ -32,7 +32,16 @@ spec:
                           properties:
                               subject:
                                   type: object
+                                  # A tuple cannot be edited in OpenFGA: a new subject or role means destroying one
+                                  # tuple and writing another, which provider-openfga refuses
+                                  # (lifecycle.prevent_destroy). The change would then stay Synced=False on the tuple while
+                                  # the Membership reads Ready, and the old right would keep being granted. Refused up
+                                  # front instead: delete the Membership and create another. The rule is on these two
+                                  # fields, not on the whole spec: Crossplane writes its own fields under spec
+                                  # (composition references) and an object-wide rule would block it.
                                   x-kubernetes-validations:
+                                      - rule: "self == oldSelf"
+                                        message: "a Membership cannot be edited: delete it and create another (a tuple cannot be changed in place)"
                                       - rule: "self.kind != 'User' || self.name.matches('^[^@\\\\s]+@[^@\\\\s]+$')"
                                         message: "a User subject is identified by its email address"
                                   properties:
@@ -48,6 +57,9 @@ spec:
                               role:
                                   type: string
                                   enum: [admin, operator, user, viewer]
+                                  x-kubernetes-validations:
+                                      - rule: "self == oldSelf"
+                                        message: "a Membership cannot be edited: delete it and create another (a tuple cannot be changed in place)"
                           required:
                               - subject
                               - role

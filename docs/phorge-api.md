@@ -50,7 +50,7 @@ The isolation and quota boundary. `metadata.name` is the tenant slug: 2 to 28 ch
 
 | Field | Type | Rule |
 |---|---|---|
-| `spec.owner` | string, required | Email of the owner, the OIDC claim Incus identifies users by. Gets the Incus `admin` role on the project |
+| `spec.owner` | string, required, immutable | Email of the owner, the OIDC claim Incus identifies users by. Gets the Incus `admin` role on the project. To hand a tenant over, add a `Membership` with the `admin` role |
 | `spec.displayName` | string | Up to 100 characters. Used as the project description |
 | `spec.plan` | enum | `small` (default), `medium`, `large` |
 | `status.namespace` | string | `t-<name>` |
@@ -113,6 +113,8 @@ The per-instance bounds are the XRD's. The plan's totals are enforced on top by 
 ## Membership
 
 Gives a user or a group a role on the tenant. The tenant is the namespace the `Membership` lives in.
+
+A `Membership` cannot be edited: changing the subject or the role is refused. An OpenFGA tuple cannot be changed in place and the provider refuses to destroy one, so an edit would leave the old right granted while everything reads `Ready`. Delete the `Membership` and create another.
 
 | Field | Type | Rule |
 |---|---|---|
