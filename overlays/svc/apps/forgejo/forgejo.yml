@@ -26,13 +26,13 @@ spec:
             sourceRef:
                 kind: HelmRepository
                 name: forgejo
-            version: 17.3.0
+            version: 17.3.1
     interval: 1m0s
     timeout: 10m0s
     values:
         image:
             # renovate: datasource=docker depName=code.forgejo.org/forgejo/forgejo
-            tag: 16.0.6-rootless
+            tag: 17.0.0-rootless
         podSecurityContext:
             fsGroupChangePolicy: OnRootMismatch
         initPreScript: |
