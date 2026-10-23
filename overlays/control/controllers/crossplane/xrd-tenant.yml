@@ -49,8 +49,20 @@ spec:
                                   type: string
                                   enum: [small, medium, large]
                                   default: small
+                              subnet:
+                                  description: >-
+                                      Index of the tenant's network inside 10.20.0.0/16: the OVN network gets
+                                      10.20.<subnet>.0/24, gateway 10.20.<subnet>.1. Must be unique across
+                                      tenants (nothing here enforces it, the allocator does) and cannot change.
+                                  type: integer
+                                  minimum: 1
+                                  maximum: 254
                           required:
                               - owner
+                              - subnet
+                          x-kubernetes-validations:
+                              - rule: "self.subnet == oldSelf.subnet"
+                                message: "subnet cannot change: the network would be recreated under its instances"
                       status:
                           type: object
                           properties:
