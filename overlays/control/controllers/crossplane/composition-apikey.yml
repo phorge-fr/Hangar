@@ -46,7 +46,7 @@ spec:
                       {{- $problems := list -}}
                       {{- range $rname, $res := (default (dict) .observed.resources) -}}
                       {{- range (dig "resource" "status" "conditions" (list) $res) -}}
-                      {{- if and (or (eq .type "Ready") (eq .type "Synced")) (ne .status "True") -}}
+                      {{- if and (or (eq .type "Ready") (eq .type "Synced") (eq .type "LastAsyncOperation")) (ne .status "True") -}}
                       {{- $problems = append $problems (printf "%s %s: %s" $rname .type (default "not ready" .message)) -}}
                       {{- end -}}
                       {{- end -}}
