@@ -1,0 +1,42 @@
+# What the Phorge API may do on the control cluster: manage the phorge.fr kinds and nothing else. It
+# cannot create namespaces (only the Tenant composition does, through provider-kubernetes, so a tenant
+# namespace always has its Tenant), read Secrets, or touch the Crossplane and provider resources
+# underneath: the API asks for a Tenant, an Image, an Instance, and Crossplane does the rest.
+#
+# Verbs follow the immutability rules of the XRDs (xrd-membership.yml, xrd-tenant.yml): a Membership
+# and a Tenant owner cannot be edited, so there is no update/patch on memberships and the API changes
+# a role by deleting and creating. Tenants can be patched (plan, displayName), keys can be patched (scopes).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+    name: phorge-api
+    namespace: phorge-api
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: phorge-api
+rules:
+    - apiGroups: ["phorge.fr"]
+      resources: ["tenants", "images", "instances", "apikeys"]
+      verbs: ["get", "list", "watch", "create", "patch", "delete"]
+    - apiGroups: ["phorge.fr"]
+      resources: ["memberships"]
+      verbs: ["get", "list", "watch", "create", "delete"]
+    # Read the status the compositions write (Ready, problems, state, ipv4, expired).
+    - apiGroups: ["phorge.fr"]
+      resources: ["tenants/status", "images/status", "instances/status", "memberships/status", "apikeys/status"]
+      verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+    name: phorge-api
+subjects:
+    - kind: ServiceAccount
+      name: phorge-api
+      namespace: phorge-api
+roleRef:
+    kind: ClusterRole
+    name: phorge-api
+    apiGroup: rbac.authorization.k8s.io

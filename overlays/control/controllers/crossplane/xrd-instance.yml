@@ -38,6 +38,13 @@ spec:
                                   description: Allow running VMs or containers inside this VM (security.nesting).
                                   type: boolean
                                   default: false
+                              secureBoot:
+                                  description: >-
+                                      UEFI secure boot (security.secureboot). Some cloud images do not boot with it
+                                      (Incus then refuses to start them: "incompatible with secureboot", seen with
+                                      alpine/3.22/cloud): set it to false for those.
+                                  type: boolean
+                                  default: true
                               cpu:
                                   type: integer
                                   default: 1
@@ -67,6 +74,9 @@ spec:
                       status:
                           type: object
                           properties:
+                              problems:
+                                  type: string
+                                  description: What is wrong with the composed resources, empty when everything is up.
                               state:
                                   type: string
                               ipv4:

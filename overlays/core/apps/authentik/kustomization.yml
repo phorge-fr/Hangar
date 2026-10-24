@@ -6,4 +6,5 @@ resources:
     - blueprint-grafana.yml
     - blueprint-forgejo.yml
     - blueprint-incus.yml
+    - blueprint-phorge-api.yml
     - blueprint-brand.yml

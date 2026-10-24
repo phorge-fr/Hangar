@@ -46,6 +46,7 @@ YAML
   eq "an unknown image name never becomes Ready" "" "$(cond images.phorge.fr nope "$a" Ready | grep -x True)"
   eq "and leaves nothing in the project" "" "$(INCUS image list --project "$a" -f csv -c l | grep -i nope)"
   note "unknown image reports: $(mr_msgs "$a" nope | cut -c1-300)"
+  match "status.problems on the Image says why (the Incus error, not just 'Unready resources')" "doesn't exist" "$(sget images.phorge.fr "$a" nope '{.status.problems}')"
   K -n "$a" delete images.phorge.fr nope --wait=true --timeout=120s >/dev/null 2>&1
   check "a failed Image can be deleted" gone images.phorge.fr nope "$a"
 }

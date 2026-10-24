@@ -28,15 +28,20 @@ group_guards() {
      "$(INCUS list --project default -f csv -c n; INCUS image list --project default -f csv -c l; INCUS project list -f csv -c n)"
 
   section "guards: a t-* namespace without a tenant"
+  # The namespace is the Incus project name and part of OpenFGA objects; a namespace named t-<x> created by
+  # hand must not get anything composed unless a Tenant <x> exists in phorge-system.
   local ns="t-e2e-$RUN_ID-ghost"
   K create ns "$ns" >/dev/null && K label ns "$ns" "$LABEL=$RUN_ID" >/dev/null && TRACK_NS+=("$ns")
   _guard Image "  source: {name: $IMG_ALPINE}" "$ns" ghost
+  _guard Instance "  imageRef: {name: nope}" "$ns" ghost
   _guard Membership "  {subject: {kind: User, name: g@example.org}, role: viewer}" "$ns" ghost
+  _guard ApiKey "  {hash: $hash, scopes: [tenant:read]}" "$ns" ghost
   sleep 45
-  note "Image in a namespace without tenant: Ready=$(cond images.phorge.fr ghost "$ns" Ready) Synced=$(cond images.phorge.fr ghost "$ns" Synced), Incus says: $(K -n "$ns" get images.phorge.fr ghost -o json | jq -r '[.status.conditions[]? | select(.status!="True") | .message] | first // "-"' | cut -c1-160)"
-  eq "an Image in a namespace without tenant is not Ready" "" "$(cond images.phorge.fr ghost "$ns" Ready | grep -x True)"
-  eq "and creates no Incus project" "" "$(INCUS project list -f csv -c n | grep -x "$ns")"
-  if [[ $(cond memberships.phorge.fr ghost "$ns" Ready) == True ]]; then
-    note "Membership in a namespace without tenant is Ready: it writes a tuple for project:$ns, which does not exist (nothing checks that a Tenant owns the namespace)"
-  else note "Membership in a namespace without tenant is not Ready: $(cond_msg memberships.phorge.fr ghost "$ns" Ready)"; fi
+  for kind in images instances memberships apikeys; do
+    eq "$kind in a namespace without Tenant is never Ready" "" "$(cond $kind.phorge.fr ghost "$ns" Ready | grep -x True)"
+    match "$kind: refused with a message that names the missing Tenant" 'has no Tenant' "$(cond_msg $kind.phorge.fr ghost "$ns" Synced)"
+  done
+  eq "nothing was composed for them" 0 "$(K get managed -A -o name 2>/dev/null | grep -c ghost)"
+  eq "no Incus project was created" "" "$(INCUS project list -f csv -c n | grep -x "$ns")"
+  note "a Tenant created later for this namespace name would be needed for these objects to compose: the guard asks for Tenant ${ns#t-} in phorge-system"
 }

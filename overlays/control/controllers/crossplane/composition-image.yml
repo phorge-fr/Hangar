@@ -19,21 +19,57 @@ spec:
               source: Inline
               inline:
                   template: |
+                      {{- /* Ready only when the managed resource is Ready AND Synced: a failing reconcile
+                               (Synced=False) must not read as Ready because its last good state was. */ -}}
                       {{- define "ready" -}}
-                      {{- $r := "False" -}}
+                      {{- $ready := false -}}
+                      {{- $synced := true -}}
                       {{- range (dig "resource" "status" "conditions" (list) .) -}}
-                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $r = "True" -}}{{- end -}}
+                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $ready = true -}}{{- end -}}
+                      {{- if and (eq .type "Synced") (ne .status "True") -}}{{- $synced = false -}}{{- end -}}
                       {{- end -}}
-                      {{- $r -}}
+                      {{- if and $ready $synced -}}True{{- else -}}False{{- end -}}
+                      {{- end -}}
+                      {{- /* What is wrong with the composed resources, for status.problems. */ -}}
+                      {{- $problems := list -}}
+                      {{- range $rname, $res := (default (dict) .observed.resources) -}}
+                      {{- range (dig "resource" "status" "conditions" (list) $res) -}}
+                      {{- if and (or (eq .type "Ready") (eq .type "Synced") (eq .type "LastAsyncOperation")) (ne .status "True") -}}
+                      {{- $problems = append $problems (printf "%s %s: %s" $rname .type (default "not ready" .message)) -}}
+                      {{- end -}}
+                      {{- end -}}
                       {{- end -}}
                       {{- $xr := .observed.composite.resource -}}
                       {{- if not (hasPrefix "t-" $xr.metadata.namespace) -}}
                       {{- fail (printf "an Image belongs in a tenant namespace (t-<name>), not %q" $xr.metadata.namespace) -}}
                       {{- end -}}
+                      {{- /* The namespace must belong to a Tenant: the Tenant composition creates it, but a
+                               namespace named t-<x> can also be created by hand, and the namespace is used as the
+                               Incus project name and in OpenFGA objects. The Tenant is asked for through
+                               ExtraResources; until it is resolved nothing is decided, once resolved an empty answer
+                               refuses the object. */ -}}
+                      {{- $tenantName := trimPrefix "t-" $xr.metadata.namespace -}}
+                      {{- $found := default (dict) .extraResources -}}
+                      {{- $tenantItems := list -}}
+                      {{- if hasKey $found "tenant" -}}
+                      {{- $tenantItems = dig "items" (list) (default (dict) (index $found "tenant")) -}}
+                      {{- if not $tenantItems -}}
+                      {{- fail (printf "namespace %q has no Tenant %q in phorge-system: create the Tenant first" $xr.metadata.namespace $tenantName) -}}
+                      {{- end -}}
+                      {{- end -}}
                       {{- $name := $xr.metadata.name -}}
                       {{- $src := $xr.spec.source -}}
                       {{- $obs := default (dict) .observed.resources -}}
                       {{- $img := default (dict) (index $obs "image") -}}
+                      apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
+                      kind: ExtraResources
+                      requirements:
+                        tenant:
+                          apiVersion: phorge.fr/v1alpha1
+                          kind: Tenant
+                          matchName: {{ $tenantName }}
+                          namespace: phorge-system
+                      ---
                       apiVersion: image.incus.m.crossplane.io/v1alpha1
                       kind: Image
                       metadata:
@@ -62,3 +98,4 @@ spec:
                       kind: Image
                       status:
                         fingerprint: {{ dig "resource" "status" "atProvider" "fingerprint" "" $img | quote }}
+                        problems: {{ join " | " $problems | trunc 800 | quote }}
