@@ -35,7 +35,7 @@ spec:
                       {{- $problems := list -}}
                       {{- range $rname, $res := (default (dict) .observed.resources) -}}
                       {{- range (dig "resource" "status" "conditions" (list) $res) -}}
-                      {{- if and (or (eq .type "Ready") (eq .type "Synced")) (ne .status "True") -}}
+                      {{- if and (or (eq .type "Ready") (eq .type "Synced") (eq .type "LastAsyncOperation")) (ne .status "True") -}}
                       {{- $problems = append $problems (printf "%s %s: %s" $rname .type (default "not ready" .message)) -}}
                       {{- end -}}
                       {{- end -}}
@@ -68,6 +68,7 @@ spec:
                             - phorge
                           config:
                             security.nesting: {{ $spec.nesting | quote }}
+                            security.secureboot: {{ $spec.secureBoot | quote }}
                             limits.cpu: {{ $spec.cpu | quote }}
                             limits.memory: {{ printf "%dMiB" (int $spec.memoryMiB) | quote }}
                             {{- if $spec.sshPublicKeys }}
@@ -80,6 +81,34 @@ spec:
                                 path: /
                                 pool: remote
                                 size: {{ printf "%dGiB" (int $spec.diskGiB) | quote }}
+                      ---
+                      {{- /* The Image cannot be deleted while this Instance exists: Incus lets an image go even
+                               when a VM was created from it, and the VM could then not be recreated. The Usage is
+                               composed here so it goes away with the Instance. It is "by" the Incus Instance, not by
+                               the phorge.fr Instance: that one is deleted in the foreground and waits for its
+                               children, the Usage waits for its "by" to be gone, which would be a deadlock.
+                               replayDeletion deletes the Image again once it is released, which a tenant teardown
+                               relies on. */}}
+                      apiVersion: protection.crossplane.io/v1beta1
+                      kind: Usage
+                      metadata:
+                        name: {{ $name }}-uses-image
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: image-usage
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "image-usage")) }}"
+                      spec:
+                        replayDeletion: true
+                        reason: "Instance {{ $name }} was created from this image"
+                        of:
+                          apiVersion: phorge.fr/v1alpha1
+                          kind: Image
+                          resourceRef:
+                            name: {{ $spec.imageRef.name }}
+                        by:
+                          apiVersion: instance.incus.m.crossplane.io/v1alpha1
+                          kind: Instance
+                          resourceRef:
+                            name: {{ $name }}
                       ---
                       apiVersion: phorge.fr/v1alpha1
                       kind: Instance
