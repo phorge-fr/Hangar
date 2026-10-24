@@ -94,7 +94,11 @@ group_deletion() {
   eq "and the VM keeps running" "RUNNING" "$(INCUS list vm1 --project "$a" -f csv -c s)"
   K -n "$a" delete instances.phorge.fr vm1 --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
   check "the Instance is deleted in the foreground without blocking on its own Usage" gone instances.phorge.fr vm1 "$a"
-  # the Usage lingers a few seconds after the VM, so the Image delete may be refused once more
-  local ok=0 i; for i in $(seq 1 20); do K -n "$a" delete images.phorge.fr deb --wait=true --timeout=120s >/dev/null 2>&1 && { ok=1; break; }; sleep 5; done
-  eq "once the VM is gone the Image can be deleted (took $i attempt(s) of 5 s)" 1 "$ok"
+  # replayDeletion: the refused deletion of the Image is remembered and replayed once nothing uses it, so the
+  # Image goes by itself a few seconds after the VM (a second explicit delete is not needed).
+  local t0=$SECONDS
+  if wait_until 180 "image gone" gone images.phorge.fr deb "$a"; then
+    pass "the refused deletion is replayed: the Image is gone once the VM is gone"
+    note "the Image disappeared $((SECONDS-t0)) s after the VM was deleted, without a second delete"
+  else fail "the refused deletion is replayed once the VM is gone" "still there after 180 s: $(K -n "$a" get usages.protection.crossplane.io -o name | tr '\n' ' ')"; fi
 }
