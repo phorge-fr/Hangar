@@ -147,6 +147,9 @@ Traffic from a tenant leaves through the `comp-ns` VLAN. The router drops traffi
 
 ## Lifecycle and deletion
 
+- **Delete in the foreground.** Deleting an XR in the default (background) mode removes the object at once while its composed resources and the Incus objects last for up to a minute or two: a `Tenant` was gone after 1 s, its resources after 58 s. With `propagationPolicy: Foreground` (`kubectl delete --cascade=foreground`) the object stays until everything it composed is gone, so its absence is a real completion signal. An API should always delete this way and treat "not found" as "deleted".
+- `status.problems` on every kind says what is wrong with the composed resources (the Incus or OpenFGA error), empty when everything is up. `Ready` now needs the composed resources to be `Ready` **and** `Synced`.
+
 - Deleting an `Instance` or an `Image` removes the Incus object.
 - Deleting a `Tenant` deletes its namespace, which cascades to every `Image`, `Instance` and `Membership` in it, then the network, the profile, the tuple and finally the project. Incus refuses to delete a non-empty project, so the project is retried until its contents are gone. The projects are never force-destroyed.
 - Deleting a `Tenant` destroys the VMs it contains. An API should ask for confirmation.
