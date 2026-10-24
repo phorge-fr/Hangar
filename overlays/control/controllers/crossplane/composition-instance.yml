@@ -44,12 +44,35 @@ spec:
                       {{- if not (hasPrefix "t-" $xr.metadata.namespace) -}}
                       {{- fail (printf "an Instance belongs in a tenant namespace (t-<name>), not %q" $xr.metadata.namespace) -}}
                       {{- end -}}
+                      {{- /* The namespace must belong to a Tenant: the Tenant composition creates it, but a
+                               namespace named t-<x> can also be created by hand, and the namespace is used as the
+                               Incus project name and in OpenFGA objects. The Tenant is asked for through
+                               ExtraResources; until it is resolved nothing is decided, once resolved an empty answer
+                               refuses the object. */ -}}
+                      {{- $tenantName := trimPrefix "t-" $xr.metadata.namespace -}}
+                      {{- $found := default (dict) .extraResources -}}
+                      {{- $tenantItems := list -}}
+                      {{- if hasKey $found "tenant" -}}
+                      {{- $tenantItems = dig "items" (list) (default (dict) (index $found "tenant")) -}}
+                      {{- if not $tenantItems -}}
+                      {{- fail (printf "namespace %q has no Tenant %q in phorge-system: create the Tenant first" $xr.metadata.namespace $tenantName) -}}
+                      {{- end -}}
+                      {{- end -}}
                       {{- $name := $xr.metadata.name -}}
                       {{- $spec := $xr.spec -}}
                       {{- $obs := default (dict) .observed.resources -}}
                       {{- $inst := default (dict) (index $obs "instance") -}}
                       {{- $ud := "#cloud-config\nssh_authorized_keys:\n" -}}
                       {{- range $spec.sshPublicKeys }}{{ $ud = printf "%s  - %s\n" $ud . }}{{ end -}}
+                      apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
+                      kind: ExtraResources
+                      requirements:
+                        tenant:
+                          apiVersion: phorge.fr/v1alpha1
+                          kind: Tenant
+                          matchName: {{ $tenantName }}
+                          namespace: phorge-system
+                      ---
                       apiVersion: instance.incus.m.crossplane.io/v1alpha1
                       kind: Instance
                       metadata:

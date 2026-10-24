@@ -56,13 +56,42 @@ spec:
                       {{- if not (hasPrefix "t-" $ns) -}}
                       {{- fail (printf "an ApiKey belongs in a tenant namespace (t-<name>), not %q" $ns) -}}
                       {{- end -}}
+                      {{- /* The namespace must belong to a Tenant: the Tenant composition creates it, but a
+                               namespace named t-<x> can also be created by hand, and the namespace is used as the
+                               Incus project name and in OpenFGA objects. The Tenant is asked for through
+                               ExtraResources; until it is resolved nothing is decided, once resolved an empty answer
+                               refuses the object. */ -}}
+                      {{- $tenantName := trimPrefix "t-" $ns -}}
+                      {{- $found := default (dict) .extraResources -}}
+                      {{- $tenantItems := list -}}
+                      {{- if hasKey $found "tenant" -}}
+                      {{- $tenantItems = dig "items" (list) (default (dict) (index $found "tenant")) -}}
+                      {{- if not $tenantItems -}}
+                      {{- fail (printf "namespace %q has no Tenant %q in phorge-system: create the Tenant first" $ns $tenantName) -}}
+                      {{- end -}}
+                      {{- end -}}
                       {{- $tenant := trimPrefix "t-" $ns -}}
                       {{- $keyId := printf "%s.%s" $tenant $xr.metadata.name -}}
                       {{- $env := index .context "apiextensions.crossplane.io/environment" -}}
                       {{- $obs := default (dict) .observed.resources -}}
-                      {{- range $scope := $xr.spec.scopes }}
+                      {{- /* An expired key grants nothing: its tuples are not rendered, so Crossplane deletes them on the
+                               next reconcile (within a minute or so). The API checks the date too. */ -}}
+                      {{- $expired := false -}}
+                      {{- if $xr.spec.expiresAt -}}
+                      {{- if (now).After (toDate "2006-01-02T15:04:05Z07:00" $xr.spec.expiresAt) -}}{{- $expired = true -}}{{- end -}}
+                      {{- end -}}
+                      {{- range $scope := (ternary (list) $xr.spec.scopes $expired) }}
                       {{- $rel := printf "key_%s" (replace ":" "_" $scope) }}
                       {{- $rname := printf "scope-%s" (replace ":" "-" $scope) }}
+                      ---
+                      apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
+                      kind: ExtraResources
+                      requirements:
+                        tenant:
+                          apiVersion: phorge.fr/v1alpha1
+                          kind: Tenant
+                          matchName: {{ $tenantName }}
+                          namespace: phorge-system
                       ---
                       apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
                       kind: RelationshipTuple
@@ -83,4 +112,5 @@ spec:
                       kind: ApiKey
                       status:
                         keyId: {{ $keyId | quote }}
+                        expired: {{ $expired }}
                         problems: {{ join " | " $problems | trunc 800 | quote }}
