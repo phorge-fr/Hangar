@@ -1,0 +1,21 @@
+# The public certificate of local-root-ca, the cert-manager CA (ClusterIssuer local-issuer) that signs the internal
+# certificates, among them openfga.core.phorge. A pod does not trust it by default: the Phorge API mounts this
+# ConfigMap and adds it to its trusted roots to call OpenFGA with TLS verification on. Public data, not a secret.
+# Valid until 2036-06-28. Refresh it from the ca.crt key of the Secret openfga-tls (core) if the CA is ever replaced.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: phorge-api-ca
+    namespace: phorge-api
+data:
+    ca.crt: |
+        -----BEGIN CERTIFICATE-----
+        MIIBczCCARqgAwIBAgIUKBUuuuomz67EA1eTzLvjTq6qLXQwCgYIKoZIzj0EAwIw
+        GDEWMBQGA1UEAxMNbG9jYWwtcm9vdC1jYTAeFw0yNjA3MDExNDQ4NDZaFw0zNjA2
+        MjgxNDQ4NDZaMBgxFjAUBgNVBAMTDWxvY2FsLXJvb3QtY2EwWTATBgcqhkjOPQIB
+        BggqhkjOPQMBBwNCAARzKs8RHsdQKtAycnbBlXh0IDao3mZ3eLikoF4r5jIKPHMB
+        37mWs+DU9Ia8ubOR4AtXmRHveqMBKqcegzPtmetso0IwQDAOBgNVHQ8BAf8EBAMC
+        AqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUbXGMASnO6bsAzmPqmKNQ3I3K
+        /UAwCgYIKoZIzj0EAwIDRwAwRAIgaC/bPqnSH8T+V6M94Q+NjXkxzH4b9/edbTxV
+        2B/A7KICIH9UwJ27NEKoTxFkRn9v1cvyabBgxsMuS1C70GYWRIul
+        -----END CERTIFICATE-----

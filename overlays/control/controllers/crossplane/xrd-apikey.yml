@@ -63,5 +63,11 @@ spec:
                       status:
                           type: object
                           properties:
+                              problems:
+                                  type: string
+                                  description: What is wrong with the composed resources, empty when everything is up.
+                              expired:
+                                  type: boolean
+                                  description: True once expiresAt has passed. An expired key has no tuples, so it grants nothing.
                               keyId:
                                   type: string

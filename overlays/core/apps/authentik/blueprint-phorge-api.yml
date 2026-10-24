@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: authentik-phorge-oauth-blueprint
+    namespace: authentik
+data:
+    phorge-oauth.yaml: |-
+        # yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+        version: 1
+
+        metadata:
+          name: phorge-oauth
+          labels:
+            blueprints.goauthentik.io/description: Phorge API and console OIDC application
+
+        # One public client for the console (authorization code + PKCE) and the CLI (device code, like
+        # Incus in blueprint-incus.yml). The API itself is a resource server: it holds no secret, it checks
+        # the access token's signature and audience (this client_id) against authentik's JWKS and takes the
+        # user from the email claim, the same key as every OpenFGA tuple (docs/phorge-api.md).
+        # Any user that authenticates gets a token; what the token can do is decided by OpenFGA
+        # (Membership and ApiKey tuples), so a user without a Membership gets nothing. Restrict the
+        # application with a group policy binding to also stop strangers from signing in.
+        entries:
+          - model: authentik_providers_oauth2.oauth2provider
+            id: phorge-oauth-provider
+            identifiers:
+              name: Phorge OAuth
+            attrs:
+              name: Phorge OAuth
+              client_id: 49a1375b-c52a-4a59-b3cb-8d4f5e392d85
+              client_type: public
+              # Also the lifetime of the device code, see blueprint-incus.yml.
+              access_code_validity: minutes=5
+              property_mappings:
+                - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+                - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+                - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+                - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
+              authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
+              invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+              signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+              grant_types:
+                - authorization_code
+                - refresh_token
+                - urn:ietf:params:oauth:grant-type:device_code
+              # TODO: the console host is not decided; this is the one the API's own host suggests. Add
+              # the real redirect URI (and a localhost one for development) when the console exists.
+              redirect_uris:
+                - matching_mode: strict
+                  url: https://console.phorge.fr/oidc/callback
+          - model: authentik_core.application
+            identifiers:
+              slug: phorge
+            attrs:
+              name: Phorge
+              slug: phorge
+              provider: !Find [authentik_providers_oauth2.oauth2provider, [name, Phorge OAuth]]

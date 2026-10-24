@@ -61,5 +61,8 @@ spec:
                       status:
                           type: object
                           properties:
+                              problems:
+                                  type: string
+                                  description: What is wrong with the composed resources, empty when everything is up.
                               fingerprint:
                                   type: string

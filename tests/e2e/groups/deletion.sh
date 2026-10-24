@@ -88,11 +88,17 @@ group_deletion() {
 
   section "deletion: an Image that an Instance still uses"
   ensure_instance "$TA" vm1 deb || return
-  K -n "$a" delete images.phorge.fr deb --wait=true --timeout=200s >/dev/null 2>&1
-  if gone images.phorge.fr deb "$a"; then
-    note "the Image was deleted although vm1 was created from it: Incus does not refuse, the Instance is $(cond instances.phorge.fr vm1 "$a" Ready | sed 's/True/still Ready/;s/False/not Ready/')"
-  else
-    note "deleting an Image that vm1 uses is held back: $(cond_msg images.phorge.fr deb "$a" Synced | cut -c1-160)"
-  fi
-  eq "in both cases the VM keeps running" "RUNNING" "$(INCUS list vm1 --project "$a" -f csv -c s)"
+  local out; out=$(K -n "$a" delete images.phorge.fr deb --wait=false 2>&1)
+  match "deleting an Image used by a VM is refused by the Usage" 'in-use by' "$out"
+  eq "the Image is still there" deb "$(sget images.phorge.fr "$a" deb '{.metadata.name}')"
+  eq "and the VM keeps running" "RUNNING" "$(INCUS list vm1 --project "$a" -f csv -c s)"
+  K -n "$a" delete instances.phorge.fr vm1 --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
+  check "the Instance is deleted in the foreground without blocking on its own Usage" gone instances.phorge.fr vm1 "$a"
+  # replayDeletion: the refused deletion of the Image is remembered and replayed once nothing uses it, so the
+  # Image goes by itself a few seconds after the VM (a second explicit delete is not needed).
+  local t0=$SECONDS
+  if wait_until 180 "image gone" gone images.phorge.fr deb "$a"; then
+    pass "the refused deletion is replayed: the Image is gone once the VM is gone"
+    note "the Image disappeared $((SECONDS-t0)) s after the VM was deleted, without a second delete"
+  else fail "the refused deletion is replayed once the VM is gone" "still there after 180 s: $(K -n "$a" get usages.protection.crossplane.io -o name | tr '\n' ' ')"; fi
 }

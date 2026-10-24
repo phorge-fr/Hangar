@@ -58,6 +58,7 @@ spec:
                 - authentik-grafana-oauth-blueprint
                 - authentik-forgejo-oauth-blueprint
                 - authentik-incus-oauth-blueprint
+                - authentik-phorge-oauth-blueprint
                 - authentik-brand
         authentik:
             enabled: true
