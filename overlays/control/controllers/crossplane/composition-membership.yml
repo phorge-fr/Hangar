@@ -1,5 +1,10 @@
-# Renders the OpenFGA tuple of a Membership, see xrd-membership.yml. The tenant is the namespace
+# Renders the two OpenFGA tuples of a Membership, see xrd-membership.yml. The tenant is the namespace
 # the Membership lives in, which is also the Incus project name.
+#
+# - Incus store (iaas): the subject is always "viewer" of the project, whatever the role. The Incus UI
+#   (iaas.phorge.fr) is read-only: Crossplane owns every object, and anything changed by hand in Incus is
+#   reconciled back. Writing goes through the Phorge API.
+# - Phorge API store (phorge-api): the subject has the real role on tenant:<name>, which is what the API checks.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -30,31 +35,98 @@ spec:
               source: Inline
               inline:
                   template: |
+                      {{- /* Ready only when the managed resource is Ready AND Synced: a failing reconcile
+                               (Synced=False) must not read as Ready because its last good state was. */ -}}
                       {{- define "ready" -}}
-                      {{- $r := "False" -}}
+                      {{- $ready := false -}}
+                      {{- $synced := true -}}
                       {{- range (dig "resource" "status" "conditions" (list) .) -}}
-                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $r = "True" -}}{{- end -}}
+                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $ready = true -}}{{- end -}}
+                      {{- if and (eq .type "Synced") (ne .status "True") -}}{{- $synced = false -}}{{- end -}}
                       {{- end -}}
-                      {{- $r -}}
+                      {{- if and $ready $synced -}}True{{- else -}}False{{- end -}}
+                      {{- end -}}
+                      {{- /* What is wrong with the composed resources, for status.problems. */ -}}
+                      {{- $problems := list -}}
+                      {{- range $rname, $res := (default (dict) .observed.resources) -}}
+                      {{- range (dig "resource" "status" "conditions" (list) $res) -}}
+                      {{- if and (or (eq .type "Ready") (eq .type "Synced") (eq .type "LastAsyncOperation")) (ne .status "True") -}}
+                      {{- $problems = append $problems (printf "%s %s: %s" $rname .type (default "not ready" .message)) -}}
+                      {{- end -}}
+                      {{- end -}}
                       {{- end -}}
                       {{- $xr := .observed.composite.resource -}}
                       {{- $ns := $xr.metadata.namespace -}}
                       {{- if not (hasPrefix "t-" $ns) -}}
                       {{- fail (printf "a Membership belongs in a tenant namespace (t-<name>), not %q" $ns) -}}
                       {{- end -}}
+                      {{- /* The namespace must belong to a Tenant: the Tenant composition creates it, but a
+                               namespace named t-<x> can also be created by hand, and the namespace is used as the
+                               Incus project name and in OpenFGA objects. The Tenant is asked for through
+                               ExtraResources; until it is resolved nothing is decided, once resolved an empty answer
+                               refuses the object. */ -}}
+                      {{- $tenantName := trimPrefix "t-" $ns -}}
+                      {{- $found := default (dict) .extraResources -}}
+                      {{- $tenantItems := list -}}
+                      {{- if hasKey $found "tenant" -}}
+                      {{- $tenantItems = dig "items" (list) (default (dict) (index $found "tenant")) -}}
+                      {{- if not $tenantItems -}}
+                      {{- fail (printf "namespace %q has no Tenant %q in phorge-system: create the Tenant first" $ns $tenantName) -}}
+                      {{- end -}}
+                      {{- end -}}
                       {{- $env := index .context "apiextensions.crossplane.io/environment" -}}
                       {{- $obs := default (dict) .observed.resources -}}
+                      {{- /* Who is on the tenant is decided once per subject: the tuples are named after a hash of the
+                               subject, so a second Membership for the same user or group in this namespace tries to
+                               compose the same resources, is refused by Crossplane (owned by the first one) and reports
+                               it in status.problems. Two Memberships never share a tuple, which deleting one would
+                               otherwise remove from the other. */ -}}
+                      {{- $hash := printf "%s:%s" $xr.spec.subject.kind $xr.spec.subject.name | sha1sum | trunc 12 -}}
+                      {{- /* The owner already has the admin role from the Tenant itself. */ -}}
+                      {{- range $tenantItems -}}
+                      {{- if and (eq $xr.spec.subject.kind "User") (eq $xr.spec.subject.name (dig "resource" "spec" "owner" "" .)) -}}
+                      {{- fail (printf "%s is the owner of tenant %s and already has the admin role" $xr.spec.subject.name $tenantName) -}}
+                      {{- end -}}
+                      {{- end -}}
                       {{- $subject := ternary (printf "user:%s" $xr.spec.subject.name) (printf "group:%s#member" $xr.spec.subject.name) (eq $xr.spec.subject.kind "User") -}}
+                      apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
+                      kind: ExtraResources
+                      requirements:
+                        tenant:
+                          apiVersion: phorge.fr/v1alpha1
+                          kind: Tenant
+                          matchName: {{ $tenantName }}
+                          namespace: phorge-system
+                      ---
                       apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
                       kind: RelationshipTuple
                       metadata:
-                        name: {{ $xr.metadata.name }}
+                        name: i-{{ $hash }}
                         annotations:
-                          gotemplating.fn.crossplane.io/composition-resource-name: tuple
-                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "tuple")) }}"
+                          gotemplating.fn.crossplane.io/composition-resource-name: incus
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "incus")) }}"
                       spec:
                         forProvider:
                           storeId: {{ $env.openfgaStoreId | quote }}
                           user: {{ $subject | quote }}
-                          relation: {{ $xr.spec.role }}
+                          relation: viewer
                           object: {{ printf "project:%s" $ns | quote }}
+                      ---
+                      apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
+                      kind: RelationshipTuple
+                      metadata:
+                        name: a-{{ $hash }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: api
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "api")) }}"
+                      spec:
+                        forProvider:
+                          storeId: {{ $env.phorgeStoreId | quote }}
+                          user: {{ $subject | quote }}
+                          relation: {{ $xr.spec.role }}
+                          object: {{ printf "tenant:%s" $tenantName | quote }}
+                      ---
+                      apiVersion: phorge.fr/v1alpha1
+                      kind: Membership
+                      status:
+                        problems: {{ join " | " $problems | trunc 800 | quote }}

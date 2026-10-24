@@ -94,6 +94,19 @@ YAML
   K -n "$a" delete instances.phorge.fr noimg --wait=true --timeout=120s >/dev/null 2>&1
   check "it can be deleted" gone instances.phorge.fr noimg "$a"
 
+
+  section "instance: an image that does not boot with secure boot"
+  # alpine/3.22/cloud is refused by Incus with secure boot on ("incompatible with secureboot"): the Instance
+  # kind has spec.secureBoot for that, and the VM must then come up like any other.
+  ensure_image "$TA" alp "$IMG_ALPINE" e2e-alp || return
+  ensure_instance "$TA" alpvm alp "  secureBoot: false" || return
+  eq "secureBoot: false reaches Incus" false "$(INCUS config get alpvm security.secureboot --project "$a")"
+  wait_until 180 "alpine running" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n $a get instances.phorge.fr alpvm -o jsonpath='{.status.state}') == Running ]]"
+  eq "the Alpine VM runs" Running "$(sget instances.phorge.fr "$a" alpvm '{.status.state}')"
+  eq "the Alpine VM has no problems to report" "" "$(sget instances.phorge.fr "$a" alpvm '{.status.problems}')"
+  K -n "$a" delete instances.phorge.fr alpvm --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
+  check "and it deletes in the foreground" gone instances.phorge.fr alpvm "$a"
+
   # free the quota for the other groups: only vm1 stays, it is the one they use
-  K -n "$a" delete instances.phorge.fr vm2 --wait=true --timeout=200s >/dev/null 2>&1
+  K -n "$a" delete instances.phorge.fr vm2 --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
 }
