@@ -37,7 +37,7 @@ spec:
                             vrrpInstances:
                                 - virtualIPs:
                                       - 10.2.0.4/24
-                                  authPass: ENC[AES256_GCM,data:QyVDuPldTIQ=,iv:3RAOXvTDRlYVHESKjTojJ1DbplRSoDQh0k1C3loax7k=,tag:2XZsUQb9HLldTG+W1xwrfQ==,type:str]
+                                  authPass: ENC[AES256_GCM,data:gGbN2f337TU=,iv:914dtpU9QT9YawvIlqMBZ8ptiOHj5sj3SDgHY8HbiIQ=,tag:Ys1cyZpG9LFXdujK3MZi0Q==,type:str]
                                   interface: enp1s0
                     nodeLocalLoadBalancing:
                         enabled: true
@@ -63,6 +63,15 @@ spec:
           noTaints: true
           privateAddress: 10.2.0.1
           privateInterface: enp1s0
+          # Caps the Go heap of everything k0s spawns on the node (kube-apiserver is the one that
+          # matters). Only read when k0scontroller starts: after changing the value, restart the
+          # service on one node at a time. See the README of this directory.
+          files:
+              - name: k0scontroller-gomemlimit
+                src: k0scontroller-gomemlimit.conf
+                dst: /etc/systemd/system/k0scontroller.service.d/gomemlimit.conf
+                perm: "0644"
+                dirPerm: "0755"
         - ssh:
               address: 10.2.0.2
               user: root
@@ -74,6 +83,15 @@ spec:
           noTaints: true
           privateAddress: 10.2.0.2
           privateInterface: enp1s0
+          # Caps the Go heap of everything k0s spawns on the node (kube-apiserver is the one that
+          # matters). Only read when k0scontroller starts: after changing the value, restart the
+          # service on one node at a time. See the README of this directory.
+          files:
+              - name: k0scontroller-gomemlimit
+                src: k0scontroller-gomemlimit.conf
+                dst: /etc/systemd/system/k0scontroller.service.d/gomemlimit.conf
+                perm: "0644"
+                dirPerm: "0755"
         - ssh:
               address: 10.2.0.3
               user: root
@@ -85,18 +103,27 @@ spec:
           noTaints: true
           privateAddress: 10.2.0.3
           privateInterface: enp1s0
+          # Caps the Go heap of everything k0s spawns on the node (kube-apiserver is the one that
+          # matters). Only read when k0scontroller starts: after changing the value, restart the
+          # service on one node at a time. See the README of this directory.
+          files:
+              - name: k0scontroller-gomemlimit
+                src: k0scontroller-gomemlimit.conf
+                dst: /etc/systemd/system/k0scontroller.service.d/gomemlimit.conf
+                perm: "0644"
+                dirPerm: "0755"
 sops:
     age:
         - recipient: age1ae6yk6xtlt8h40272xqxegz3t3zpvvuxj0jwy489xs6e34k0y9xsvpmt03
           enc: |
               -----BEGIN AGE ENCRYPTED FILE-----
-              YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBUOFJ0aDdQbGVDcmJLWHpB
-              WWQzWmJtZ3AxN2UrZEtQdmRoUHJFa0NVclhZClY5YWZIbGNXclV4UzRqNnRJNDNl
-              TExtTkVwTTFVcGNEWUVzcmh3b1ZJbncKLS0tIFJNY093RDJTZkF2Y3oyVzh3UWxG
-              OFlUZVhkQ3NGdFB5cHpRcDVuVjI5cDgKN/bSNE56hkOtOmtRAlzSAx5tk5fFh/7w
-              Mif4xBsbxHG682e9RwCPd5a7xUxfE4mBzDFHZqpQ7LwiVKI3gewjsQ==
+              YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBKYWxqejJ2VEdHOWR4ckh3
+              akM3ZVNPZzFqaCtHME9qcFN3czFUbzAvTEFNCk1CZHU5bHdsZWlWOGs2NGdWRlM4
+              V1VMcXZ0TU95NDlNVkdZLzhkbUJTME0KLS0tIGJIb3d1cDhrc2REM0hFb1Z4RWJG
+              WHZBOXRYdWNYYnhrczRKVDdHdmlyN2MK0SnyjHr4tg5J1saaGAKUv9Trp5zl5LIv
+              hBJpDFZFx7DpL8MlgagVzHl7H14+Zk/LQN/1PT6/yN2tY1eJ3kgi/w==
               -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2026-09-26T13:26:21Z"
-    mac: ENC[AES256_GCM,data:b4fWNzA/1e/RPc+0tfXAwsXBCY//mFmPTJwZNEPDrhIynE7pk/3HcOuztDaU4UdEoB/f5ZjXVKuVpzPU301osuF9KG7hSCCJo9Uugs0chIHQ088F0BB8xTTiprno4Z7R8otiKvw009ZYp/bSX61XWSQMX1KXvTmJa6Io5k3jcAI=,iv:AutS8R2DklnqGFcWH3jc+TKOcDOYB9n/D/MioU2lTVU=,tag:wBnzEfcy48tO06isNOcy4w==,type:str]
+    lastmodified: "2026-10-24T19:26:30Z"
+    mac: ENC[AES256_GCM,data:wXb+xxL8qL5TT8+bzui9fQWtQc5EF+qGnoumNxFmg35ubVHsfoKpKpzTNnE0iM3Zi2UL7gmoNr8So8Cl/GV7TwwGTKL8zQqHya5GVWEgF1Hkkeei3BdBr+UIILlV82a09GlkmGu8+ebl9qxaEvN99YvFC4LqQ6d6/zcamfqbdHE=,iv:0tuMM26im6t6uqlrZPDq6vnwcuVKNePX2kTuFyYKG0I=,tag:ACCOy+yyBuxqfcPWKAY41g==,type:str]
     encrypted_regex: ^(email|password|secret_key|data|stringData|ca|crt|key|id|secret|token|aggregatorCA|serviceAccount|bootstraptoken|secretboxencryptionsecret|secretboxEncryptionSecret|clientSecret|clientId|clientID|external-dns.alpha.kubernetes.io/target|adminPassword|metrics.crt|metrics.key|ca.crt|uri|postgresPassword|preshared|username|cloud-init.user-data|access_key|secret_key|authPass)$
     version: 3.11.0
