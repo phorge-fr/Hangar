@@ -37,6 +37,7 @@ Not in v1: groups, `Expose` (publishing an instance), volumes, snapshots, ACLs, 
 | OIDC application "Phorge" | `overlays/core/apps/authentik/blueprint-phorge-api.yml` | Deployed. Issuer `https://auth.phorge.fr/application/o/phorge/`, audience (client id) `49a1375b-c52a-4a59-b3cb-8d4f5e392d85`, public client |
 | ServiceAccount `phorge-api` with limited RBAC | `overlays/control/apps/phorge-api/rbac.yml` | Deployed. Can manage the five kinds, nothing else (no namespaces, no Secrets, no update on `Membership`) |
 | OpenFGA | `https://openfga.core.phorge` (inside the network), stores `iaas` and `phorge-api` | Deployed |
+| The internal CA, as a ConfigMap | `phorge-api-ca` (key `ca.crt`), namespace `phorge-api` on `control` | Deployed. `openfga.core.phorge` is signed by the cert-manager CA `local-root-ca`, which a pod does not trust by default (`ssl_verify=20`). Mount this ConfigMap and add it to the trusted roots; never turn verification off. `auth.phorge.fr` has a public certificate and needs nothing |
 | A dedicated OpenFGA key | Secret `phorge-api-openfga`, key `apiKey`, namespace `phorge-api` on `control` | Deployed. Not scoped: any key can read and write every store |
 | Network path `control` to `core` | Router rule `alloy-ctrl-to-core` (TCP 443 to `10.2.0.10`) | Works: OpenFGA answers 200 from a pod of `control` |
 | Authentik from `control` | `auth.phorge.fr` | Works through the public address (NAT hairpin of the ISP box). Fragile, keep the issuer URL configurable |
@@ -64,7 +65,7 @@ curl -s https://auth.phorge.fr/application/o/device/ -d client_id=49a1375b-c52a-
 #   with grant_type=urn:ietf:params:oauth:grant-type:device_code, device_code=..., client_id=...
 ```
 
-Never print, log or commit a key or a token. Never put a secret in a file that is not SOPS-encrypted (`age.agekey` at the root of Hangar decrypts; the rules are in `.sops.yaml`).
+From a pod the URL is `https://openfga.core.phorge` with the CA above; from your machine use the port-forward (plain HTTP on `127.0.0.1`), the `.phorge` names do not resolve there. Never print, log or commit a key or a token. Never put a secret in a file that is not SOPS-encrypted (`age.agekey` at the root of Hangar decrypts; the rules are in `.sops.yaml`).
 
 The platform has an end-to-end suite you can run to check it is healthy before and after your work: `tests/e2e/run.sh fast` (a few minutes, no VM), the whole suite takes about an hour. Read `tests/e2e/README.md`. It creates tenants named `e2e-*`; **name yours differently** (`apitest-<run>-*`) so that its cleanup never touches your data and yours never touches its.
 
