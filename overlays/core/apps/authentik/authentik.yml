@@ -49,7 +49,14 @@ spec:
                 repository: ghcr.io/goauthentik/server
                 tag: 2026.8.5
             addPrometheusAnnotations: false
-            env: []
+            # The key of the token of the service account phorge-api-directory, read by blueprint-phorge-api.yml (!Env). The same
+            # value is in the Secret phorge-api-authentik of the control cluster, which is what the Phorge API presents.
+            env:
+                - name: PHORGE_API_DIRECTORY_TOKEN
+                  valueFrom:
+                      secretKeyRef:
+                          name: authentik-phorge-api-directory
+                          key: token
             envFrom: []
             volumeMounts: []
             volumes: []

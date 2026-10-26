@@ -157,10 +157,12 @@ cleanup() {
   local t k x
   for x in "${TRACK_XR[@]}"; do K delete ${x%% *}.phorge.fr -n "$(cut -d' ' -f2 <<<"$x")" "$(cut -d' ' -f3 <<<"$x")" --wait=false >/dev/null 2>&1; done
   for t in "${TRACK_TENANTS[@]}"; do
-    for k in instances apikeys memberships images; do
+    for k in instances memberships images; do
       K -n "t-$t" delete "$k.phorge.fr" -l "$LABEL=$RUN_ID" --wait=false >/dev/null 2>&1
     done
   done
+  # The keys are a person's, not a tenant's: they are in their own namespace.
+  K -n phorge-keys delete apikeys.phorge.fr -l "$LABEL=$RUN_ID" --wait=false >/dev/null 2>&1
   for t in "${TRACK_TENANTS[@]}"; do
     wait_until 300 "children of $t" bash -c "K() { kubectl --context $E2E_CONTEXT \"\$@\"; }; [[ -z \$(K -n t-$t get instances.phorge.fr,images.phorge.fr -o name 2>/dev/null) ]]"
     K -n phorge-system delete tenants.phorge.fr "$t" --wait=false >/dev/null 2>&1
@@ -179,6 +181,7 @@ sweep() {
     echo "sweep: deleting $n"; K -n phorge-system delete "$n" --wait=false >/dev/null 2>&1
   done
   for n in $(K get ns -l "$LABEL" -o name 2>/dev/null); do K delete "$n" --wait=false >/dev/null 2>&1; done
+  K -n phorge-keys delete apikeys.phorge.fr -l "$LABEL" --wait=false >/dev/null 2>&1
 }
 
 preflight() {

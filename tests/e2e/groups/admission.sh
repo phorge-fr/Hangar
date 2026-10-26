@@ -7,7 +7,7 @@ _t() { # name, then spec lines (already indented)
 _i() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Image\nmetadata: {name: x, namespace: default}\nspec:\n%s\n' "$1"; }
 _n() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n%s\n' "${1:-}"; }
 _m() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Membership\nmetadata: {name: x, namespace: default}\nspec:\n%s\n' "$1"; }
-_k() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: ApiKey\nmetadata: {name: x, namespace: default}\nspec:\n%s\n' "$1"; }
+_k() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: ApiKey\nmetadata: {name: x, namespace: phorge-keys}\nspec:\n%s\n  owner: %s\n' "$1" "${2-a@b.fr}"; }
 H64=$(printf 'a%.0s' {1..64})
 
 group_admission() {
@@ -62,7 +62,13 @@ group_admission() {
   _n "  diskGiB: 0" | reject "disk 0" 'diskGiB'
   _n "  diskGiB: 501" | reject "disk 501" 'diskGiB'
   _n "  diskGiB: 500" | accept "disk 500"
-  _n "  sshPublicKeys: [a, b]" | accept "several ssh keys"
+  local k1='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE2eUpdatedKeyOnly' k2='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7 laptop@home'
+  _n "  sshPublicKeys: ['$k1', '$k2']" | accept "several ssh keys, one with a comment"
+  _n "  sshPublicKeys: [a, b]" | reject "ssh keys that are not keys" 'each key must be'
+  _n "  sshPublicKeys: [\"$k1\\nruncmd: [reboot]\"]" | reject "an ssh key with a line break (cloud-init injection)" 'each key must be'
+  _n "  sshPublicKeys: ['$k1 note: x']" | reject "an ssh key whose comment has a colon" 'each key must be'
+  _n "  sshPublicKeys: ['$k1 two words']" | reject "an ssh key with a two word comment" 'each key must be'
+  _n "  sshPublicKeys: [$(printf "'$k1', %.0s" {1..20})'$k1']" | reject "21 ssh keys" 'sshPublicKeys'
 
   section "admission: Membership"
   _m "  subject: {kind: User, name: a@b.fr}
@@ -88,12 +94,13 @@ group_admission() {
   _k "  hash: $H64
   scopes: [instances:read]" | accept "key with one scope"
   _k "  hash: $H64
-  scopes: [tenant:read, instances:read, instances:write, images:read, images:write, memberships:read, memberships:write]" | accept "key with all 7 scopes"
+  scopes: [tenants:read, tenants:write, instances:read, instances:write, images:read, images:write, memberships:read, memberships:write]" | accept "key with all 8 scopes"
   _k "  hash: $H64
   scopes: [instances:read]
   displayName: ci
-  expiresAt: 2030-01-01T00:00:00Z
-  createdBy: a@b.fr" | accept "key with every field"
+  expiresAt: 2030-01-01T00:00:00Z" | accept "key with every field"
+  _k "  hash: $H64
+  scopes: [tenant:read]" | reject "the former scope name tenant:read" 'spec.scopes'
   _k "  hash: abc
   scopes: [instances:read]" | reject "short hash" 'spec.hash'
   _k "  hash: ${H64^^}
@@ -114,4 +121,7 @@ group_admission() {
   _k "  hash: $H64
   scopes: [instances:read]
   displayName: $(printf 'x%.0s' {1..101})" | reject "displayName over 100 characters" 'displayName'
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: ApiKey\nmetadata: {name: x, namespace: phorge-keys}\nspec:\n  hash: %s\n  scopes: [instances:read]\n' "$H64" | reject "no owner" 'spec.owner'
+  _k "  hash: $H64
+  scopes: [instances:read]" "" | reject "an empty owner" 'spec.owner'
 }

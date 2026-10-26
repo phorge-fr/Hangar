@@ -1,0 +1,15 @@
+# Alloy on control watches the PodMonitors cluster-wide and forwards to core (base/controllers/alloy/alloy.yml). The metrics
+# are the Go runtime and the requests by route pattern, never by path (no tenant name in a label).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+    name: phorge-api
+    namespace: phorge-api
+spec:
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: phorge-api
+    podMetricsEndpoints:
+        - port: http
+          path: /metrics
+          interval: 30s

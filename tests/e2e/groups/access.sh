@@ -1,4 +1,4 @@
-# Membership and ApiKey: the OpenFGA tuples they write.
+# Membership: the OpenFGA tuples it writes. ApiKey: a person's access token, which writes none.
 #
 # - A Membership writes two tuples: "viewer" on the project in the Incus store (iaas), because the Incus
 #   UI is read-only, and the real role on tenant:<name> in the Phorge API store (phorge-api).
@@ -29,16 +29,16 @@ metadata: {name: $2, namespace: $1, labels: {$LABEL: "$RUN_ID"}}
 spec: {subject: {kind: $3, name: "$4"}, role: $5}
 YAML
 }
-apikey() { # <ns> <name> <scopes, comma separated> [expiresAt]
+apikey() { # <name> <scopes, comma separated> [expiresAt]: a key of a throw-away owner, in phorge-keys
   cat <<YAML | K apply -f - 2>&1
 apiVersion: phorge.fr/v1alpha1
 kind: ApiKey
-metadata: {name: $2, namespace: $1, labels: {$LABEL: "$RUN_ID"}}
+metadata: {name: $1, namespace: phorge-keys, labels: {$LABEL: "$RUN_ID"}}
 spec:
-  hash: "$(printf '%s' "$RUN_ID$2" | sha256sum | cut -d' ' -f1)"
-  scopes: [$3]
-${4:+  expiresAt: "$4"}
-  createdBy: e2e@example.org
+  hash: "$(printf '%s' "$RUN_ID$1" | sha256sum | cut -d' ' -f1)"
+  scopes: [$2]
+${3:+  expiresAt: "$3"}
+  owner: e2e-owner@example.org
 YAML
 }
 count_tuples() { K -n "$1" get $RT -o name 2>/dev/null | grep -c "/$2"; }
@@ -108,36 +108,35 @@ group_access() {
     fga_has "$s" user:u-operator@example.org viewer "$obj" && fail "in OpenFGA, the deleted Membership's Incus tuple is gone" || pass "in OpenFGA, the deleted Membership's Incus tuple is gone"
   fi
 
-  section "access: ApiKey scopes"
-  apikey "$a" k1 instances:read,instances:write >/dev/null
-  wait_ready apikeys.phorge.fr "$a" k1 120 && pass "ApiKey with two scopes becomes Ready" || fail "ApiKey with two scopes becomes Ready" "$(why apikeys.phorge.fr k1 "$a")"
-  eq "status.keyId is <tenant>.<name>" "$TA.k1" "$(sget apikeys.phorge.fr "$a" k1 '{.status.keyId}')"
-  eq "one tuple per scope" 2 "$(count_tuples "$a" k1-)"
-  eq "scope instances:read is key_instances_read on tenant:<name>, in the phorge-api store" "$ps/apikey:$TA.k1/key_instances_read/$tobj" "$(tuple_name "$a" k1-instances-read)"
-  eq "scope instances:write likewise" "$ps/apikey:$TA.k1/key_instances_write/$tobj" "$(tuple_name "$a" k1-instances-write)"
-  apikey "$a" kall tenant:read,instances:read,instances:write,images:read,images:write,memberships:read,memberships:write >/dev/null
-  wait_ready apikeys.phorge.fr "$a" kall 180 && eq "a key with all 7 scopes writes 7 tuples" 7 "$(count_tuples "$a" kall-)" \
-    || fail "a key with all 7 scopes becomes Ready" "$(why apikeys.phorge.fr kall "$a")"
+  # A key is its owner limited to its scopes: the API checks the scope and asks OpenFGA about the owner, so there is no
+  # tuple for a key. These checks are about the object: its status, its immutable fields, its date.
+  section "access: ApiKey, a person's key"
+  local k1="e2e-$RUN_ID-k1" kold="e2e-$RUN_ID-kold" knew="e2e-$RUN_ID-knew"
+  apikey "$k1" instances:read,instances:write >/dev/null
+  wait_ready apikeys.phorge.fr phorge-keys "$k1" 120 && pass "an ApiKey becomes Ready" || fail "an ApiKey becomes Ready" "$(why apikeys.phorge.fr "$k1" phorge-keys)"
+  eq "status.keyId is the name of the object, the id in the key" "$k1" "$(sget apikeys.phorge.fr phorge-keys "$k1" '{.status.keyId}')"
+  eq "it is not expired" false "$(sget apikeys.phorge.fr phorge-keys "$k1" '{.status.expired}')"
+  eq "no tuple is written for it, whatever its scopes" 0 "$(K get $RT -A -o name 2>/dev/null | grep -c "$k1")"
+  eq "no managed resource carries its name" 0 "$(K get managed -A -o name 2>/dev/null | grep -c "$k1")"
+  if out=$(K -n phorge-keys patch apikeys.phorge.fr "$k1" --type merge -p '{"spec":{"owner":"someone-else@example.org"}}' 2>&1); then
+    fail "the owner of a key cannot change" "the patch was accepted"
+  else match "the owner of a key cannot change" 'cannot change' "$out"; fi
+  if out=$(K -n phorge-keys patch apikeys.phorge.fr "$k1" --type merge -p "{\"spec\":{\"hash\":\"$(printf 'c%.0s' {1..64})\"}}" 2>&1); then
+    fail "the secret of a key cannot change" "the patch was accepted"
+  else match "the secret of a key cannot change" 'cannot change' "$out"; fi
+  K -n phorge-keys patch apikeys.phorge.fr "$k1" --type merge -p '{"spec":{"scopes":["instances:read"]}}' >/dev/null 2>&1 \
+    && pass "the scopes of a key can change" || fail "the scopes of a key can change" "the patch was refused"
+  K -n phorge-keys delete apikeys.phorge.fr "$k1" --wait=true --timeout=60s >/dev/null 2>&1
+  eq "a key is gone as soon as it is deleted" "" "$(K -n phorge-keys get apikeys.phorge.fr "$k1" -o name 2>/dev/null)"
 
-  section "access: ApiKey scope changes and deletion"
-  apikey "$a" k1 instances:read,images:read >/dev/null
-  wait_until 150 "tuples follow scopes" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n $a get $RT -o name | grep -c '/k1-images-read') == 1 && \$(kubectl --context $E2E_CONTEXT -n $a get $RT -o name | grep -c '/k1-instances-write') == 0 ]]"
-  eq "adding a scope adds its tuple" 1 "$(count_tuples "$a" k1-images-read)"
-  eq "removing a scope removes its tuple (the key loses the right)" 0 "$(count_tuples "$a" k1-instances-write)"
-  eq "the scope kept keeps its tuple" 1 "$(count_tuples "$a" k1-instances-read)"
-  K -n "$a" delete apikeys.phorge.fr kall --wait=true --timeout=180s >/dev/null 2>&1
-  tuples_gone "$a" kall- "deleting a key deletes every tuple"
-
-  section "access: an expired key grants nothing"
-  apikey "$a" kold tenant:read,instances:read 2020-01-01T00:00:00Z >/dev/null
-  sleep 50
-  eq "status.expired is true" true "$(sget apikeys.phorge.fr "$a" kold '{.status.expired}')"
-  eq "an expired key has no tuple at all" 0 "$(count_tuples "$a" kold-)"
-  eq "the key is still Ready (nothing is wrong, it just grants nothing)" True "$(cond apikeys.phorge.fr kold "$a" Ready)"
-  apikey "$a" knew tenant:read 2099-01-01T00:00:00Z >/dev/null
-  wait_ready apikeys.phorge.fr "$a" knew 120
-  eq "a key that expires later keeps its tuple" 1 "$(count_tuples "$a" knew-)"
-  eq "and is not expired" false "$(sget apikeys.phorge.fr "$a" knew '{.status.expired}')"
+  section "access: an expired key"
+  apikey "$kold" tenants:read,instances:read 2020-01-01T00:00:00Z >/dev/null
+  wait_until 120 "status.expired" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n phorge-keys get apikeys.phorge.fr $kold -o jsonpath='{.status.expired}') == true ]]"
+  eq "status.expired is true" true "$(sget apikeys.phorge.fr phorge-keys "$kold" '{.status.expired}')"
+  eq "the key is still Ready (nothing is wrong, it just grants nothing)" True "$(cond apikeys.phorge.fr "$kold" phorge-keys Ready)"
+  apikey "$knew" tenants:read 2099-01-01T00:00:00Z >/dev/null
+  wait_ready apikeys.phorge.fr phorge-keys "$knew" 120
+  eq "a key that expires later is not expired" false "$(sget apikeys.phorge.fr phorge-keys "$knew" '{.status.expired}')"
 
   if (( fga_on )); then
     section "access: what OpenFGA grants"
@@ -152,9 +151,6 @@ group_access() {
     eq "an API 'viewer' can read instances" true "$(fga_check "$ps" user:u-viewer@example.org can_read_instances "$tobj")"
     eq "but cannot write them" false "$(fga_check "$ps" user:u-viewer@example.org can_write_instances "$tobj")"
     eq "an API 'operator' (group devs) can write images" true "$(fga_check "$ps" 'group:devs#member' can_write_images "$tobj")"
-    eq "a key with instances:read can read instances" true "$(fga_check "$ps" "apikey:$TA.k1" can_read_instances "$tobj")"
-    eq "and cannot write them (that scope was removed)" false "$(fga_check "$ps" "apikey:$TA.k1" can_write_instances "$tobj")"
-    eq "an expired key reads nothing" false "$(fga_check "$ps" "apikey:$TA.kold" can_read_tenant "$tobj")"
   else
     skip "reading tuples back from OpenFGA and real checks (set FGA_URL and FGA_TOKEN, see the top of groups/access.sh)"
   fi
