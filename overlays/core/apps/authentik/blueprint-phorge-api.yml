@@ -21,6 +21,29 @@ data:
         # (Membership and ApiKey tuples), so a user without a Membership gets nothing. Restrict the
         # application with a group policy binding to also stop strangers from signing in.
         entries:
+          # authentik's own 'email' mapping hardcodes "email_verified": false, it never verifies an address, so
+          # the API (which refuses a token without a verified email, docs/phorge-api-implementation.md) would
+          # refuse every user. This mapping, attached to this provider only, states what is true here: accounts
+          # are created by an administrator, nobody enrolls by themselves, so the address of an account is the
+          # one the administrator typed. No mail can be sent from the domain, so an address cannot be verified by
+          # mail either, so the administrator is the one who decides whether a person may use an account: keep it
+          # that way (accounts created by an administrator, or by an invitation link handed over by hand) and do
+          # not open a self-enrollment flow. If one is ever opened, replace the constant with
+          # a check (an attribute set after a verification) first: any user could otherwise register somebody
+          # else's address and inherit their rights in OpenFGA.
+          - model: authentik_providers_oauth2.scopemapping
+            id: phorge-email-scope
+            identifiers:
+              name: Phorge email
+            attrs:
+              name: Phorge email
+              scope_name: email
+              description: Email address, vouched for by the administrators of the accounts
+              expression: |
+                return {
+                    "email": request.user.email,
+                    "email_verified": True,
+                }
           - model: authentik_providers_oauth2.oauth2provider
             id: phorge-oauth-provider
             identifiers:
@@ -33,7 +56,7 @@ data:
               access_code_validity: minutes=5
               property_mappings:
                 - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
-                - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+                - !KeyOf phorge-email-scope
                 - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
                 - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-offline_access]]
               authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-explicit-consent]]
@@ -55,3 +78,12 @@ data:
               name: Phorge
               slug: phorge
               provider: !Find [authentik_providers_oauth2.oauth2provider, [name, Phorge OAuth]]
+          # The people who create, resize and delete tenants. The API reads the "groups" claim of the token (the names
+          # of the groups the user belongs to, see the 'profile' scope) and compares it with PLATFORM_ADMIN_GROUP, so
+          # this name is the one the API is configured with. The blueprint creates the group but never lists its
+          # members, which would be reset at each apply: add the people to it in authentik.
+          - model: authentik_core.group
+            identifiers:
+              name: phorge-platform-admins
+            attrs:
+              name: phorge-platform-admins
