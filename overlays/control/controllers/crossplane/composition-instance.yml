@@ -63,7 +63,7 @@ spec:
                       {{- $obs := default (dict) .observed.resources -}}
                       {{- $inst := default (dict) (index $obs "instance") -}}
                       {{- $ud := "#cloud-config\nssh_authorized_keys:\n" -}}
-                      {{- range $spec.sshPublicKeys }}{{ $ud = printf "%s  - %s\n" $ud . }}{{ end -}}
+                      {{- range $spec.sshPublicKeys }}{{ $ud = printf "%s  - %s\n" $ud (toJson .) }}{{ end -}}
                       apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
                       kind: ExtraResources
                       requirements:

@@ -62,7 +62,13 @@ group_admission() {
   _n "  diskGiB: 0" | reject "disk 0" 'diskGiB'
   _n "  diskGiB: 501" | reject "disk 501" 'diskGiB'
   _n "  diskGiB: 500" | accept "disk 500"
-  _n "  sshPublicKeys: [a, b]" | accept "several ssh keys"
+  local k1='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE2eUpdatedKeyOnly' k2='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7 laptop@home'
+  _n "  sshPublicKeys: ['$k1', '$k2']" | accept "several ssh keys, one with a comment"
+  _n "  sshPublicKeys: [a, b]" | reject "ssh keys that are not keys" 'each key must be'
+  _n "  sshPublicKeys: [\"$k1\\nruncmd: [reboot]\"]" | reject "an ssh key with a line break (cloud-init injection)" 'each key must be'
+  _n "  sshPublicKeys: ['$k1 note: x']" | reject "an ssh key whose comment has a colon" 'each key must be'
+  _n "  sshPublicKeys: ['$k1 two words']" | reject "an ssh key with a two word comment" 'each key must be'
+  _n "  sshPublicKeys: [$(printf "'$k1', %.0s" {1..20})'$k1']" | reject "21 ssh keys" 'sshPublicKeys'
 
   section "admission: Membership"
   _m "  subject: {kind: User, name: a@b.fr}
