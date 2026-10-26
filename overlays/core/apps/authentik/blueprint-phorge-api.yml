@@ -78,3 +78,12 @@ data:
               name: Phorge
               slug: phorge
               provider: !Find [authentik_providers_oauth2.oauth2provider, [name, Phorge OAuth]]
+          # The people who create, resize and delete tenants. The API reads the "groups" claim of the token (the names
+          # of the groups the user belongs to, see the 'profile' scope) and compares it with PLATFORM_ADMIN_GROUP, so
+          # this name is the one the API is configured with. The blueprint creates the group but never lists its
+          # members, which would be reset at each apply: add the people to it in authentik.
+          - model: authentik_core.group
+            identifiers:
+              name: phorge-platform-admins
+            attrs:
+              name: phorge-platform-admins
