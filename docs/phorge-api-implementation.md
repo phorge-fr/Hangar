@@ -136,16 +136,7 @@ Everything is **asynchronous**. Creating a `Tenant` takes about a minute, an `Im
 - Only a person signed in with Authentik manages keys, never a key. Creating and changing is for the platform administrators for now (the Authentik group `phorge-platform-admins`); anyone lists and revokes their own, and someone else's key is a `404`. A key has to expire (at most 366 days).
 - A token carries the groups of its user, a key does not: for a key, ask Authentik whether the owner is a member of `phorge-platform-admins`, with the token of the service account `phorge-api-directory` (Secret `phorge-api-authentik`, env `AUTHENTIK_TOKEN`, `AUTHENTIK_URL`), and refuse (503) when it cannot be asked. The token can read that one group and nothing else.
 
-**The service account is in a blueprint.** `blueprint-phorge-api.yml` creates the user `phorge-api-directory` (a service account), a role, a group, its token, and gives the role the right to read the group `phorge-platform-admins` (an object permission, which is all a blueprint can grant; the members of that group stay managed in Authentik). A blueprint creates a token but does not choose its key, so the key is read once from Authentik and put in the Secret, without printing it:
-
-```bash
-kubectl --context core -n authentik exec deploy/authentik-server -- ak shell -c "
-from authentik.core.models import Token
-print(Token.objects.get(identifier='phorge-api-directory').key)
-" 2>/dev/null | tail -1
-```
-
-Pipe that into the `token` field of the SOPS secret `phorge-api-authentik` (`overlays/control/apps/phorge-api/secrets.yml`), never to the terminal. To rotate it, delete the token in Authentik: the blueprint creates another, and the Secret takes its key.
+**The service account is in a blueprint, with nothing to do by hand.** `blueprint-phorge-api.yml` creates the user `phorge-api-directory` (a service account), a role, a group, its token, and gives the role the right to read the group `phorge-platform-admins` (an object permission, which is all a blueprint can grant; the members of that group stay managed in Authentik). The key of the token is one value, in two SOPS secrets that are both used: `authentik-phorge-api-directory` (namespace `authentik` on `core`, read by authentik through `PHORGE_API_DIRECTORY_TOKEN`, which the blueprint reads with `!Env`) and `phorge-api-authentik` (namespace `phorge-api` on `control`, which the Deployment passes as `AUTHENTIK_TOKEN`). To rotate it, put a new value in both: the blueprint updates the token, the pods pick the secret up at their next restart.
 
 ## 5. What the platform does, learned the hard way
 

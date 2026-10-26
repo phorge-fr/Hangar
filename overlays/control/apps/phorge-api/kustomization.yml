@@ -4,6 +4,7 @@ resources:
     - namespace.yml
     - rbac.yml
     - secrets.yml
+    - secret-authentik.yml
     - ca.yml
     - deployment.yml
     - service.yml

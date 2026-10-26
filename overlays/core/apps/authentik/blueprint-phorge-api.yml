@@ -90,9 +90,8 @@ data:
           # The Phorge API asks Authentik whether the owner of an API key is still a platform administrator: a token carries
           # the groups of its user, a key does not. A service account whose token can read that one group, and nothing
           # else: the permission is on the group object (a blueprint can only grant object permissions, which is what
-          # we want), not on the users. The token has no expiry and is read once from Authentik into the Secret
-          # phorge-api-authentik of the control cluster (docs/phorge-api-implementation.md, 4.4): a blueprint creates
-          # the token but does not choose its key.
+          # we want), not on the users. The key of its token comes from the environment of authentik (the Secret
+          # authentik-phorge-api-directory, see authentik.yml), the same value the API holds on the control cluster.
           - model: authentik_core.user
             id: phorge-api-directory-user
             identifiers:
@@ -127,6 +126,7 @@ data:
               intent: api
               user: !KeyOf phorge-api-directory-user
               expiring: false
+              key: !Env PHORGE_API_DIRECTORY_TOKEN
           # The same group as above, to give the role the right to read it. The members are still not listed.
           - model: authentik_core.group
             identifiers:
