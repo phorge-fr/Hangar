@@ -42,9 +42,9 @@ spec:
                           app.kubernetes.io/name: phorge-api
             containers:
                 - name: phorge-api
-                  # The release v0.1.1 of phorge-fr/phorge-api. Tag and digest together: the digest is what runs, the tag lets
+                  # The release v0.2.0 of phorge-fr/phorge-api. Tag and digest together: the digest is what runs, the tag lets
                   # Renovate see a new release and bump both in one pull request.
-                  image: ghcr.io/phorge-fr/phorge-api:0.1.1@sha256:37220c56d6cae5bbe08bdf45de3988afb8599f90107c71b6b5b8dc6c7f5029b2
+                  image: ghcr.io/phorge-fr/phorge-api:0.2.0@sha256:c56d8497150cf615fcb6521339915c3f76315111633eb52e52e8250f95e355d5
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: http
