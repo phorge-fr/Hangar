@@ -44,7 +44,9 @@ Not in v1: groups, `Expose` (publishing an instance), volumes, snapshots, ACLs, 
 
 Store ids (not secret): `iaas` `01M46QWWZKD17137T1AB0V6V0Q`, `phorge-api` `01M50R0P12MY8JHNKP3ATYSJC2`. The API only uses `phorge-api`.
 
-Still to decide with the owner (do not guess, ask): the public host names of the API and the console, the container registry and CI for the new repository, who may create tenants (see 4.3).
+Decided: the API is published at `api.phorge.fr` (a new host needs no change in the Network repository: the edge HAProxy sends every host it does not know to the control ingress, only its public DNS record is needed), its image is `ghcr.io/phorge-fr/phorge-api` (built and published by the CI of the `phorge-api` repository, public), and the platform administrators who create tenants are the members of the Authentik group `phorge-platform-admins` (`PLATFORM_ADMIN_GROUP`, read from the `groups` claim of the token).
+
+Still to decide with the owner (do not guess, ask): the public host name of the console.
 
 ## 3. Working on the platform from your machine
 

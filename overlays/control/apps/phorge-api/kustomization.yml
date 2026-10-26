@@ -5,3 +5,8 @@ resources:
     - rbac.yml
     - secrets.yml
     - ca.yml
+    - deployment.yml
+    - service.yml
+    - ingress.yml
+    - podmonitor.yml
+    - networkpolicy.yml

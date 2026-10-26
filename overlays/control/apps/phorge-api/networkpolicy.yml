@@ -1,0 +1,30 @@
+# Who may reach the pods: the ingress, which carries the traffic from outside, and the nodes, which is where Alloy scrapes the
+# metrics from and the kubelet probes from. Alloy runs in the host network, so the scrapes it makes on another node come from a
+# remote-node identity: a NetworkPolicy on the namespace of Alloy would drop them, and only the pods on Alloy's own node would be
+# scraped (the same as base/apps/monitoring/flux-networkpolicy.yml). Nothing else in the cluster has a reason to call the API,
+# which holds a ServiceAccount that can create and delete tenants. Egress is not restricted: the API calls the Kubernetes API,
+# OpenFGA on core, and authentik for the keys of its tokens.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: phorge-api
+    namespace: phorge-api
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: phorge-api
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP

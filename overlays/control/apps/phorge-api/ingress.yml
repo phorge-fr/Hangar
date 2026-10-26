@@ -1,0 +1,36 @@
+# Public, through the edge HAProxy: it sends every host it does not know to the control ingress (traefik-public,
+# 10.1.0.11), so a new host needs no change in the Network repository, only its DNS record (api.phorge.fr, same address as
+# the others) and the certificate, which cert-manager gets with the HTTP-01 challenge through the same path.
+#
+# Only the API, its OpenAPI document and its Swagger UI are routed. /metrics, /healthz and /readyz stay inside the cluster:
+# Alloy scrapes the pods directly (podmonitor.yml) and the kubelet probes them.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: phorge-api
+    namespace: phorge-api
+    annotations:
+        cert-manager.io/cluster-issuer: public-issuer
+spec:
+    ingressClassName: traefik-public
+    tls:
+        - hosts:
+              - api.phorge.fr
+          secretName: phorge-api-tls
+    rules:
+        - host: api.phorge.fr
+          http:
+              paths:
+                  - path: /v1
+                    pathType: Prefix
+                    backend: &backend
+                        service:
+                            name: phorge-api
+                            port:
+                                name: http
+                  - path: /openapi.yaml
+                    pathType: Exact
+                    backend: *backend
+                  - path: /docs
+                    pathType: Prefix
+                    backend: *backend
