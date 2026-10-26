@@ -66,8 +66,15 @@ spec:
                               sshPublicKeys:
                                   description: Injected with cloud-init, so the image must be a cloud variant (e.g. debian/13/cloud).
                                   type: array
+                                  maxItems: 20
                                   items:
                                       type: string
+                                      maxLength: 1024
+                                      # Same shape as the Phorge API accepts. A key is written into the cloud-init
+                                      # user data, so a line break or a stray YAML character must never get through.
+                                      x-kubernetes-validations:
+                                          - rule: "self.matches('^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh[.]com|sk-ecdsa-sha2-nistp256@openssh[.]com) [A-Za-z0-9+/]{16,}={0,3}( [A-Za-z0-9@._+=/-]{1,100})?$')"
+                                            message: "each key must be '<type> <base64 key>' with at most a one word comment of letters, digits and @._+=/-"
                                   default: []
                           required:
                               - imageRef
