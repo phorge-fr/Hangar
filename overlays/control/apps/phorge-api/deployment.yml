@@ -72,6 +72,16 @@ spec:
                       # delete tenants. The group is created by blueprint-phorge-api.yml, its members are added in authentik.
                       - name: PLATFORM_ADMIN_GROUP
                         value: phorge-platform-admins
+                      # An API key acts as its owner and carries no group, so the API asks authentik whether the owner is still a
+                      # member of the group above, with the token of the service account phorge-api-directory, which can read
+                      # that one group (blueprint-phorge-api.yml).
+                      - name: AUTHENTIK_URL
+                        value: https://auth.phorge.fr
+                      - name: AUTHENTIK_TOKEN
+                        valueFrom:
+                            secretKeyRef:
+                                name: phorge-api-authentik
+                                key: token
                       # The container limit is 192 MiB: make the GC reclaim before it is reached.
                       - name: GOMEMLIMIT
                         value: 150MiB

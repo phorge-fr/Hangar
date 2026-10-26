@@ -80,7 +80,7 @@ Do not change an XRD, a composition or anything under `overlays/` on the cluster
 Two kinds of caller, both in the `Authorization: Bearer ...` header.
 
 - **A user token** (JWT from Authentik): verify the signature against the JWKS of the issuer, the issuer, the audience (the client id above), the expiry. The user is the **`email` claim**, exactly as it is, case included: it is the key of every OpenFGA tuple (`user:<email>`). Refuse a token without a verified email.
-- **An API key**, in a format you choose so that the object can be found without listing; suggestion: `phk_<tenant>_<name>_<hex secret>` (a tenant slug and a name hold no underscore). The first two parts locate the `ApiKey` object (`name` in the namespace `t-<tenant>`) with one `get`. Compare `sha256(secret)` (hex) with `spec.hash` in constant time. Refuse it when `status.expired` is true or `spec.expiresAt` has passed (check both: the composition removes the tuples within about a minute, the API must not wait for that).
+- **An API key** is personal: `phk_<id>_<secret>` (hex), where the id is the name of the `ApiKey` object of the namespace `phorge-keys`, so the object is found with one `get`. Compare `sha256(secret)` (hex) with `spec.hash` in constant time. Refuse it when `status.expired` is true, `spec.expiresAt` has passed (check both), the object is being deleted or has no `spec.owner`. The caller it stands for is `spec.owner`, limited to `spec.scopes`.
 
 ### 4.2 Authorization
 
@@ -89,7 +89,7 @@ Every request is a `Check` in the `phorge-api` store on the object `tenant:<name
 | Caller | User of the tuple | Example |
 |---|---|---|
 | user | `user:<email>` | `Check(user:alice@example.org, can_write_instances, tenant:demo)` |
-| key | `apikey:<tenant>.<name>` | `Check(apikey:demo.ci, can_write_instances, tenant:demo)` |
+| key | `user:<owner>`, after the scope was checked | `Check(user:alice@example.org, can_write_instances, tenant:demo)` |
 
 | Action | Relation to check |
 |---|---|
@@ -118,7 +118,7 @@ Suggested routes; the shape is yours as long as it maps one to one on the kinds.
 | `/v1/tenants/{t}/images`, `.../{name}` | `Image` in `t-{t}` | Source name and remote are free, but only `type: virtual-machine` exists. Pulling takes minutes |
 | `/v1/tenants/{t}/instances`, `.../{name}` | `Instance` in `t-{t}` | Start/stop is a patch of `spec.running`. The image must be an `Image` of the same tenant |
 | `/v1/tenants/{t}/memberships`, `.../{name}` | `Membership` in `t-{t}` | `User` subjects only. No update |
-| `/v1/tenants/{t}/apikeys`, `.../{name}` | `ApiKey` in `t-{t}` | See 4.4 |
+| `/v1/apikeys`, `.../{id}` | `ApiKey` in `phorge-keys` | See 4.4 |
 
 The slug rules are in the XRDs (a tenant name is 2 to 28 lowercase letters, digits and hyphens, starting with a letter): validate before sending, the API server rejects the rest anyway.
 
@@ -130,15 +130,19 @@ Everything is **asynchronous**. Creating a `Tenant` takes about a minute, an `Im
 
 ### 4.4 API keys
 
-- The API generates the secret (at least 32 random bytes), stores only `sha256` hex in `spec.hash`, records the caller in `spec.createdBy`, and returns the full key **once**.
-- `spec.scopes` is a set among `tenant:read`, `instances:read|write`, `images:read|write`, `memberships:read|write`. Removing a scope removes its tuple; patching `scopes` is allowed.
-- An expired key has no tuple and `status.expired: true`; it is still listed.
+- The API generates the id and the secret (32 random bytes in hex), stores only `sha256` hex in `spec.hash`, records the caller in `spec.owner`, and returns the full key **once**.
+- A key is its owner, limited to its scopes: check the scope, then `Check(user:<owner>, ...)`. Nothing is written to OpenFGA for a key, and nothing needs removing when it expires or is deleted.
+- `spec.scopes` is a set among `tenants:read|write`, `instances:read|write`, `images:read|write`, `memberships:read|write`. `tenants:write` creates, resizes and deletes tenants and needs a platform administrator; the others need what the owner has on the tenant.
+- Only a person signed in with Authentik manages keys, never a key. Creating and changing is for the platform administrators for now (the Authentik group `phorge-platform-admins`); anyone lists and revokes their own, and someone else's key is a `404`. A key has to expire (at most 366 days).
+- A token carries the groups of its user, a key does not: for a key, ask Authentik whether the owner is a member of `phorge-platform-admins`, with the token of the service account `phorge-api-directory` (Secret `phorge-api-authentik`, env `AUTHENTIK_TOKEN`, `AUTHENTIK_URL`), and refuse (503) when it cannot be asked. The token can read that one group and nothing else.
+
+**The service account is in a blueprint, with nothing to do by hand.** `blueprint-phorge-api.yml` creates the user `phorge-api-directory` (a service account), a role, a group, its token, and gives the role the right to read the group `phorge-platform-admins` (an object permission, which is all a blueprint can grant; the members of that group stay managed in Authentik). The key of the token is one value, in two SOPS secrets that are both used: `authentik-phorge-api-directory` (namespace `authentik` on `core`, read by authentik through `PHORGE_API_DIRECTORY_TOKEN`, which the blueprint reads with `!Env`) and `phorge-api-authentik` (namespace `phorge-api` on `control`, which the Deployment passes as `AUTHENTIK_TOKEN`). To rotate it, put a new value in both: the blueprint updates the token, the pods pick the secret up at their next restart.
 
 ## 5. What the platform does, learned the hard way
 
 These are measured behaviours (see `tests/e2e/` and the issues). Build around them, do not hide them.
 
-1. **Delete in the foreground.** Send `propagationPolicy: Foreground`. In the default mode a `Tenant` object is gone after 1 to 2 seconds while its resources and the Incus project last 20 to 60 seconds; in the foreground it stays until everything is gone (about 2 minutes for a tenant with a running VM). Treat "not found" as "deleted". Deleting a `Membership` or a key still leaves its OpenFGA tuples for up to about a minute (9 to 55 seconds measured): permissions are not revoked instantly. If you need an instant cutoff, also check `deletionTimestamp`.
+1. **Delete in the foreground.** Send `propagationPolicy: Foreground`. In the default mode a `Tenant` object is gone after 1 to 2 seconds while its resources and the Incus project last 20 to 60 seconds; in the foreground it stays until everything is gone (about 2 minutes for a tenant with a running VM). Treat "not found" as "deleted". Deleting a `Membership` still leaves its OpenFGA tuples for up to about a minute (9 to 55 seconds measured): permissions are not revoked instantly. If you need an instant cutoff, also check `deletionTimestamp`. A key has no tuple: it stops as soon as its object is deleting.
 2. **A `Membership` cannot be edited.** A tuple cannot be changed in place; the XRD refuses the edit. To change a role: delete, wait until it is gone, create. There is **one `Membership` per user per tenant**; a second one is not composed (`Ready=False`). The owner of a tenant has `admin` from the `Tenant` itself and cannot be given a `Membership`; to hand a tenant over, give the new person `admin`.
 3. **An `Image` that a VM uses cannot be deleted.** An admission webhook refuses the delete with "in-use by 1 usage(s)" (check the status code you actually get, do not rely on a particular one) and the API should answer `409 Conflict`. The refusal is remembered: when the last VM goes, the image goes by itself a few seconds later.
 4. **An `Instance` whose first start failed is stuck.** The provider keeps it as failed and refuses to destroy it. The only way out is to delete the `Instance` and create it again. The usual cause is an image that does not boot with secure boot (`alpine/3.22/cloud`): set `spec.secureBoot: false`. `status.problems` shows both errors.
@@ -158,7 +162,7 @@ Each step ends with tests you ran, not only written. Open a pull request per ste
 | 2 | Authorization: the `Check` and `ListObjects` wrappers, the scope-to-relation table, "a key never exceeds its creator" | Table-driven tests against the real `phorge-api` store with tuples you create and remove |
 | 3 | Tenants: list, get, create, patch, delete (foreground) | A tenant created through the API becomes `Ready`, and deleting it leaves nothing in Kubernetes nor in Incus |
 | 4 | Images and instances, with `status.problems` surfaced and the quota refusals | A VM boots from an image created through the API and is stopped and started with a patch |
-| 5 | Memberships and API keys | A member sees only the tenants and actions their role allows; a key stops working at its expiry |
+| 5 | Memberships and API keys | A member sees only the tenants and actions their role allows; a personal key acts as its owner within its scopes and stops working at its expiry |
 | 6 | Deployment manifests in Hangar (Deployment, Service, Ingress, PodMonitor, NetworkPolicy), the host name, the console redirect URI in the Authentik blueprint | The API runs on `control` and the `tests/e2e/` suite still passes |
 
 For the integration tests, do not mock Kubernetes or OpenFGA where the point is the platform's behaviour: use the real `control` cluster with the `apitest-` tenants and clean up after yourself (children first, then the tenant, then wait until the Incus project is gone). Use fakes for the logic that does not depend on it.

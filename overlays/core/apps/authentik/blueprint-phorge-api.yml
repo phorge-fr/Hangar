@@ -87,3 +87,52 @@ data:
               name: phorge-platform-admins
             attrs:
               name: phorge-platform-admins
+          # The Phorge API asks Authentik whether the owner of an API key is still a platform administrator: a token carries
+          # the groups of its user, a key does not. A service account whose token can read that one group, and nothing
+          # else: the permission is on the group object (a blueprint can only grant object permissions, which is what
+          # we want), not on the users. The key of its token comes from the environment of authentik (the Secret
+          # authentik-phorge-api-directory, see authentik.yml), the same value the API holds on the control cluster.
+          - model: authentik_core.user
+            id: phorge-api-directory-user
+            identifiers:
+              username: phorge-api-directory
+            attrs:
+              username: phorge-api-directory
+              name: Phorge API (reads who is a platform administrator)
+              type: service_account
+              path: goauthentik.io/service-accounts
+              is_active: true
+          - model: authentik_rbac.role
+            id: phorge-api-directory-role
+            identifiers:
+              name: phorge-api-directory
+            attrs:
+              name: phorge-api-directory
+          - model: authentik_core.group
+            identifiers:
+              name: phorge-api-directory
+            attrs:
+              name: phorge-api-directory
+              roles:
+                - !KeyOf phorge-api-directory-role
+              users:
+                - !KeyOf phorge-api-directory-user
+          - model: authentik_core.token
+            identifiers:
+              identifier: phorge-api-directory
+            attrs:
+              identifier: phorge-api-directory
+              description: Read by the Phorge API (control cluster) to know who is in phorge-platform-admins
+              intent: api
+              user: !KeyOf phorge-api-directory-user
+              expiring: false
+              key: !Env PHORGE_API_DIRECTORY_TOKEN
+          # The same group as above, to give the role the right to read it. The members are still not listed.
+          - model: authentik_core.group
+            identifiers:
+              name: phorge-platform-admins
+            attrs:
+              name: phorge-platform-admins
+            permissions:
+              - permission: authentik_core.view_group
+                role: !KeyOf phorge-api-directory-role

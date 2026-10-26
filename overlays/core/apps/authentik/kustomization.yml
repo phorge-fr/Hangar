@@ -3,6 +3,7 @@ kind: Kustomization
 resources:
     - authentik.yml
     - secrets.yml
+    - secret-phorge-api-directory.yml
     - blueprint-grafana.yml
     - blueprint-forgejo.yml
     - blueprint-incus.yml

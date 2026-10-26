@@ -2,3 +2,10 @@ apiVersion: v1
 kind: Namespace
 metadata:
     name: phorge-api
+---
+# The API keys of the people (ApiKey objects, see xrd-apikey.yml): one namespace for all of them, a key belongs to a
+# user and not to a tenant. Only the Phorge API writes here.
+apiVersion: v1
+kind: Namespace
+metadata:
+    name: phorge-keys
