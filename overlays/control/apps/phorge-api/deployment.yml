@@ -42,8 +42,9 @@ spec:
                           app.kubernetes.io/name: phorge-api
             containers:
                 - name: phorge-api
-                  # The commit f12ffbd of phorge-fr/phorge-api (docker workflow, tag sha-f12ffbd), by digest so that the tag cannot move.
-                  image: ghcr.io/phorge-fr/phorge-api@sha256:4dd3b780e074947740d5f0d3010dfd45060f1cf262e6919cfbcf40828daf3d72
+                  # The release v0.1.0 of phorge-fr/phorge-api. Tag and digest together: the digest is what runs, the tag lets
+                  # Renovate see a new release and bump both in one pull request.
+                  image: ghcr.io/phorge-fr/phorge-api:0.1.0@sha256:30d5bdd52a94e74306348f2892adffaa2a6fcd626d90720e1d2ea08c8fe28e2b
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: http
