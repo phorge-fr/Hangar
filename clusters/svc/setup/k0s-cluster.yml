@@ -44,7 +44,7 @@ spec:
                             vrrpInstances:
                                 - virtualIPs:
                                       - 10.3.0.4/24
-                                  authPass: ENC[AES256_GCM,data:AcR4tV75j/k=,iv:iiIX2n5mfxCp2nC+VYqZedIxxR+vp7OLxC4Q3qZL4no=,tag:MqbEGRiFBSREK6E0L2WQeA==,type:str]
+                                  authPass: ENC[AES256_GCM,data:HKzzKiFYg9o=,iv:xsuPxiJbab5UGtnfiEzY1erW2imzCasZiIQi7SoICoM=,tag:OmRxs+uwRJHxd11RvJm+Sg==,type:str]
                                   interface: end0
                     nodeLocalLoadBalancing:
                         enabled: true
@@ -80,12 +80,12 @@ spec:
                 perm: "0644"
                 dirPerm: "0755"
               - name: k0s-audit-policy
-                src: ../audit-policy.yaml
+                src: ../../audit-policy.yaml
                 dst: /etc/k0s/audit-policy.yaml
                 perm: "0644"
                 dirPerm: "0755"
               - name: k0scontroller-audit-dir
-                src: ../k0scontroller-audit-dir.conf
+                src: ../../k0scontroller-audit-dir.conf
                 dst: /etc/systemd/system/k0scontroller.service.d/audit-dir.conf
                 perm: "0644"
                 dirPerm: "0755"
@@ -110,12 +110,12 @@ spec:
                 perm: "0644"
                 dirPerm: "0755"
               - name: k0s-audit-policy
-                src: ../audit-policy.yaml
+                src: ../../audit-policy.yaml
                 dst: /etc/k0s/audit-policy.yaml
                 perm: "0644"
                 dirPerm: "0755"
               - name: k0scontroller-audit-dir
-                src: ../k0scontroller-audit-dir.conf
+                src: ../../k0scontroller-audit-dir.conf
                 dst: /etc/systemd/system/k0scontroller.service.d/audit-dir.conf
                 perm: "0644"
                 dirPerm: "0755"
@@ -140,12 +140,12 @@ spec:
                 perm: "0644"
                 dirPerm: "0755"
               - name: k0s-audit-policy
-                src: ../audit-policy.yaml
+                src: ../../audit-policy.yaml
                 dst: /etc/k0s/audit-policy.yaml
                 perm: "0644"
                 dirPerm: "0755"
               - name: k0scontroller-audit-dir
-                src: ../k0scontroller-audit-dir.conf
+                src: ../../k0scontroller-audit-dir.conf
                 dst: /etc/systemd/system/k0scontroller.service.d/audit-dir.conf
                 perm: "0644"
                 dirPerm: "0755"
@@ -154,13 +154,13 @@ sops:
         - recipient: age1ae6yk6xtlt8h40272xqxegz3t3zpvvuxj0jwy489xs6e34k0y9xsvpmt03
           enc: |
               -----BEGIN AGE ENCRYPTED FILE-----
-              YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBFejRaamRiQ2ExbERrb1Z2
-              VDZuNk1iUVlsTS9ScVMyWjZ3SmkwK0F6TkVZCnFGcVd4akVmNFlaMVQ5TXJpS2Nz
-              MmRzMnUrWm8vUHRXUks5S24zUmhHSGMKLS0tIGtNYkhTTURQaE1oK2Jua2JCMWVa
-              YjQxV3BlaDRxc2c3U1FyRGlYa2l0K0kKiYTRbE7MxhRQ/j2OKRbTam0hgh1oi29a
-              V1L5ni81DaUJ0TbUvJKGdg/MYweRZggZqGq6mRvqYpKrgNdUK1a+hA==
+              YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAzc25QcGdTWnN2VGNxMFU2
+              T2VlR0g1R2dtaHJDOUxKN2hJVzNXSGdaNGtzCnFJb0tyYXl3aHpTOVlTRDc4aXNx
+              TzRjaXRnRk5oZmlXa1FXRzdJb2crTkEKLS0tIE1hRDBkT0tHazNyUk1aUEEzcm9H
+              dTVzUlNvem5MVFIrV1ZDZVZOcitqUTAKzDfT1TbqUnpNHP07bz6y0JJp1NJrOjSz
+              WeUGPlLb3Bio/7hiA3B63OvyAi/CiLJqUOyuZ3zzGRtb3GkzIy8RJg==
               -----END AGE ENCRYPTED FILE-----
-    lastmodified: "2026-10-24T19:26:30Z"
-    mac: ENC[AES256_GCM,data:0lAcRoLm4rvKQgwCb4QQkuRAVD70/fPbUFR9Bpl7+/WC7k/9QTIpV2wK5+JzPRBoSMZeEExAY0rH+DAlIInA3Kl44C4CgXIoLdmW6jyydnLHb1t+WgeU9l5wIcqridhXzu0F8IIKrzR6rq/46RLOAuuMUS2/X5+oKnUkm2EK5Hk=,iv:O9Co5VqhkJDqPH5+rPR7SfQC9kbguQwtTJLDDBzD/z8=,tag:z+ZDQsZP4Qhh71jImWsgAA==,type:str]
+    lastmodified: "2026-10-27T22:44:21Z"
+    mac: ENC[AES256_GCM,data:CCGqO46ct1kvQx4O3DBZIuqT/M0tVYUWr0h20ghyRpX0ETnwW+EUhECNLHECu6hmOQzHaNpNQqvEi9HzCxRspXGEISrSnmKtNy1rEDOhYfxc9gQfDD3tTqte29s3E5E+4c5P7TGIqJjkdcAgBV3tOcPx3aBuDpkWPsoIMKzxajc=,iv:jbiRAsrKxIBrKaMgAOeFUHHRJ4Ok3T4b947zBOHQx4w=,tag:FnpcMsdHPk8MqQuZUrJhzw==,type:str]
     encrypted_regex: ^(email|password|secret_key|data|stringData|ca|crt|key|id|secret|token|aggregatorCA|serviceAccount|bootstraptoken|secretboxencryptionsecret|secretboxEncryptionSecret|clientSecret|clientId|clientID|external-dns.alpha.kubernetes.io/target|adminPassword|metrics.crt|metrics.key|ca.crt|uri|postgresPassword|preshared|username|cloud-init.user-data|access_key|secret_key|authPass)$
     version: 3.11.0
