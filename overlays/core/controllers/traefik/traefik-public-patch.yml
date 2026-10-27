@@ -5,9 +5,19 @@ metadata:
     namespace: traefik
 spec:
     values:
+        # One pod on every node, a new one is ready before the old one stops (the chart's rolling update, maxSurge 1): the node
+        # that answers for the address of the service (Cilium L2 announcement) always has a local pod, which
+        # externalTrafficPolicy Local needs.
+        deployment:
+            kind: DaemonSet
         service:
             annotations:
                 lbipam.cilium.io/ips: 10.2.0.11
+            spec:
+                # With Cluster the node that answers for the address rewrites the source of a connection whose pod is on another
+                # node (to the Cilium address of that node), so the PROXY protocol of the edge HAProxy comes from an address that is
+                # not in trustedIPs and is dropped: every sign-in showed up as 10.244.x.x, with no country. Local keeps the source.
+                externalTrafficPolicy: Local
         ports:
             websecure:
                 proxyProtocol:

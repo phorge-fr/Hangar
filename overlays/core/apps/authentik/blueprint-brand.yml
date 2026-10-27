@@ -101,7 +101,9 @@ data:
               terminate_other_sessions: false
           # Too many failed sign-ins from one address (authentik lowers the score at each one) close the flow to it. The policy
           # passes when the score is at or under the threshold, hence the negated binding. Only the address is checked: the
-          # user is not known when the flow starts. Local and in-cluster clients share one address, so the threshold is loose.
+          # user is not known when the flow starts. The score of an address is the sum of the scores of its identifiers, each
+          # one kept between -5 and 5 (the lower and upper limits of the tenant): a threshold under -5 could never be reached
+          # by someone who tries a single user name. A success raises the score by 1, a failure lowers it by 1.
           - model: authentik_policies_reputation.reputationpolicy
             id: authentication-reputation
             identifiers:
@@ -109,7 +111,7 @@ data:
             attrs:
               check_ip: true
               check_username: false
-              threshold: -10
+              threshold: -5
           - model: authentik_policies.policybinding
             identifiers:
               target: !KeyOf authentication-flow
@@ -118,6 +120,44 @@ data:
             attrs:
               enabled: true
               negate: true
+              timeout: 30
+          # A log line each time the flow starts: the address, its country and network, and the score it has at that moment.
+          # authentik already logs "Updated score" at every failure and success, and the events carry the country; this line
+          # puts it all together, and also records the visitors who stop at the captcha (they raise no event). It never decides
+          # anything: it returns False, and the flow passes when ANY of its policies passes (policy_engine_mode any), so the
+          # reputation binding above stays the only one that counts. Do not switch the flow to "all" without removing it.
+          # Policy results are cached for 30 seconds per address, so a burst logs once.
+          - model: authentik_policies_expression.expressionpolicy
+            id: authentication-audit
+            identifiers:
+              name: phorge-authentication-audit
+            attrs:
+              expression: |
+                from django.db.models import Sum
+                from authentik.policies.reputation.models import Reputation
+
+                ip = str(ak_client_ip)
+                score = Reputation.objects.filter(ip=ip).aggregate(total=Sum("score"))["total"] or 0
+                geo = request.context.get("geoip") or {}
+                asn = request.context.get("asn") or {}
+                ak_logger.info(
+                    "Sign-in flow started",
+                    client_ip=ip,
+                    country=geo.get("country") or "",
+                    continent=geo.get("continent") or "",
+                    asn=asn.get("asn") or "",
+                    as_org=asn.get("as_org") or "",
+                    reputation=score,
+                )
+                return False
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              policy: !KeyOf authentication-audit
+              order: 1
+            attrs:
+              enabled: true
+              negate: false
               timeout: 30
           - model: authentik_flows.flowstagebinding
             identifiers:

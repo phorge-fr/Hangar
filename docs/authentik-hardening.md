@@ -6,16 +6,24 @@ What stands between a visitor and `auth.phorge.fr`, where each piece lives, how 
 
 | Layer | What it does | Where |
 |---|---|---|
-| Traefik rate limit | 5 requests/s per client address (burst 20) on the flow executor and the OAuth endpoints. The address is the real one for visitors from outside; the LAN and the cluster share one. | `authentik/ratelimit.yml` |
-| Reputation policy | Closes the sign-in flow to an address whose score falls to -10 (authentik lowers it at each failed sign-in). Address only: the user is not known when the flow starts. | `blueprint-brand.yml` |
+| Traefik rate limit | 5 requests/s per client address (burst 20) on the flow executor and the OAuth endpoints. The address is the real one (see "The client address" below). | `authentik/ratelimit.yml` |
+| Reputation policy | Closes the sign-in flow to an address whose score falls to -5 (authentik lowers it by 1 at each failed sign-in and raises it by 1 at each success). Address only: the user is not known when the flow starts. The score of an address is the sum of its identifiers, each one kept between -5 and 5 by the tenant, so -5 is the lowest value a single user name can reach: a lower threshold would never trigger. | `blueprint-brand.yml` |
 | Cap captcha | Proof of work, first step of the flow. Served by `cap.phorge.fr`, token checked inside the cluster. | `cap/`, `blueprint-brand.yml` |
 | Identification and password | `pretend_user_exists`: an unknown name looks like a known one. The password stage gives up after 5 attempts. | `blueprint-brand.yml` |
 | MFA validation | Asks for a passkey, a TOTP code or a recovery code **when the user has a device**. Not mandatory yet (below). | `blueprint-brand.yml` |
 | Session | Lasts 12 hours and is bound to the autonomous system and the country it was opened from. A private client address (LAN, cluster) has none, so those sessions are not bound. | `blueprint-brand.yml` |
 | Alerts | A message in a Discord channel, through a webhook, on a sign-in from outside France (detection only, nothing is blocked) and on a `suspicious_request`. It carries the action, the user name, the country and a request id, nothing else. | `blueprint-hardening.yml`, `secret-alerts.yml` |
-| Tracking | Every event (sign-in, failure, logout, password change, suspicious request) is a JSON line in the logs of authentik, collected into Loki. A dashboard reads them. | `grafana-dashboards/authentik-signins-dashboard.yml` |
+| Tracking | Every event (sign-in, failure, logout, password change, suspicious request) is a JSON line in the logs of authentik, collected into Loki, and so is each start of the sign-in flow with the address, country, network and score. A dashboard reads them. | `grafana-dashboards/authentik-signins-dashboard.yml` |
 
 The OIDC clients (Incus, Crossview, Phorge) use strict redirect URIs. Grafana and Forgejo are restricted to `phorge-platform-admins` (`blueprint-brand.yml`).
+
+## The client address
+
+authentik only sees the address of the client if every hop passes it on. From outside, the edge HAProxy sends it in a PROXY protocol header (`send-proxy-v2`) and Traefik (`traefik-public`) believes that header only from `10.2.0.254`, the address of the HAProxy container. Until 2026-10-27 every sign-in was logged as `10.244.1.91`, with no country, because the Service was `externalTrafficPolicy: Cluster`: the node that answers for `10.2.0.11` (Cilium L2 announcement, here `core-wyse-02`, which had no Traefik pod) forwarded the connection to a pod on another node and rewrote its source to its own Cilium address. That address is not `10.2.0.254`, so Traefik dropped the header and used the rewritten source.
+
+The fix (`overlays/core/controllers/traefik/traefik-public-patch.yml`): `externalTrafficPolicy: Local` keeps the source, and `traefik-public` runs as a DaemonSet (one pod per node, a new one ready before the old one stops) because with `Local` a node without a local pod drops the traffic: the first attempt with two replicas and `Local` cut the ingress for about 25 seconds, the L2 leader staying on the node without a pod. Check after any change to the Traefik release: `kubectl -n kube-system get lease cilium-l2announce-traefik-traefik-public` names the leader, and `kubectl -n traefik get pods -o wide` must show a pod on that node.
+
+What the address is now: a visitor from outside, the real address; a client of the LAN, its own LAN address; a pod that calls `auth.phorge.fr` through the public address (Grafana, Forgejo), the address of the site, because it leaves the cluster by its node. Private addresses have no country or network, so they are never bound to a session and never trigger the alert from outside France.
 
 ## Alerts and tracking
 
@@ -27,6 +35,14 @@ The OIDC clients (Incus, Crossview, Phorge) use strict redirect URIs. Grafana an
 {namespace="authentik"} |= "Created Event" | json | action="login_failed"
 {namespace="authentik"} |= "Created Event" | json | action="login" | context_geo_country != "FR"
 {namespace="authentik"} |= "Created Event" | json | request_id="<id from the Discord message>"
+```
+
+Two kinds of line carry the reputation. authentik logs `Updated score` (`for_ip`, `for_user`, `amount` = the new score of that identifier) at each failed or successful sign-in. The policy `phorge-authentication-audit` logs `Sign-in flow started` (`client_ip`, `country`, `continent`, `asn`, `as_org`, `reputation` = the score of the address before the attempt) each time the flow starts, including for a visitor who stops at the captcha, who raises no event. It always returns False and the flow passes when any of its policies passes, so it never decides anything: keep the flow in mode `any`.
+
+```
+{namespace="authentik"} |= "Sign-in flow started" | json | country != "FR"
+{namespace="authentik"} |= "Updated score" | json | amount < 0
+{namespace="authentik"} |= "Sign-in flow started" | json | reputation <= -3
 ```
 
 The dashboard "Authentik sign-ins" (folder Core) shows the counts over 24 hours, the events by action, the addresses with the most failures and the list of events. Events created by hand from `ak shell` are not in Loki, since that output is not the one of the container.
@@ -77,7 +93,7 @@ If the Cap site key is gone (the Valkey volume was lost), create a new one: log 
 ```
 kubectl --context core -n authentik exec deploy/authentik-server -- ak shell -c "
 from authentik.policies.reputation.models import Reputation
-print(Reputation.objects.filter(score__lte=-10).delete())"
+print(Reputation.objects.filter(score__lte=-5).delete())"
 ```
 
 **Signed out all the time.** The session binding (ASN and country) may be too strict for a network that changes address. Set `network_binding` and `geoip_binding` to `no_binding` in `blueprint-brand.yml`.
