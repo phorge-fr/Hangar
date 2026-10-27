@@ -5,21 +5,6 @@ metadata:
     namespace: traefik
 spec:
     values:
-        # The HTTP audit log: one JSON line per request on the standard output, collected by Alloy into Loki (which adds the
-        # country and the network of the client, overlays/core/controllers/alloy). Only the User-Agent header is kept (the
-        # Authorization and Cookie headers never are), and the query string of the path is dropped (v3.7.3+): it can hold an OAuth
-        # code, a state or a device code. The Referer is dropped for the same reason.
-        accessLog:
-            enabled: true
-            format: json
-            fields:
-                defaultMode: keep
-                headers:
-                    defaultMode: drop
-                    names:
-                        User-Agent: keep
-                queryParameters:
-                    defaultMode: drop
         # One pod on every node, a new one is ready before the old one stops (the chart's rolling update, maxSurge 1): the node
         # that answers for the address of the service (Cilium L2 announcement) always has a local pod, which
         # externalTrafficPolicy Local needs.

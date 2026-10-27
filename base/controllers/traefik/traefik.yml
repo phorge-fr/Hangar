@@ -30,6 +30,21 @@ spec:
             interval: 12h
     values:
         fullnameOverride: traefik-local
+        # The HTTP audit log (docs/http-audit.md): one JSON line per request on the standard output, collected by Alloy into the Loki
+        # of core, which adds the country and the network of the client. Only the User-Agent header is kept (never Authorization or
+        # Cookie), the Referer is dropped and so is the query string of the path (v3.7.3+): it can hold an OAuth code, a state or a
+        # device code.
+        accessLog:
+            enabled: true
+            format: json
+            fields:
+                defaultMode: keep
+                headers:
+                    defaultMode: drop
+                    names:
+                        User-Agent: keep
+                queryParameters:
+                    defaultMode: drop
         deployment:
             replicas: 2
         podDisruptionBudget:
@@ -78,6 +93,21 @@ spec:
             interval: 12h
     values:
         fullnameOverride: traefik-public
+        # The HTTP audit log (docs/http-audit.md): one JSON line per request on the standard output, collected by Alloy into the Loki
+        # of core, which adds the country and the network of the client. Only the User-Agent header is kept (never Authorization or
+        # Cookie), the Referer is dropped and so is the query string of the path (v3.7.3+): it can hold an OAuth code, a state or a
+        # device code.
+        accessLog:
+            enabled: true
+            format: json
+            fields:
+                defaultMode: keep
+                headers:
+                    defaultMode: drop
+                    names:
+                        User-Agent: keep
+                queryParameters:
+                    defaultMode: drop
         deployment:
             replicas: 2
         podDisruptionBudget:

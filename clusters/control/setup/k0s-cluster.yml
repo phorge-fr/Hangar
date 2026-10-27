@@ -23,6 +23,14 @@ spec:
                         # every one of the 130+ registered types regardless. apiserver RSS was
                         # 0.9-1.3 GiB on this cluster's 3 nodes before this change (2026-09-26).
                         default-watch-cache-size: "20"
+                        # Audit log of the API server (docs/kubernetes-audit.md): who did what, to what, from where. The policy is
+                        # clusters/audit-policy.yaml, uploaded to every node below. The file is only a buffer (3 files of 100 MiB at most,
+                        # 3 days): Alloy ships it to Loki, which is the record.
+                        audit-policy-file: /etc/k0s/audit-policy.yaml
+                        audit-log-path: /var/lib/k0s-audit/audit.log
+                        audit-log-maxsize: "100"
+                        audit-log-maxbackup: "3"
+                        audit-log-maxage: "3"
                 network:
                     provider: custom
                     kubeProxy:
@@ -71,6 +79,16 @@ spec:
                 dst: /etc/systemd/system/k0scontroller.service.d/gomemlimit.conf
                 perm: "0644"
                 dirPerm: "0755"
+              - name: k0s-audit-policy
+                src: ../audit-policy.yaml
+                dst: /etc/k0s/audit-policy.yaml
+                perm: "0644"
+                dirPerm: "0755"
+              - name: k0scontroller-audit-dir
+                src: ../k0scontroller-audit-dir.conf
+                dst: /etc/systemd/system/k0scontroller.service.d/audit-dir.conf
+                perm: "0644"
+                dirPerm: "0755"
         - ssh:
               address: 10.1.0.2
               user: root
@@ -91,6 +109,16 @@ spec:
                 dst: /etc/systemd/system/k0scontroller.service.d/gomemlimit.conf
                 perm: "0644"
                 dirPerm: "0755"
+              - name: k0s-audit-policy
+                src: ../audit-policy.yaml
+                dst: /etc/k0s/audit-policy.yaml
+                perm: "0644"
+                dirPerm: "0755"
+              - name: k0scontroller-audit-dir
+                src: ../k0scontroller-audit-dir.conf
+                dst: /etc/systemd/system/k0scontroller.service.d/audit-dir.conf
+                perm: "0644"
+                dirPerm: "0755"
         - ssh:
               address: 10.1.0.3
               user: root
@@ -109,6 +137,16 @@ spec:
               - name: k0scontroller-gomemlimit
                 src: k0scontroller-gomemlimit.conf
                 dst: /etc/systemd/system/k0scontroller.service.d/gomemlimit.conf
+                perm: "0644"
+                dirPerm: "0755"
+              - name: k0s-audit-policy
+                src: ../audit-policy.yaml
+                dst: /etc/k0s/audit-policy.yaml
+                perm: "0644"
+                dirPerm: "0755"
+              - name: k0scontroller-audit-dir
+                src: ../k0scontroller-audit-dir.conf
+                dst: /etc/systemd/system/k0scontroller.service.d/audit-dir.conf
                 perm: "0644"
                 dirPerm: "0755"
 sops:
