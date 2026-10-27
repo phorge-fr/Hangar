@@ -41,6 +41,15 @@ spec:
               - ports:
                     - port: "5432"
                       protocol: TCP
+        # The check of the captcha token of the sign-in (siteverify)
+        - toEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: cap
+                    app: cap
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
         # Gravatar, and the sources and webhooks configured in the blueprints
         - toEntities:
               - world
