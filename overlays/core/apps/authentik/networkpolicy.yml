@@ -95,6 +95,13 @@ spec:
               - ports:
                     - port: "443"
                       protocol: TCP
+        # The mails go out through Brevo (STARTTLS), sent by the worker
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "587"
+                      protocol: TCP
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
