@@ -188,7 +188,52 @@ spec:
 
                     loki.source.kubernetes "pods" {
                         targets    = discovery.relabel.pods.output
+                        forward_to = [loki.process.enrich.receiver]
+                    }
+
+                    // The access log of Traefik (JSON, one line per request) gets the country and the network of the client
+                    // address, looked up in the DB-IP databases that the init container of this pod keeps in /geoip. The two
+                    // fields are written into the JSON line, so Loki reads them back with | json: a country is cheap, but the
+                    // network has too many values for a label. Everything else is passed on untouched. A private address
+                    // (LAN, cluster) has neither.
+                    loki.process "enrich" {
                         forward_to = [loki.write.local.receiver]
+
+                        stage.match {
+                            selector = "{namespace=\"traefik\"} |= \"\\\"ClientHost\\\"\""
+
+                            stage.json {
+                                expressions = {client_ip = "ClientHost", req_host = "RequestHost", req_status = "DownstreamStatus"}
+                            }
+                            // The pushes of logs and metrics of every Alloy (loki.core.phorge, prometheus.core.phorge) are most of
+                            // the requests, and each one would log a line that has to be pushed in turn: only the successful
+                            // ones are left out, a refused or failed push stays in the audit.
+                            stage.drop {
+                                source              = "req_host,req_status"
+                                separator           = ";"
+                                expression          = "^(loki|prometheus)\\.core\\.phorge;204$"
+                                drop_counter_reason = "machine_push"
+                            }
+                            stage.geoip {
+                                source  = "client_ip"
+                                db      = "/geoip/country.mmdb"
+                                db_type = "country"
+                            }
+                            stage.geoip {
+                                source  = "client_ip"
+                                db      = "/geoip/asn.mmdb"
+                                db_type = "asn"
+                            }
+                            // the network name goes into a JSON string: no double quote or backslash in it
+                            stage.template {
+                                source   = "geo_org"
+                                template = "{{ "{{" }} if .geoip_autonomous_system_organization {{ "}}" }}{{ "{{" }} Replace (Replace .geoip_autonomous_system_organization \"\\\"\" \"'\" -1) \"\\\\\" \"\" -1 {{ "}}" }}{{ "{{" }} end {{ "}}" }}"
+                            }
+                            stage.replace {
+                                expression = "(\\})\\s*$"
+                                replace    = ",\"GeoCountry\":\"{{ "{{" }} with .geoip_country_code {{ "}}" }}{{ "{{" }} . {{ "}}" }}{{ "{{" }} end {{ "}}" }}\",\"GeoAsn\":\"{{ "{{" }} with .geoip_autonomous_system_number {{ "}}" }}{{ "{{" }} . {{ "}}" }}{{ "{{" }} end {{ "}}" }}\",\"GeoOrg\":\"{{ "{{" }} with .geo_org {{ "}}" }}{{ "{{" }} . {{ "}}" }}{{ "{{" }} end {{ "}}" }}\"}"
+                            }
+                        }
                     }
 
                     loki.write "local" {
@@ -206,6 +251,9 @@ spec:
                       mountPath: /host/root
                       readOnly: true
                       mountPropagation: HostToContainer
+                    - name: geoip
+                      mountPath: /geoip
+                      readOnly: true
         controller:
             type: daemonset
             hostNetwork: true
@@ -215,6 +263,40 @@ spec:
                     - name: rootfs
                       hostPath:
                           path: /
+                    # DB-IP databases, kept on the node so that a failed download at a restart does not leave Alloy without them
+                    - name: geoip
+                      hostPath:
+                          path: /var/lib/alloy-geoip
+                          type: DirectoryOrCreate
+            # Fetches the free DB-IP country and network databases (monthly, CC BY 4.0: "IP Geolocation by DB-IP") at each start.
+            # Best effort: the old file stays when the download fails, and the pod starts either way.
+            initContainers:
+                - name: geoip
+                  image: docker.io/curlimages/curl:8.15.0
+                  securityContext:
+                      runAsUser: 0
+                  command:
+                      - sh
+                      - -c
+                      - |
+                        y=$(date +%Y); m=$(date +%m)
+                        pm=$((10#$m - 1)); py=$y
+                        if [ "$pm" -eq 0 ]; then pm=12; py=$((y - 1)); fi
+                        pm=$(printf '%02d' "$pm")
+                        for kind in country asn; do
+                          for ym in "$y-$m" "$py-$pm"; do
+                            if curl -fsS --max-time 120 -o "/geoip/$kind.mmdb.gz" "https://download.db-ip.com/free/dbip-$kind-lite-$ym.mmdb.gz" \
+                              && gunzip -c "/geoip/$kind.mmdb.gz" > "/geoip/$kind.mmdb.new" && mv "/geoip/$kind.mmdb.new" "/geoip/$kind.mmdb"; then
+                              echo "$kind: $ym"; break
+                            fi
+                          done
+                          rm -f "/geoip/$kind.mmdb.gz" "/geoip/$kind.mmdb.new"
+                        done
+                        ls -l /geoip
+                        exit 0
+                  volumeMounts:
+                      - name: geoip
+                        mountPath: /geoip
     postRenderers:
         # The chart probes the pod IP, which is the node IP under hostNetwork: probe the
         # loopback instead so the HTTP server doesn't have to listen on the node network.
