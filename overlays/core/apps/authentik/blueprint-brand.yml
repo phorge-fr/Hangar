@@ -79,13 +79,46 @@ data:
               name: phorge-authentication-mfa
             attrs:
               device_classes: [webauthn, totp, static]
+              # To make MFA mandatory once passkeys are enrolled: set not_configured_action to configure (see
+              # docs/authentik-hardening.md). Users then enrol one of these stages, the setup flows of the default blueprints.
               not_configured_action: skip
               webauthn_user_verification: preferred
+              configuration_stages:
+                - !Find [authentik_stages_authenticator_webauthn.authenticatorwebauthnstage, [name, default-authenticator-webauthn-setup]]
+                - !Find [authentik_stages_authenticator_totp.authenticatortotpstage, [name, default-authenticator-totp-setup]]
+                - !Find [authentik_stages_authenticator_static.authenticatorstaticstage, [name, default-authenticator-static-setup]]
           - model: authentik_stages_user_login.userloginstage
             id: authentication-login
             identifiers:
               name: phorge-authentication-login
-            attrs: {}
+            # A session ends after 12 hours and is tied to the autonomous system and the country it was opened from: a stolen
+            # cookie used from elsewhere is refused. A client address that is private (the LAN, the cluster) has no ASN or
+            # country, so those sessions are not bound.
+            attrs:
+              session_duration: hours=12
+              network_binding: bind_asn
+              geoip_binding: bind_continent_country
+              terminate_other_sessions: false
+          # Too many failed sign-ins from one address (authentik lowers the score at each one) close the flow to it. The policy
+          # passes when the score is at or under the threshold, hence the negated binding. Only the address is checked: the
+          # user is not known when the flow starts. Local and in-cluster clients share one address, so the threshold is loose.
+          - model: authentik_policies_reputation.reputationpolicy
+            id: authentication-reputation
+            identifiers:
+              name: phorge-authentication-reputation
+            attrs:
+              check_ip: true
+              check_username: false
+              threshold: -10
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              policy: !KeyOf authentication-reputation
+              order: 0
+            attrs:
+              enabled: true
+              negate: true
+              timeout: 30
           - model: authentik_flows.flowstagebinding
             identifiers:
               target: !KeyOf authentication-flow

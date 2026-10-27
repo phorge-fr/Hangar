@@ -78,6 +78,12 @@ spec:
                       secretKeyRef:
                           name: authentik-cap
                           key: secret-key
+                # The webhook that receives the alerts of the sign-in, read by blueprint-hardening.yml (!Env).
+                - name: ALERT_WEBHOOK_URL
+                  valueFrom:
+                      secretKeyRef:
+                          name: authentik-alerts
+                          key: webhook-url
             envFrom: []
             volumeMounts: []
             volumes: []
@@ -89,6 +95,7 @@ spec:
                 - authentik-phorge-oauth-blueprint
                 - authentik-crossview-oauth-blueprint
                 - authentik-brand
+                - authentik-hardening
         authentik:
             enabled: true
             log_level: info
