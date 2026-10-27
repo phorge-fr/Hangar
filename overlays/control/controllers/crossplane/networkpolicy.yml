@@ -1,0 +1,152 @@
+# Alloy runs in the host network: its scrapes and the kubelet probes come from the host or remote-node identity.
+# The providers reach their targets (the Incus API, OpenFGA on core) over HTTPS through their addresses on the network.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: crossplane
+    namespace: crossplane-system
+spec:
+    endpointSelector:
+        matchLabels:
+            app: crossplane
+    ingress:
+        # The webhooks of the API server
+        - fromEntities:
+              - host
+              - remote-node
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "9443"
+                      protocol: TCP
+                    - port: "8081"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        # The composition functions
+        - toEndpoints:
+              - matchExpressions:
+                    - key: pkg.crossplane.io/function
+                      operator: Exists
+          toPorts:
+              - ports:
+                    - port: "9443"
+                      protocol: TCP
+        # The registries of the packages
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: crossplane-rbac-manager
+    namespace: crossplane-system
+spec:
+    endpointSelector:
+        matchLabels:
+            app: crossplane-rbac-manager
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: crossplane-functions
+    namespace: crossplane-system
+spec:
+    endpointSelector:
+        matchExpressions:
+            - key: pkg.crossplane.io/function
+              operator: Exists
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    app: crossplane
+          toPorts:
+              - ports:
+                    - port: "9443"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: crossplane-providers
+    namespace: crossplane-system
+spec:
+    endpointSelector:
+        matchExpressions:
+            - key: pkg.crossplane.io/provider
+              operator: Exists
+    ingress:
+        - fromEntities:
+              - host
+              - remote-node
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "9443"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP
+        - fromEndpoints:
+              - matchLabels:
+                    app: crossplane
+          toPorts:
+              - ports:
+                    - port: "9443"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+---
+# provider-incus manages the Incus nodes, provider-openfga the OpenFGA of core
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: crossplane-providers-remote
+    namespace: crossplane-system
+spec:
+    endpointSelector:
+        matchExpressions:
+            - key: pkg.crossplane.io/provider
+              operator: In
+              values:
+                  - provider-incus
+                  - provider-openfga
+    egress:
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP

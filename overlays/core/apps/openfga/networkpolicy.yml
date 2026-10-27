@@ -1,0 +1,65 @@
+# Alloy runs in the host network: its probes come from the host or remote-node identity.
+# phorge-api, on the control cluster, reaches OpenFGA through traefik-local.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: openfga
+    namespace: openfga
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: openfga
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-local-traefik
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP
+                    - port: "8081"
+                      protocol: TCP
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: kube-prometheus-stack
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "2112"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP
+                    - port: "8081"
+                      protocol: TCP
+    egress:
+        - toEndpoints:
+              - matchLabels:
+                    app: openfga-postgres
+          toPorts:
+              - ports:
+                    - port: "5432"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: openfga-postgres
+    namespace: openfga
+spec:
+    endpointSelector:
+        matchLabels:
+            app: openfga-postgres
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: openfga
+          toPorts:
+              - ports:
+                    - port: "5432"
+                      protocol: TCP

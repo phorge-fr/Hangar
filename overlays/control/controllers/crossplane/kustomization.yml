@@ -33,3 +33,4 @@ resources:
     - openfga-phorge-model.yml
     - xrd-apikey.yml
     - composition-apikey.yml
+    - networkpolicy.yml

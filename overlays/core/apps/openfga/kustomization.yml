@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
     - openfga.yml
     - secrets.yml
+    - networkpolicy.yml

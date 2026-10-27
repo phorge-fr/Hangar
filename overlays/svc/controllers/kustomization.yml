@@ -7,3 +7,4 @@ resources:
     - traefik
     - alloy
     - ../../../base/controllers/kube-state-metrics
+    - ../../../base/controllers/kube-system

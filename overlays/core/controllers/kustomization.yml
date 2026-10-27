@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
     - ../../../base/controllers/cert-manager
     - ../../../base/controllers/longhorn
+    - ../../../base/controllers/kube-system
     - traefik
     - alloy

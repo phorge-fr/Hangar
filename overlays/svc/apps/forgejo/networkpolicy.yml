@@ -1,0 +1,71 @@
+# Alloy runs in the host network: its scrapes come from the host or remote-node identity.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: forgejo
+    namespace: forgejo
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: forgejo
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-public-traefik
+              # The pod that waits for Forgejo before it registers the OIDC source
+              - matchLabels:
+                    job-name: forgejo-oidc-setup
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+        # git over SSH, through the LoadBalancer
+        - fromEntities:
+              - world
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "2222"
+                      protocol: TCP
+    egress:
+        # The OIDC provider, reached through its public address
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: forgejo-oidc-setup
+    namespace: forgejo
+spec:
+    endpointSelector:
+        matchLabels:
+            job-name: forgejo-oidc-setup
+    egress:
+        - toEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: forgejo
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+        # The discovery document of the OIDC provider
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP

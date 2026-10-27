@@ -1,0 +1,26 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: mktxp
+    namespace: mktxp
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: mktxp
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: kube-prometheus-stack
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "49090"
+                      protocol: TCP
+    egress:
+        # The API (api-ssl) of the router
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "8729"
+                      protocol: TCP
