@@ -1,11 +1,13 @@
 # Audit policy of the kube-apiserver of the three clusters (control, core, svc), uploaded by k0sctl to /etc/k0s/audit-policy.yaml
 # (see docs/kubernetes-audit.md). The first rule that matches a request decides its level. Nothing here records the body of a
-# secret or of a configmap: those are always Metadata (who, what, when, from where, with which result).
+# secret or of a configmap: those are never more than Metadata (who, what, when, from where, with which result).
 apiVersion: audit.k8s.io/v1
 kind: Policy
-# A request is recorded once, when it is answered (the RequestReceived copy only doubles the volume)
+# One record per request, when it is answered. RequestReceived would double the volume, and ResponseStarted (only for the
+# long requests: watches, exec) would do it again for the ones that last.
 omitStages:
     - RequestReceived
+    - ResponseStarted
 # The copies of the objects in the events keep the managed fields, which are long and of no use here
 omitManagedFields: true
 rules:
@@ -45,6 +47,50 @@ rules:
             resources: ["leases"]
           - group: "discovery.k8s.io"
             resources: ["endpointslices"]
+    # The status that the controllers write back on their own objects (Flux, Longhorn, Crossplane, the workload controllers):
+    # constant, and the work of a program, not a decision. What they change in the spec is kept, below. A new kind of
+    # object that is not listed here shows up in the log, which is the cue to add its group.
+    - level: None
+      userGroups:
+          - system:serviceaccounts
+      verbs: ["create", "update", "patch", "apply"]
+      resources:
+          - group: ""
+            resources: ["*/status"]
+          - group: "apps"
+            resources: ["*/status"]
+          - group: "batch"
+            resources: ["*/status"]
+          - group: "longhorn.io"
+            resources: ["*/status"]
+          - group: "helm.toolkit.fluxcd.io"
+            resources: ["*/status"]
+          - group: "kustomize.toolkit.fluxcd.io"
+            resources: ["*/status"]
+          - group: "source.toolkit.fluxcd.io"
+            resources: ["*/status"]
+          - group: "notification.toolkit.fluxcd.io"
+            resources: ["*/status"]
+          - group: "cert-manager.io"
+            resources: ["*/status"]
+          - group: "acme.cert-manager.io"
+            resources: ["*/status"]
+          - group: "pkg.crossplane.io"
+            resources: ["*/status"]
+          - group: "apiextensions.crossplane.io"
+            resources: ["*/status"]
+          - group: "phorge.fr"
+            resources: ["*/status"]
+          - group: "cluster.incus.crossplane.io"
+            resources: ["*/status"]
+          - group: "network.incus.crossplane.io"
+            resources: ["*/status"]
+          - group: "project.incus.m.crossplane.io"
+            resources: ["*/status"]
+          - group: "profile.incus.m.crossplane.io"
+            resources: ["*/status"]
+          - group: "network.incus.m.crossplane.io"
+            resources: ["*/status"]
     # The checks that the apiserver makes of tokens and permissions for other components
     - level: None
       resources:
@@ -53,11 +99,11 @@ rules:
           - group: "authorization.k8s.io"
             resources: ["subjectaccessreviews", "selfsubjectaccessreviews", "selfsubjectrulesreviews", "localsubjectaccessreviews"]
 
-    # Secrets and configmaps: every access, by anybody, but never the content (Metadata)
+    # Secrets: every access, by anybody, but never the content (Metadata)
     - level: Metadata
       resources:
           - group: ""
-            resources: ["secrets", "configmaps", "serviceaccounts/token"]
+            resources: ["secrets", "serviceaccounts/token"]
 
     # Reading by the service accounts of the applications (Flux, Crossplane, Cilium, cert-manager...) is routine and constant:
     # only what they change is kept, below. A person reading with kubectl is kept.
