@@ -1,0 +1,28 @@
+# Egress of the Flux controllers: the API server, each other (the artifacts of source-controller, the
+# events of notification-controller) and HTTPS, which is all the sources use (GitHub, the Helm repositories
+# and the OCI registries). DNS comes from the default-deny policy.
+# This replaces the all-egress rule of the allow-egress NetworkPolicy of the Flux manifests, which is
+# patched in clusters/*/flux-system/kustomization.yaml. Both are in the same Kustomization, so that Flux
+# never applies one without the other.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: flux-egress
+    namespace: flux-system
+spec:
+    endpointSelector: {}
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        - toEndpoints:
+              - {}
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
