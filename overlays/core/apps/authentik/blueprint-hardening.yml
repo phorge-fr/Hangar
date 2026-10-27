@@ -36,19 +36,23 @@ data:
                 who = ((event.user if event else None) or {}).get("username") or "anonymous"
                 country = (context.get("geo") or {}).get("country") or "unknown"
                 request_id = (context.get("http_request") or {}).get("request_id") or "-"
+                obj = (context.get("model") or {}).get("model_name")
                 colors = {"alert": 0xE74C3C, "warning": 0xF39C12, "notice": 0x3498DB}
+                fields = [
+                    {"name": "Severity", "value": notification.severity, "inline": True},
+                    {"name": "User", "value": who, "inline": True},
+                    {"name": "Country", "value": country, "inline": True},
+                ]
+                if obj:
+                    fields.append({"name": "Object", "value": obj, "inline": True})
+                fields.append({"name": "Request id", "value": request_id})
                 return {
                     "username": "authentik",
                     "allowed_mentions": {"parse": []},
                     "embeds": [{
-                        "title": "Sign-in: " + action,
+                        "title": "authentik: " + action,
                         "color": colors.get(notification.severity, 0x95A5A6),
-                        "fields": [
-                            {"name": "Severity", "value": notification.severity, "inline": True},
-                            {"name": "User", "value": who, "inline": True},
-                            {"name": "Country", "value": country, "inline": True},
-                            {"name": "Request id", "value": request_id},
-                        ],
+                        "fields": fields,
                     }],
                 }
           - model: authentik_events.notificationtransport
@@ -111,6 +115,94 @@ data:
             identifiers:
               target: !KeyOf suspicious-request-rule
               policy: !KeyOf suspicious-request
+              order: 0
+            attrs:
+              enabled: true
+              negate: false
+              timeout: 30
+          # Authentication of an administrator. akadmin is the only superuser and is not used day to day, so every sign-in of a
+          # superuser, and every failed sign-in against one, is worth a look; so is a new token or user (a way back in for
+          # somebody who got in). The policies read the user of the event: a user name that does not exist raises nothing.
+          - model: authentik_policies_expression.expressionpolicy
+            id: superuser-login
+            identifiers:
+              name: phorge-superuser-login
+            attrs:
+              expression: |
+                from authentik.core.models import User
+                event = request.context.get("event")
+                pk = ((event.user if event else None) or {}).get("pk")
+                user = User.objects.filter(pk=pk).first() if pk else None
+                return bool(event and event.action == "login" and user and user.is_superuser)
+          - model: authentik_events.notificationrule
+            id: superuser-login-rule
+            identifiers:
+              name: phorge-superuser-login
+            attrs:
+              severity: alert
+              destination_group: !KeyOf platform-admins-group
+              transports:
+                - !KeyOf alert-transport
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf superuser-login-rule
+              policy: !KeyOf superuser-login
+              order: 0
+            attrs:
+              enabled: true
+              negate: false
+              timeout: 30
+          - model: authentik_policies_expression.expressionpolicy
+            id: superuser-login-failed
+            identifiers:
+              name: phorge-superuser-login-failed
+            attrs:
+              expression: |
+                from authentik.core.models import User
+                event = request.context.get("event")
+                pk = ((event.user if event else None) or {}).get("pk")
+                user = User.objects.filter(pk=pk).first() if pk else None
+                return bool(event and event.action == "login_failed" and user and user.is_superuser)
+          - model: authentik_events.notificationrule
+            id: superuser-login-failed-rule
+            identifiers:
+              name: phorge-superuser-login-failed
+            attrs:
+              severity: warning
+              destination_group: !KeyOf platform-admins-group
+              transports:
+                - !KeyOf alert-transport
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf superuser-login-failed-rule
+              policy: !KeyOf superuser-login-failed
+              order: 0
+            attrs:
+              enabled: true
+              negate: false
+              timeout: 30
+          - model: authentik_policies_expression.expressionpolicy
+            id: credential-created
+            identifiers:
+              name: phorge-credential-created
+            attrs:
+              expression: |
+                event = request.context.get("event")
+                model = ((event.context if event else None) or {}).get("model") or {}
+                return bool(event and event.action == "model_created" and model.get("model_name") in ("token", "user"))
+          - model: authentik_events.notificationrule
+            id: credential-created-rule
+            identifiers:
+              name: phorge-credential-created
+            attrs:
+              severity: warning
+              destination_group: !KeyOf platform-admins-group
+              transports:
+                - !KeyOf alert-transport
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf credential-created-rule
+              policy: !KeyOf credential-created
               order: 0
             attrs:
               enabled: true
