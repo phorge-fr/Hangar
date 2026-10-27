@@ -5,6 +5,7 @@ resources:
     - secrets.yml
     - secret-phorge-api-directory.yml
     - secret-crossview.yml
+    - secret-smtp.yml
     - blueprint-grafana.yml
     - blueprint-forgejo.yml
     - blueprint-incus.yml
