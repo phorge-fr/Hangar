@@ -1,0 +1,213 @@
+# Cap (https://capjs.js.org): the proof-of-work captcha of the Authentik sign-in. Everything it stores (site keys, secrets,
+# tokens) is in Valkey. The dashboard is not exposed: it is reached with a port-forward, only /assets (the widget) is public.
+kind: Namespace
+apiVersion: v1
+metadata:
+    name: cap
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: cap
+    namespace: cap
+spec:
+    selector:
+        app: cap
+    ports:
+        - name: http
+          port: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: cap-valkey
+    namespace: cap
+spec:
+    selector:
+        app: cap-valkey
+    ports:
+        - name: valkey
+          port: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: cap
+    namespace: cap
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: cap
+    template:
+        metadata:
+            labels:
+                app: cap
+        spec:
+            containers:
+                - name: cap
+                  image: tiago2/cap:3.1.17
+                  env:
+                      - name: ADMIN_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: cap
+                                key: admin-key
+                      - name: REDIS_URL
+                        value: redis://cap-valkey:6379
+                      # The widget and its WASM are served by Cap itself (pinned), so the sign-in page loads nothing from a CDN
+                      - name: ENABLE_ASSETS_SERVER
+                        value: "true"
+                      - name: WIDGET_VERSION
+                        value: 0.1.58
+                      - name: WASM_VERSION
+                        value: 0.0.8
+                      # Only the sign-in page may ask for a challenge
+                      - name: CORS_ORIGIN
+                        value: https://auth.phorge.fr
+                  ports:
+                      - name: http
+                        containerPort: 3000
+                        protocol: TCP
+                  readinessProbe:
+                      httpGet:
+                          path: /health
+                          port: 3000
+                      periodSeconds: 10
+                      timeoutSeconds: 3
+                      failureThreshold: 3
+                  livenessProbe:
+                      httpGet:
+                          path: /health/live
+                          port: 3000
+                      initialDelaySeconds: 15
+                      periodSeconds: 20
+                      timeoutSeconds: 3
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          cpu: 50m
+                          memory: 128Mi
+                      limits:
+                          memory: 384Mi
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      runAsNonRoot: true
+                      runAsUser: 1000
+                      capabilities:
+                          drop:
+                              - ALL
+                  # The IP databases and the assets are downloaded here
+                  volumeMounts:
+                      - name: data
+                        mountPath: /usr/src/app/data
+            volumes:
+                - name: data
+                  emptyDir: {}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+    name: cap-valkey
+    namespace: cap
+spec:
+    replicas: 1
+    serviceName: cap-valkey
+    selector:
+        matchLabels:
+            app: cap-valkey
+    template:
+        metadata:
+            labels:
+                app: cap-valkey
+        spec:
+            securityContext:
+                fsGroup: 999
+            containers:
+                - name: valkey
+                  image: valkey/valkey:9.1.3-alpine
+                  # noeviction: a full Valkey refuses writes instead of dropping site keys or tokens
+                  args:
+                      - valkey-server
+                      - --save
+                      - "60"
+                      - "1"
+                      - --loglevel
+                      - warning
+                      - --maxmemory
+                      - 128mb
+                      - --maxmemory-policy
+                      - noeviction
+                  ports:
+                      - name: valkey
+                        containerPort: 6379
+                        protocol: TCP
+                  readinessProbe:
+                      exec:
+                          command:
+                              - valkey-cli
+                              - ping
+                      periodSeconds: 10
+                      timeoutSeconds: 3
+                  livenessProbe:
+                      exec:
+                          command:
+                              - valkey-cli
+                              - ping
+                      initialDelaySeconds: 15
+                      periodSeconds: 20
+                      timeoutSeconds: 3
+                  resources:
+                      requests:
+                          cpu: 20m
+                          memory: 64Mi
+                      limits:
+                          memory: 192Mi
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      runAsNonRoot: true
+                      runAsUser: 999
+                      capabilities:
+                          drop:
+                              - ALL
+                  volumeMounts:
+                      - name: data
+                        mountPath: /data
+    volumeClaimTemplates:
+        - metadata:
+              name: data
+          spec:
+              accessModes:
+                  - ReadWriteOnce
+              volumeMode: Filesystem
+              storageClassName: longhorn
+              resources:
+                  requests:
+                      storage: 1Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: cap
+    namespace: cap
+    annotations:
+        cert-manager.io/cluster-issuer: public-issuer
+spec:
+    ingressClassName: traefik-public
+    tls:
+        - hosts:
+              - cap.phorge.fr
+          secretName: cap.phorge.fr
+    rules:
+        - host: cap.phorge.fr
+          http:
+              paths:
+                  # The widget. The paths of the site key (challenge, redeem) are added with the Authentik side.
+                  - path: /assets
+                    pathType: Prefix
+                    backend:
+                        service:
+                            name: cap
+                            port:
+                                number: 3000

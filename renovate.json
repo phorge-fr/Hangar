@@ -34,11 +34,12 @@
     ],
     "packageRules": [
         {
-            "description": "The Forgejo app image (helm values) and the OIDC setup Job run the forgejo CLI against the same database: bump them together, in one PR",
+            "description": "The Forgejo helm chart, the app image (helm values) and the OIDC setup Job run the forgejo CLI against the same database: bump them together, in one PR",
             "matchPackageNames": [
+                "forgejo",
                 "code.forgejo.org/forgejo/forgejo"
             ],
-            "groupName": "forgejo image"
+            "groupName": "forgejo"
         },
         {
             "description": "Chart/CRD bumps on stateful or cluster-critical apps: never automerge, even if config:recommended's defaults change, since a schema/values change here needs a live test before merging (see docs/runbook or the Flux-suspend-decrypt-apply convention).",

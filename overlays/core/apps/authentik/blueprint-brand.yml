@@ -26,6 +26,71 @@ data:
               title: Authorize a device
               designation: authentication
               authentication: require_authenticated
+          # The sign-in flow. The default one carries the title "Welcome to authentik!" and the default blueprints are applied
+          # again at every start, so it cannot be renamed: the brand uses this one instead. Same steps as the default flow
+          # (identification, password, MFA if the user has a device, login). Users without a device are not forced to enrol
+          # yet (not_configured_action: skip), so nobody is locked out before the passkeys are set up.
+          - model: authentik_flows.flow
+            id: authentication-flow
+            identifiers:
+              slug: phorge-authentication-flow
+            attrs:
+              name: Phorge sign-in
+              title: Sign in to Phorge
+              designation: authentication
+              layout: stacked
+              authentication: none
+          - model: authentik_stages_identification.identificationstage
+            id: authentication-identification
+            identifiers:
+              name: phorge-authentication-identification
+            attrs:
+              user_fields: [email, username]
+              case_insensitive_matching: true
+              show_matched_user: true
+              pretend_user_exists: true
+          - model: authentik_stages_password.passwordstage
+            id: authentication-password
+            identifiers:
+              name: phorge-authentication-password
+            attrs:
+              backends:
+                - authentik.core.auth.InbuiltBackend
+                - authentik.core.auth.TokenBackend
+              failed_attempts_before_cancel: 5
+          - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+            id: authentication-mfa
+            identifiers:
+              name: phorge-authentication-mfa
+            attrs:
+              device_classes: [webauthn, totp, static]
+              not_configured_action: skip
+              webauthn_user_verification: preferred
+          - model: authentik_stages_user_login.userloginstage
+            id: authentication-login
+            identifiers:
+              name: phorge-authentication-login
+            attrs: {}
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-identification
+              order: 10
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-password
+              order: 20
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-mfa
+              order: 30
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-login
+              order: 100
           - model: authentik_brands.brand
             id: phorge-brand
             identifiers:
@@ -33,11 +98,153 @@ data:
             attrs:
               default: true
               flow_device_code: !KeyOf device-code-flow
+              flow_authentication: !KeyOf authentication-flow
               branding_title: Phorge
               branding_logo: https://avatars.githubusercontent.com/u/187407936
-              branding_favicon: /static/dist/assets/icons/icon.png
+              branding_favicon: https://avatars.githubusercontent.com/u/187407936
               branding_default_flow_background: /static/dist/assets/images/user_default.png
-              branding_custom_css: ""
+              # A neutral look, until there is a real identity: one accent (the blue of the logo, darkened for the buttons so the
+              # white text stays readable), a soft background, a rounded card. Everything is a variable or a CSS part, no image
+              # and no font is fetched from another host. The ::part() rules reach the flow card from the page, the rest is
+              # inherited through the shadow roots.
+              branding_custom_css: |-
+                :root {
+                  --phorge-accent: #3db5ff;
+                  --pf-global--primary-color--100: #0b78c4;
+                  --pf-global--primary-color--200: #095f9d;
+                  --pf-global--link--Color: #0b78c4;
+                  --pf-global--link--Color--hover: #095f9d;
+                  --pf-global--active-color--100: #0b78c4;
+                  --pf-global--BorderRadius--sm: 8px;
+                }
+                :root[data-theme="dark"] {
+                  --pf-global--primary-color--100: #3db5ff;
+                  --pf-global--primary-color--200: #7ccdff;
+                  --pf-global--link--Color: #3db5ff;
+                  --pf-global--link--Color--hover: #7ccdff;
+                  --pf-global--active-color--100: #3db5ff;
+                }
+                ak-flow-executor {
+                  background:
+                    radial-gradient(900px 480px at 15% -10%, rgba(61, 181, 255, 0.16), transparent 60%),
+                    linear-gradient(180deg, #f8fafc, #eef2f6);
+                }
+                :root[data-theme="dark"] ak-flow-executor {
+                  background:
+                    radial-gradient(900px 480px at 15% -10%, rgba(61, 181, 255, 0.14), transparent 60%),
+                    linear-gradient(180deg, #11161c, #0b0f14);
+                }
+                ak-flow-executor::part(main) {
+                  border-radius: 14px;
+                  border: 1px solid rgba(16, 40, 64, 0.08);
+                  box-shadow: 0 12px 40px rgba(16, 40, 64, 0.12);
+                }
+                :root[data-theme="dark"] ak-flow-executor::part(main) {
+                  border-color: rgba(255, 255, 255, 0.08);
+                  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+                }
+                .branding-logo {
+                  max-height: 88px;
+                  width: auto;
+                }
+                /* white on the light background by default: readable in both themes */
+                ak-flow-executor::part(footer),
+                ak-flow-executor::part(locale-select),
+                .pf-c-login__footer,
+                .pf-c-login__footer a,
+                .pf-c-login__footer p,
+                ak-locale-select,
+                ak-locale-select * {
+                  color: #4a5663;
+                  text-shadow: none;
+                }
+                :root[data-theme="dark"] ak-flow-executor::part(footer),
+                :root[data-theme="dark"] ak-flow-executor::part(locale-select),
+                :root[data-theme="dark"] .pf-c-login__footer,
+                :root[data-theme="dark"] .pf-c-login__footer a,
+                :root[data-theme="dark"] .pf-c-login__footer p,
+                :root[data-theme="dark"] ak-locale-select,
+                :root[data-theme="dark"] ak-locale-select * {
+                  color: #aab4bf;
+                }
               attributes:
                 settings:
                   locale: en
+          # The icons of the applications, pinned to a commit of homarr-labs/dashboard-icons. The library is hidden from the users
+          # (meta_hide): they have no reason to see the applications, the icons are for the administrators. There is no
+          # Crossview icon, so it takes the one of Crossplane. These entries only set the icon and the visibility, the
+          # provider and the rest come from the blueprint of each application.
+          - model: authentik_core.application
+            id: grafana-application
+            identifiers:
+              slug: grafana
+            attrs:
+              name: Grafana
+              slug: grafana
+              meta_hide: true
+              meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@83f32e08257b66fbd971ac8d7645f5b38d52e85d/svg/grafana.svg
+          - model: authentik_core.application
+            id: forgejo-application
+            identifiers:
+              slug: forgejo
+            attrs:
+              name: Forgejo
+              slug: forgejo
+              meta_hide: true
+              meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@83f32e08257b66fbd971ac8d7645f5b38d52e85d/svg/forgejo.svg
+          - model: authentik_core.application
+            identifiers:
+              slug: incus
+            attrs:
+              name: Incus
+              slug: incus
+              meta_hide: true
+              meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@83f32e08257b66fbd971ac8d7645f5b38d52e85d/svg/incus.svg
+          - model: authentik_core.application
+            identifiers:
+              slug: crossview
+            attrs:
+              name: Crossview
+              slug: crossview
+              meta_hide: true
+              meta_icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons@83f32e08257b66fbd971ac8d7645f5b38d52e85d/svg/crossplane.svg
+          - model: authentik_core.application
+            identifiers:
+              slug: phorge
+            attrs:
+              name: Phorge
+              slug: phorge
+              meta_hide: true
+              meta_icon: https://avatars.githubusercontent.com/u/187407936
+          # Hiding an application does not protect it: any signed-in account could still open it. Grafana and Forgejo are
+          # administration tools, so only the platform administrators may use them (Crossview already has its own group). Incus and the Phorge console stay open: what a person may do there is decided by OpenFGA, not by this.
+          - model: authentik_core.group
+            id: platform-admins-group
+            identifiers:
+              name: phorge-platform-admins
+            attrs:
+              name: phorge-platform-admins
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf grafana-application
+              group: !KeyOf platform-admins-group
+              order: 0
+            attrs:
+              target: !KeyOf grafana-application
+              group: !KeyOf platform-admins-group
+              order: 0
+              enabled: true
+              negate: false
+              timeout: 30
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf forgejo-application
+              group: !KeyOf platform-admins-group
+              order: 0
+            attrs:
+              target: !KeyOf forgejo-application
+              group: !KeyOf platform-admins-group
+              order: 0
+              enabled: true
+              negate: false
+              timeout: 30
