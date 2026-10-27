@@ -2,8 +2,8 @@
 # metrics from and the kubelet probes from. Alloy runs in the host network, so the scrapes it makes on another node come from a
 # remote-node identity: a NetworkPolicy on the namespace of Alloy would drop them, and only the pods on Alloy's own node would be
 # scraped (the same as base/apps/monitoring/flux-networkpolicy.yml). Nothing else in the cluster has a reason to call the API,
-# which holds a ServiceAccount that can create and delete tenants. Egress is not restricted: the API calls the Kubernetes API,
-# OpenFGA on core, and authentik for the keys of its tokens.
+# which holds a ServiceAccount that can create and delete tenants. Egress is what the API calls: the Kubernetes API, and OpenFGA on
+# core and authentik (the keys of its tokens), both reached over HTTPS through their addresses on the network.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -27,4 +27,17 @@ spec:
           toPorts:
               - ports:
                     - port: "8080"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
                       protocol: TCP

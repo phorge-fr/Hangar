@@ -11,3 +11,4 @@ resources:
     - blueprint-phorge-api.yml
     - blueprint-crossview.yml
     - blueprint-brand.yml
+    - networkpolicy.yml

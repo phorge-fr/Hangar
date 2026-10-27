@@ -1,0 +1,115 @@
+# Alloy runs in the host network: its probes and scrapes come from the host or remote-node identity.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: authentik-server
+    namespace: authentik
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: authentik
+            app.kubernetes.io/component: server
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-public-traefik
+          toPorts:
+              - ports:
+                    - port: "9000"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "9000"
+                      protocol: TCP
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: kube-prometheus-stack
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "9300"
+                      protocol: TCP
+    egress:
+        - toEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: postgresql
+          toPorts:
+              - ports:
+                    - port: "5432"
+                      protocol: TCP
+        # Gravatar, and the sources and webhooks configured in the blueprints
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: authentik-worker
+    namespace: authentik
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: authentik
+            app.kubernetes.io/component: worker
+    ingress:
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "9000"
+                      protocol: TCP
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: kube-prometheus-stack
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "9300"
+                      protocol: TCP
+    egress:
+        - toEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: postgresql
+          toPorts:
+              - ports:
+                    - port: "5432"
+                      protocol: TCP
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: authentik-postgresql
+    namespace: authentik
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: postgresql
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: authentik
+          toPorts:
+              - ports:
+                    - port: "5432"
+                      protocol: TCP

@@ -1,0 +1,31 @@
+# Alloy runs in the host network: its probes come from the host or remote-node identity.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: uptime-kuma
+    namespace: uptime-kuma
+spec:
+    endpointSelector:
+        matchLabels:
+            app: uptime-kuma
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-public-traefik
+          toPorts:
+              - ports:
+                    - port: "3001"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "3001"
+                      protocol: TCP
+    egress:
+        # It probes whatever monitors are configured in its UI, inside and outside the cluster
+        - toEntities:
+              - world
+              - cluster

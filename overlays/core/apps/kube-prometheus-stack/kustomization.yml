@@ -7,3 +7,4 @@ resources:
     - alertmanager-healthchecks-secret.yml
     - alertmanager-rules
     - grafana-dashboards
+    - networkpolicy.yml
