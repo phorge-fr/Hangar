@@ -1,0 +1,1686 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: http-audit-dashboard
+    namespace: kube-prometheus-stack
+    annotations:
+        grafana_folder: "Core"
+    labels:
+        grafana_dashboard: "1"
+data:
+    http-audit.json: |
+        {
+          "uid": "http-audit",
+          "title": "HTTP audit (Traefik)",
+          "description": "Audit log of the HTTP requests that reach the clusters through Traefik: who (address, country, network, user agent), to whom (host, service), why it failed. Read from the JSON access logs in Loki; Alloy adds GeoCountry, GeoAsn and GeoOrg to each line (DB-IP, IP Geolocation by DB-IP, CC BY 4.0). Retention is the one of Loki. See docs/http-audit.md and docs/gdpr.md.",
+          "tags": [
+            "traefik",
+            "audit",
+            "logs",
+            "security",
+            "cap"
+          ],
+          "schemaVersion": 39,
+          "version": 1,
+          "editable": true,
+          "graphTooltip": 1,
+          "refresh": "1m",
+          "time": {
+            "from": "now-24h",
+            "to": "now"
+          },
+          "timezone": "browser",
+          "templating": {
+            "list": [
+              {
+                "name": "cluster",
+                "label": "Cluster",
+                "type": "query",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "query": {
+                  "query": "label_values({namespace=\"traefik\"}, cluster)",
+                  "refId": "LokiVar"
+                },
+                "definition": "label_values({namespace=\"traefik\"}, cluster)",
+                "includeAll": true,
+                "multi": true,
+                "allValue": ".*",
+                "refresh": 2,
+                "sort": 1,
+                "current": {
+                  "selected": true,
+                  "text": [
+                    "All"
+                  ],
+                  "value": [
+                    "$__all"
+                  ]
+                }
+              },
+              {
+                "name": "ingress",
+                "label": "Ingress",
+                "type": "query",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "query": {
+                  "query": "label_values({namespace=\"traefik\"}, container)",
+                  "refId": "LokiVar"
+                },
+                "definition": "label_values({namespace=\"traefik\"}, container)",
+                "includeAll": true,
+                "multi": true,
+                "allValue": ".*",
+                "refresh": 2,
+                "sort": 1,
+                "current": {
+                  "selected": true,
+                  "text": [
+                    "All"
+                  ],
+                  "value": [
+                    "$__all"
+                  ]
+                }
+              },
+              {
+                "name": "host",
+                "label": "Host (regex)",
+                "type": "textbox",
+                "query": ".*",
+                "current": {
+                  "text": ".*",
+                  "value": ".*"
+                },
+                "hide": 0
+              }
+            ]
+          },
+          "annotations": {
+            "list": []
+          },
+          "links": [],
+          "panels": [
+            {
+              "id": 1,
+              "type": "row",
+              "title": "Who comes, and from where",
+              "collapsed": false,
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+              },
+              "panels": []
+            },
+            {
+              "id": 2,
+              "type": "stat",
+              "title": "Requests",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 0,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "Requests that went through Traefik in the time range. The pushes of logs and metrics of Alloy that succeed are not counted (they would be most of it)."
+            },
+            {
+              "id": 3,
+              "type": "stat",
+              "title": "Client errors (4xx)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 4,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | DownstreamStatus=~\"4..\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 4,
+              "type": "stat",
+              "title": "Server errors (5xx)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 8,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | DownstreamStatus=~\"5..\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 5,
+              "type": "stat",
+              "title": "Clients",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 12,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "count(sum by (ClientHost) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "Distinct client addresses. A client on the LAN or in the cluster shows its own address, or the one of its node."
+            },
+            {
+              "id": 6,
+              "type": "stat",
+              "title": "Countries",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 16,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "count(sum by (GeoCountry) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | GeoCountry!=\"\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "Distinct countries among the public addresses (private addresses have none)."
+            },
+            {
+              "id": 7,
+              "type": "stat",
+              "title": "Time to answer (p95)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 20,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "max(quantile_over_time(0.95, {namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | RequestPath!~\".*/ws/.*\" | DownstreamStatus!=101 | unwrap Duration [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "ns",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "95th percentile of the time Traefik took to answer. The WebSocket connections of authentik (/ws/) stay open for minutes and are left out."
+            },
+            {
+              "id": 8,
+              "type": "geomap",
+              "title": "Requests by country",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 11,
+                "w": 14,
+                "x": 0,
+                "y": 5
+              },
+              "description": "Public client addresses only, located with the free DB-IP country database (IP Geolocation by DB-IP, CC BY 4.0). A country, not a city: the address itself stays in the log.",
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum by (GeoCountry) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | GeoCountry!=\"\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "continuous-GrYlRd"
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "view": {
+                  "id": "zero",
+                  "lat": 25,
+                  "lon": 10,
+                  "zoom": 1.6,
+                  "allLayers": true
+                },
+                "controls": {
+                  "showZoom": true,
+                  "mouseWheelZoom": false,
+                  "showAttribution": true
+                },
+                "basemap": {
+                  "type": "default",
+                  "name": "Basemap",
+                  "config": {}
+                },
+                "layers": [
+                  {
+                    "type": "markers",
+                    "name": "Requests",
+                    "tooltip": true,
+                    "location": {
+                      "mode": "lookup",
+                      "lookup": "GeoCountry",
+                      "gazetteer": "public/gazetteer/countries.json"
+                    },
+                    "config": {
+                      "showLegend": true,
+                      "style": {
+                        "size": {
+                          "fixed": 5,
+                          "min": 6,
+                          "max": 40,
+                          "field": "Value"
+                        },
+                        "color": {
+                          "field": "Value",
+                          "fixed": "dark-green"
+                        },
+                        "opacity": 0.6,
+                        "symbol": {
+                          "mode": "fixed",
+                          "fixed": "img/icons/marker/circle.svg"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": 9,
+              "type": "table",
+              "title": "Top clients",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 11,
+                "w": 10,
+                "x": 14,
+                "y": 5
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(15, sum by (ClientHost, GeoCountry, GeoOrg) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "ClientHost": "Address",
+                      "GeoCountry": "Country",
+                      "GeoOrg": "Network",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "ClientHost": 0,
+                      "GeoCountry": 1,
+                      "GeoOrg": 2,
+                      "Value": 3
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              },
+              "description": "Who calls most. Network is the name of the autonomous system (an ISP, or a hosting provider for a bot or a cloud service)."
+            },
+            {
+              "id": 10,
+              "type": "row",
+              "title": "To whom, and why",
+              "collapsed": false,
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 16
+              },
+              "panels": []
+            },
+            {
+              "id": 11,
+              "type": "timeseries",
+              "title": "Requests by status",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 17
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | DownstreamStatus=~\"2..\" [$__auto]))",
+                  "legendFormat": "2xx",
+                  "queryType": "range"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | DownstreamStatus=~\"3..\" [$__auto]))",
+                  "legendFormat": "3xx",
+                  "queryType": "range"
+                },
+                {
+                  "refId": "C",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | DownstreamStatus=~\"4..\" [$__auto]))",
+                  "legendFormat": "4xx",
+                  "queryType": "range"
+                },
+                {
+                  "refId": "D",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | DownstreamStatus=~\"5..\" [$__auto]))",
+                  "legendFormat": "5xx",
+                  "queryType": "range"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "custom": {
+                    "drawStyle": "bars",
+                    "fillOpacity": 60,
+                    "stacking": {
+                      "mode": "normal"
+                    },
+                    "lineWidth": 0
+                  }
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "2xx"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "green"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "3xx"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "blue"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "4xx"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "orange"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "5xx"
+                    },
+                    "properties": [
+                      {
+                        "id": "color",
+                        "value": {
+                          "mode": "fixed",
+                          "fixedColor": "red"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "sum"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 12,
+              "type": "timeseries",
+              "title": "Requests by service",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 17
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum by (ServiceName) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" [$__auto]))",
+                  "legendFormat": "{{ServiceName}}",
+                  "queryType": "range"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "custom": {
+                    "drawStyle": "bars",
+                    "fillOpacity": 60,
+                    "stacking": {
+                      "mode": "normal"
+                    },
+                    "lineWidth": 0
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "sum"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              },
+              "description": "Where the requests go: the Kubernetes service behind each router."
+            },
+            {
+              "id": 13,
+              "type": "table",
+              "title": "Destinations",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 0,
+                "y": 25
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(15, sum by (RequestHost, ServiceName) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "RequestHost": "Host",
+                      "ServiceName": "Service",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "RequestHost": 0,
+                      "ServiceName": 1,
+                      "Value": 2
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 14,
+              "type": "table",
+              "title": "Why it failed",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 25
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(20, sum by (RequestHost, RequestMethod, RequestPath, DownstreamStatus) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | DownstreamStatus>=400 [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "RequestHost": "Host",
+                      "RequestMethod": "Method",
+                      "RequestPath": "Path",
+                      "DownstreamStatus": "Status",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "RequestHost": 0,
+                      "RequestMethod": 1,
+                      "RequestPath": 2,
+                      "DownstreamStatus": 3,
+                      "Value": 4
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              },
+              "description": "The requests that were refused or failed: 401 and 403 (not allowed), 404 (a path that does not exist, often a scanner), 429 (the rate limit), 5xx (the service). The query string is never logged."
+            },
+            {
+              "id": 15,
+              "type": "table",
+              "title": "Clients with errors",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 0,
+                "y": 34
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(15, sum by (ClientHost, GeoCountry, GeoOrg) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | DownstreamStatus>=400 [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "ClientHost": "Address",
+                      "GeoCountry": "Country",
+                      "GeoOrg": "Network",
+                      "Value #A": "Errors",
+                      "Value": "Errors"
+                    },
+                    "indexByName": {
+                      "ClientHost": 0,
+                      "GeoCountry": 1,
+                      "GeoOrg": 2,
+                      "Value": 3
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Errors",
+                    "desc": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 16,
+              "type": "table",
+              "title": "User agents",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 34
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(15, sum by (request_User_Agent) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "request_User_Agent": "User agent",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "request_User_Agent": 0,
+                      "Value": 1
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              },
+              "description": "What calls: browsers, tools (curl, python-requests, Go clients) and scanners."
+            },
+            {
+              "id": 17,
+              "type": "logs",
+              "title": "Requests",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 12,
+                "w": 24,
+                "x": 0,
+                "y": 43
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "{namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=~\"$host\" | line_format \"{{.ClientHost}} {{.GeoCountry}} {{.GeoOrg}} -> {{.RequestHost}} {{.RequestMethod}} {{.RequestPath}} {{.DownstreamStatus}} router={{.RouterName}} ua={{.request_User_Agent}}\"",
+                  "queryType": "range"
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": false,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "description": "One line per request. Open a line for every field of the access log (the address, the port, the TLS version, the timings)."
+            },
+            {
+              "id": 18,
+              "type": "row",
+              "title": "Cap (captcha of the sign-in)",
+              "collapsed": false,
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 55
+              },
+              "panels": []
+            },
+            {
+              "id": 19,
+              "type": "stat",
+              "title": "Challenges issued",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 56
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/challenge\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "A challenge is requested when the widget loads and the visitor clicks. Cap does not expose metrics: these figures come from the access log of Traefik for cap.phorge.fr. The check of the token (siteverify) stays inside the cluster and is not seen here."
+            },
+            {
+              "id": 20,
+              "type": "stat",
+              "title": "Solved (redeem 200)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 56
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/redeem\" | DownstreamStatus=200 [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 21,
+              "type": "stat",
+              "title": "Refused (redeem 4xx/5xx)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 56
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/redeem\" | DownstreamStatus>=400 [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "A proof of work that did not validate, or a malformed request."
+            },
+            {
+              "id": 22,
+              "type": "stat",
+              "title": "Solve rate",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 56
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "(sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/redeem\" | DownstreamStatus=200 [$__range]))) / (sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/challenge\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "percentunit",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "Solved divided by issued. A low rate over a long time means bots that ask for challenges and never solve them, or a widget that breaks."
+            },
+            {
+              "id": 23,
+              "type": "timeseries",
+              "title": "Cap requests",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 60
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/challenge\" [$__auto]))",
+                  "legendFormat": "challenge",
+                  "queryType": "range"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/redeem\" | DownstreamStatus=200 [$__auto]))",
+                  "legendFormat": "redeem 200",
+                  "queryType": "range"
+                },
+                {
+                  "refId": "C",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/redeem\" | DownstreamStatus>=400 [$__auto]))",
+                  "legendFormat": "redeem refused",
+                  "queryType": "range"
+                },
+                {
+                  "refId": "D",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestPath=~\".*/widget.js\" [$__auto]))",
+                  "legendFormat": "widget.js",
+                  "queryType": "range"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "custom": {
+                    "drawStyle": "bars",
+                    "fillOpacity": 60,
+                    "stacking": {
+                      "mode": "normal"
+                    },
+                    "lineWidth": 0
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "sum"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 24,
+              "type": "timeseries",
+              "title": "Cap time to answer (95th percentile)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 60
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "max(quantile_over_time(0.95, {namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/challenge\" | unwrap Duration [$__auto]))",
+                  "legendFormat": "challenge",
+                  "queryType": "range"
+                },
+                {
+                  "refId": "B",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "max(quantile_over_time(0.95, {namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/redeem\" | unwrap Duration [$__auto]))",
+                  "legendFormat": "redeem",
+                  "queryType": "range"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ns",
+                  "custom": {
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "stacking": {
+                      "mode": "none"
+                    },
+                    "lineWidth": 1
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "mean",
+                    "max"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 25,
+              "type": "table",
+              "title": "Cap by country",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 68
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(15, sum by (GeoCountry, GeoOrg) (count_over_time({namespace=\"traefik\", cluster=~\"$cluster\", container=~\"$ingress\"} |= \"\\\"ClientHost\\\"\" | json | RequestHost=\"cap.phorge.fr\" | RequestMethod=\"POST\" | RequestPath=~\".*/challenge\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "GeoCountry": "Country",
+                      "GeoOrg": "Network",
+                      "Value #A": "Challenges",
+                      "Value": "Challenges"
+                    },
+                    "indexByName": {
+                      "GeoCountry": 0,
+                      "GeoOrg": 1,
+                      "Value": 2
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Challenges",
+                    "desc": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 26,
+              "type": "logs",
+              "title": "Cap logs",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 68
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "{namespace=\"cap\", container=\"cap\"}",
+                  "queryType": "range"
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": false,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "description": "What Cap writes itself: its start and its errors (it does not log requests)."
+            }
+          ]
+        }

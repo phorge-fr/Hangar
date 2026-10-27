@@ -36,9 +36,10 @@ Server side, authentik can also ask Gravatar for an avatar (the network policy o
 | authentik database, events | Action, user name, e-mail, **client address**, **user agent**, country and network (GeoIP) | 365 days (`event_retention`) | `gdpr_compliance` is on: the events of a user are deleted with the user. |
 | authentik database, reputation | Address, score, country and network of an address that failed a sign-in | Until the entry expires | Used to close the flow to an abusive address. |
 | Loki, `{namespace="authentik"}` | The same events as JSON log lines (`Created Event`), the `Updated score` lines (address, typed identifier, score) and the `Sign-in flow started` lines (address, country, network, score, request id), one per start of the flow, so also for visitors who never sign in | 30 days (`retention_period: 720h`) | Includes the raw `context.username`: what a visitor typed in the user name field, which can be a password typed in the wrong field. The password field itself is masked. |
+| Loki, `{namespace="traefik"}` | The HTTP audit log of core's Traefik (`docs/http-audit.md`): client **address**, host and path requested (query string dropped), method, status, duration, **user agent**, router and service, country and network of the client | 30 days (`retention_period: 720h`) | Every visitor of a public host is in it, whether or not they sign in. The `Authorization` and `Cookie` headers and the `Referer` are not kept. |
 | Discord (alert webhook) | Action, user name, country, request id, nothing else | Discord's own | Minimised on purpose: no address, no e-mail, no browser. The request id finds the full line in Loki. A US processor: record it in the register. |
 | Brevo (SMTP relay) | The e-mail address and the content of the mails authentik sends (recovery, notifications) | Brevo's own | French provider, still a processor to list. |
-| GeoIP | Nothing leaves the cluster: the lookup is local. | | |
+| GeoIP | Nothing leaves the cluster: the lookups are local (authentik uses MaxMind GeoLite2, Alloy the DB-IP lite databases). The only thing fetched from outside is the database files, by the init container of Alloy, which sends nothing about the visitors. | | DB-IP lite is CC BY 4.0: keep the credit "IP Geolocation by DB-IP" where the map is shown. |
 
 ## Decisions still to take
 
