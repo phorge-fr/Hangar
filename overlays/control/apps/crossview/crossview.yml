@@ -1,0 +1,85 @@
+# Crossview, a read-only web view of the Crossplane objects of this cluster (XRDs, compositions, claims, managed
+# resources). Internal only: the single entry point is the Ingress of traefik-local, at crossview.control.phorge.
+# No PostgreSQL: people sign in through authentik (blueprint-crossview.yml, core), which the chart supports with
+# the database off. Everything Crossview shows comes from the cluster, nothing is stored.
+#
+# The chart's ClusterRole grants get/list/watch on every resource of every API group, Secrets included: whoever
+# signs in to Crossview can read the cluster. Access is therefore limited to the authentik group crossview-users.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: HelmRepository
+metadata:
+    name: crossview
+    namespace: crossview
+spec:
+    interval: 24h
+    url: https://crossplane-contrib.github.io/crossview
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+    name: crossview
+    namespace: crossview
+spec:
+    interval: 30m
+    chart:
+        spec:
+            chart: crossview
+            version: 4.7.0
+            sourceRef:
+                kind: HelmRepository
+                name: crossview
+            interval: 12h
+    values:
+        database:
+            enabled: false
+        config:
+            database:
+                enabled: false
+            server:
+                auth:
+                    mode: session
+                # Where the browser lands after the sign-in, and the public root URL of this instance.
+                cors:
+                    origin: https://crossview.control.phorge
+            sso:
+                oidc:
+                    enabled: true
+                    issuer: https://auth.phorge.fr/application/o/crossview/
+                    clientId: 9cfce95d-f0a5-4965-986a-56711b883d8c
+                    callbackURL: https://crossview.control.phorge/api/auth/oidc/callback
+                    providerName: Phorge
+        secrets:
+            sessionSecret:
+                secretKeyRef:
+                    name: crossview-auth
+                    key: session-secret
+            OIDCClientSecret:
+                secretKeyRef:
+                    name: crossview-auth
+                    key: oidc-client-secret
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: crossview
+    namespace: crossview
+    annotations:
+        cert-manager.io/cluster-issuer: local-issuer
+        cert-manager.io/common-name: crossview.control.phorge
+spec:
+    ingressClassName: traefik-local
+    tls:
+        - hosts:
+              - crossview.control.phorge
+          secretName: crossview-tls
+    rules:
+        - host: crossview.control.phorge
+          http:
+              paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                        service:
+                            name: crossview-service
+                            port:
+                                number: 80

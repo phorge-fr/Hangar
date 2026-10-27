@@ -4,8 +4,10 @@ resources:
     - authentik.yml
     - secrets.yml
     - secret-phorge-api-directory.yml
+    - secret-crossview.yml
     - blueprint-grafana.yml
     - blueprint-forgejo.yml
     - blueprint-incus.yml
     - blueprint-phorge-api.yml
+    - blueprint-crossview.yml
     - blueprint-brand.yml
