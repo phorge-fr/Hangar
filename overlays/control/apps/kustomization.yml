@@ -2,4 +2,6 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
     - ../../../base/apps/monitoring
+    - ../../../base/apps/network-policies
     - phorge-api
+    - crossview

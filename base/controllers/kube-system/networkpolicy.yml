@@ -1,0 +1,86 @@
+# CoreDNS and metrics-server are installed by k0s, so only their policies live here.
+# Alloy runs in the host network: its scrapes come from the host or remote-node identity.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: coredns
+    namespace: kube-system
+spec:
+    endpointSelector:
+        matchLabels:
+            k8s-app: kube-dns
+    ingress:
+        - fromEntities:
+              - cluster
+          toPorts:
+              - ports:
+                    - port: "53"
+                      protocol: ANY
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "9153"
+                      protocol: TCP
+                    - port: "8080"
+                      protocol: TCP
+                    - port: "8181"
+                      protocol: TCP
+        # The Prometheus of the cluster, where there is one
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: kube-prometheus-stack
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "9153"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        # The upstream resolver is the router
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "53"
+                      protocol: ANY
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: metrics-server
+    namespace: kube-system
+spec:
+    endpointSelector:
+        matchLabels:
+            k8s-app: metrics-server
+    ingress:
+        - fromEntities:
+              - host
+              - remote-node
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "10250"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        # The kubelets
+        - toEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "10250"
+                      protocol: TCP

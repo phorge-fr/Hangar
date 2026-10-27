@@ -142,7 +142,23 @@ Like every kind that lives in a tenant namespace, it is only composed if a `Tena
 
 ## ApiKey
 
-A key for the API, scoped to a tenant. It stores the SHA-256 of the key, never the key. Each scope (`tenant:read`, `instances:read`, `instances:write`, `images:read`, `images:write`, `memberships:read`, `memberships:write`) is one tuple in the `phorge-api` store. Removing a scope removes its tuple at once. `expiresAt` is enforced: once it has passed, `status.expired` is true and the key has no tuple, so it grants nothing (within about a minute of the date). The API should check the date too.
+A personal access token: it lets a person's scripts and tools (OpenTofu, CI, a CLI) call the Phorge API as that person. It belongs to a user, not to a tenant, so every `ApiKey` lives in the namespace `phorge-keys`, named after the id of the key (`phk_<id>_<secret>`). It stores the SHA-256 of the secret, never the key.
+
+| Field | Type | Rule |
+|---|---|---|
+| `spec.owner` | email, required, immutable | The user the key acts as. Recorded by the API from the token of the person who creates it |
+| `spec.hash` | string, required, immutable | SHA-256 of the secret, 64 lowercase hex characters. A secret is not rotated: create another key |
+| `spec.scopes` | set, required | Among `tenants:read`, `tenants:write`, `instances:read\|write`, `images:read\|write`, `memberships:read\|write` |
+| `spec.expiresAt` | date-time | The API requires it, at most 366 days ahead; the XRD does not |
+| `spec.displayName` | string | At most 100 characters |
+| `status.keyId` | string | The name of the object, the id in the key |
+| `status.expired` | boolean | True once `expiresAt` has passed |
+
+**A key is its owner, within its scopes.** Nothing is written to OpenFGA for it: at every request the API checks that the scope covers the action, then asks OpenFGA about the owner (`user:<owner>`). A key therefore never exceeds the person it belongs to, even if their rights change after the key was made. `tenants:read` reads the tenants the owner sees (all of them for a platform administrator), `tenants:write` creates, resizes and deletes tenants (platform administrators only) and reads them too. The other scopes are the ones that already existed, now on every tenant the owner has a right on. The `key_*` relations of the OpenFGA model are no longer written (the model is immutable and was left as it is).
+
+**Platform administrator.** A token carries the groups of its user, a key does not: the API asks Authentik whether the owner is a member of `phorge-platform-admins`, with the token of a service account that can read that one group and nothing else (the answer is kept for a minute). A key stops being an administrator's within a minute of its owner leaving the group.
+
+**Who manages keys.** Only a person signed in with Authentik: a key cannot create, read or delete keys. For now only the platform administrators create and change them; anyone lists and revokes their own. `expiresAt` is enforced by the API at every request, to the second; `status.expired` is only what the list shows.
 
 ## What a tenant can and cannot do
 
@@ -174,7 +190,7 @@ Traffic from a tenant leaves through the `comp-ns` VLAN. The router drops traffi
 Users authenticate with Authentik (OIDC). Incus identifies them by the `email` claim, so the email is the key of every tuple, and the Authentik enrollment flow must make it mandatory. Tuples are written by Crossplane in two OpenFGA stores:
 
 - `iaas` (`overlays/control/resources/openfga/store.yml`): the one Incus enforces. Users and groups are only `viewer` there: the Incus UI is read-only for everybody, the tenant owner included. Crossplane reconciles an Incus object back as soon as it is changed by hand, and a VM deleted in Incus is recreated blank.
-- `phorge-api`: the roles and API key scopes the Phorge API checks (`can_read_*`, `can_write_*`). Writing goes through the API.
+- `phorge-api`: the roles the Phorge API checks (`can_read_*`, `can_write_*`). Writing goes through the API. An API key writes nothing there: it acts as its owner.
 
 No users or groups are stored in Crossplane: Authentik owns identities.
 

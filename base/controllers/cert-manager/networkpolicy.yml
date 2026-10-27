@@ -1,0 +1,102 @@
+# Alloy runs in the host network: its scrapes come from the host or remote-node identity.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: cert-manager
+    namespace: cert-manager
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: cert-manager
+    ingress:
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "9402"
+                      protocol: TCP
+        # The Prometheus of the cluster, where there is one
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: kube-prometheus-stack
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "9402"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        # ACME (Let's Encrypt), the Cloudflare API, and the DNS-01 propagation checks
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+                    - port: "53"
+                      protocol: ANY
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: cert-manager-cainjector
+    namespace: cert-manager
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: cainjector
+    ingress:
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "9402"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: cert-manager-webhook
+    namespace: cert-manager
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: webhook
+    ingress:
+        # The admission calls of the API server
+        - fromEntities:
+              - host
+              - remote-node
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "10250"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "9402"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP

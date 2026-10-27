@@ -1,0 +1,34 @@
+# Shared by traefik-local and traefik-public. Traefik may reach every pod of the cluster: what a
+# backend accepts is decided by the ingress rules of the backend itself.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: traefik
+    namespace: traefik
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: traefik
+    ingress:
+        # web and websecure, from the clients and from the edge proxy
+        - fromEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "8000"
+                      protocol: TCP
+                    - port: "8443"
+                      protocol: TCP
+        # Probes, and the scrapes of Alloy (host network)
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP
+                    - port: "9100"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - cluster

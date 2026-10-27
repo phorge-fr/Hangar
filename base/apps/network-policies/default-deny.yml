@@ -1,0 +1,34 @@
+# Nothing is allowed in either direction for any pod, except DNS. Each workload then opens what it
+# needs in its own CiliumNetworkPolicy, next to its manifests. Policies are additive, so the
+# NetworkPolicies of Flux and Longhorn keep working next to this one.
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+    name: default-deny
+spec:
+    endpointSelector: {}
+    ingress:
+        - {}
+    egress:
+        - toEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: kube-system
+                    k8s-app: kube-dns
+          toPorts:
+              - ports:
+                    - port: "53"
+                      protocol: ANY
+---
+# The health checks of Cilium between the nodes land on its own endpoint, which default-deny selects
+apiVersion: cilium.io/v2
+kind: CiliumClusterwideNetworkPolicy
+metadata:
+    name: allow-cilium-health
+spec:
+    endpointSelector:
+        matchLabels:
+            reserved:health: ""
+    ingress:
+        - fromEntities:
+              - host
+              - remote-node

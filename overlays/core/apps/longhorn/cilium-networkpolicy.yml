@@ -1,0 +1,25 @@
+# Longhorn's own NetworkPolicies only cover some of its pods. The components talk to each other on
+# many dynamic ports (instance managers, replicas), so the namespace is open to itself; the rest
+# is limited to what is observed: the kubelets and the nodes (CSI, iSCSI/NFS clients, webhooks)
+# and the API server.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: longhorn
+    namespace: longhorn-system
+spec:
+    endpointSelector: {}
+    ingress:
+        - fromEndpoints:
+              - {}
+        - fromEntities:
+              - host
+              - remote-node
+              - kube-apiserver
+    egress:
+        - toEndpoints:
+              - {}
+        - toEntities:
+              - kube-apiserver
+              - host
+              - remote-node

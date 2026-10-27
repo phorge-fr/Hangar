@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
     - mktxp.yml
     - secrets.yml
+    - networkpolicy.yml

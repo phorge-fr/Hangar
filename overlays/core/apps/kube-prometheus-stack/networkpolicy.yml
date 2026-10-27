@@ -1,0 +1,244 @@
+# Alloy runs in the host network: its probes and pushes come from the host or remote-node identity.
+# The Alloy of the other clusters push to Prometheus through traefik-local.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: prometheus
+    namespace: kube-prometheus-stack
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: prometheus
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: grafana
+              - matchLabels:
+                    app.kubernetes.io/name: kube-prometheus-stack-prometheus-operator
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-local-traefik
+          toPorts:
+              - ports:
+                    - port: "9090"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "9090"
+                      protocol: TCP
+    egress:
+        # It scrapes the pods, the kubelets and the API server
+        - toEntities:
+              - cluster
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: alertmanager
+    namespace: kube-prometheus-stack
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: alertmanager
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "9093"
+                      protocol: TCP
+                    - port: "8080"
+                      protocol: TCP
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: grafana
+          toPorts:
+              - ports:
+                    - port: "9093"
+                      protocol: TCP
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: alertmanager
+          toPorts:
+              - ports:
+                    - port: "9094"
+                      protocol: ANY
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "9093"
+                      protocol: TCP
+    egress:
+        # The notifications (Discord) and the heartbeat
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+        - toEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: alertmanager
+          toPorts:
+              - ports:
+                    - port: "9094"
+                      protocol: ANY
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: grafana
+    namespace: kube-prometheus-stack
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: grafana
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-public-traefik
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+    egress:
+        - toEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "9090"
+                      protocol: TCP
+        - toEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: alertmanager
+          toPorts:
+              - ports:
+                    - port: "9093"
+                      protocol: TCP
+        - toEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: loki
+                    app: loki
+          toPorts:
+              - ports:
+                    - port: "3100"
+                      protocol: TCP
+        # The sidecars watch the ConfigMaps of the dashboards and the data sources
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        # The OIDC provider, reached through its public address, and grafana.com
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: prometheus-operator
+    namespace: kube-prometheus-stack
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: kube-prometheus-stack-prometheus-operator
+    ingress:
+        # The admission webhook is called by the API server
+        - fromEntities:
+              - host
+              - remote-node
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "10250"
+                      protocol: TCP
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "10250"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP
+        - toEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: prometheus
+              - matchLabels:
+                    app.kubernetes.io/name: alertmanager
+          toPorts:
+              - ports:
+                    - port: "9090"
+                      protocol: TCP
+                    - port: "9093"
+                      protocol: TCP
+                    - port: "8080"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: kube-state-metrics
+    namespace: kube-prometheus-stack
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: kube-state-metrics
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    app.kubernetes.io/name: prometheus
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP
+                    - port: "8081"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "8080"
+                      protocol: TCP
+                    - port: "8081"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+          toPorts:
+              - ports:
+                    - port: "6443"
+                      protocol: TCP

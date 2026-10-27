@@ -49,7 +49,21 @@ spec:
                 repository: ghcr.io/goauthentik/server
                 tag: 2026.8.5
             addPrometheusAnnotations: false
-            env: []
+            # The key of the token of the service account phorge-api-directory, read by blueprint-phorge-api.yml (!Env). The same
+            # value is in the Secret phorge-api-authentik of the control cluster, which is what the Phorge API presents.
+            env:
+                - name: PHORGE_API_DIRECTORY_TOKEN
+                  valueFrom:
+                      secretKeyRef:
+                          name: authentik-phorge-api-directory
+                          key: token
+                # The client secret of the provider Crossview OAuth, read by blueprint-crossview.yml (!Env). The same value is in
+                # the Secret crossview-auth of the control cluster, which is what Crossview presents.
+                - name: CROSSVIEW_OIDC_CLIENT_SECRET
+                  valueFrom:
+                      secretKeyRef:
+                          name: authentik-crossview-oidc
+                          key: client-secret
             envFrom: []
             volumeMounts: []
             volumes: []
@@ -59,6 +73,7 @@ spec:
                 - authentik-forgejo-oauth-blueprint
                 - authentik-incus-oauth-blueprint
                 - authentik-phorge-oauth-blueprint
+                - authentik-crossview-oauth-blueprint
                 - authentik-brand
         authentik:
             enabled: true

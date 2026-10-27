@@ -5,3 +5,4 @@ resources:
     - admin-secret.yml
     - oidc-secret.yml
     - job-setup-oidc.yml
+    - networkpolicy.yml

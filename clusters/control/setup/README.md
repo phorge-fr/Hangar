@@ -24,6 +24,18 @@ k0sctl apply -c k0s-cluster.yml
 sops -e --in-place k0s-cluster.yml
 ```
 
+### kube-apiserver memory limit
+
+`k0s-cluster.yml` uploads `k0scontroller-gomemlimit.conf` to `/etc/systemd/system/k0scontroller.service.d/gomemlimit.conf` on every node, which sets `GOMEMLIMIT=1100MiB` for `k0scontroller` and so for everything k0s spawns (kube-apiserver, etcd, kubelet). Without it the Go garbage collector lets the apiserver heap reach about twice the live heap (`GOGC=100`), and the apiserver is the largest process on every node.
+
+The value is about 1.4 to 1.9 times the estimated peak live heap of this cluster's apiserver (~770 MiB): a limit closer to the live heap makes the GC run continuously (an A/B on `svc` with 700 MiB against a ~460 MiB peak showed GC CPU spikes four times higher than without the limit). Check `go_cpu_classes_gc_total_cpu_seconds_total` for the apiserver job before lowering it.
+
+`k0sctl apply` only uploads the file: systemd reads it when `k0scontroller` starts. After changing the value, restart the service on one node at a time and wait for the node and etcd to be healthy before the next one:
+
+```bash
+ssh root@<node> 'systemctl daemon-reload && systemctl restart k0scontroller'
+```
+
 ### 2. Retrieve the kubeconfig
 
 ```bash

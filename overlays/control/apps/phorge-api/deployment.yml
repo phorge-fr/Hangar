@@ -1,0 +1,134 @@
+# The Phorge API (phorge-fr/phorge-api): a REST API that creates, reads and deletes the phorge.fr objects of this cluster,
+# which Crossplane turns into Incus and OpenFGA objects (docs/phorge-api.md). It keeps nothing: tenants, images, instances,
+# memberships and API keys are Kubernetes objects, and what a caller may do is decided by OpenFGA.
+#
+# Configuration is the environment. Nothing in it is secret except the OpenFGA key, which is the Secret phorge-api-openfga
+# (secrets.yml). The Authentik client id is public (the application is a public client, blueprint-phorge-api.yml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: phorge-api
+    namespace: phorge-api
+spec:
+    replicas: 2
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: phorge-api
+    strategy:
+        type: RollingUpdate
+        rollingUpdate:
+            maxUnavailable: 0
+            maxSurge: 1
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/name: phorge-api
+        spec:
+            serviceAccountName: phorge-api
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                seccompProfile:
+                    type: RuntimeDefault
+            # The server fails /readyz for 5 s before it closes the listener, then drains for up to 15 s.
+            terminationGracePeriodSeconds: 30
+            topologySpreadConstraints:
+                - maxSkew: 1
+                  topologyKey: kubernetes.io/hostname
+                  whenUnsatisfiable: ScheduleAnyway
+                  labelSelector:
+                      matchLabels:
+                          app.kubernetes.io/name: phorge-api
+            containers:
+                - name: phorge-api
+                  # The release v0.3.0 of phorge-fr/phorge-api. Tag and digest together: the digest is what runs, the tag lets
+                  # Renovate see a new release and bump both in one pull request.
+                  image: ghcr.io/phorge-fr/phorge-api:0.3.0@sha256:3c80c533ebb39164d6c5648faa92001543992a108ad6de039ab2bc6c7b707d8b
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - name: http
+                        containerPort: 8080
+                  env:
+                      - name: LISTEN_ADDR
+                        value: ":8080"
+                      - name: OIDC_ISSUER
+                        value: https://auth.phorge.fr/application/o/phorge/
+                      - name: OIDC_AUDIENCE
+                        value: 49a1375b-c52a-4a59-b3cb-8d4f5e392d85
+                      - name: OPENFGA_URL
+                        value: https://openfga.core.phorge
+                      - name: OPENFGA_STORE_ID
+                        value: 01M50R0P12MY8JHNKP3ATYSJC2
+                      - name: OPENFGA_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: phorge-api-openfga
+                                key: apiKey
+                      # openfga.core.phorge is signed by the internal CA, which a pod does not trust by default.
+                      - name: CA_FILE
+                        value: /etc/phorge-api/ca/ca.crt
+                      # Whoever is a member of this Authentik group (the "groups" claim of the token) may create, resize and
+                      # delete tenants. The group is created by blueprint-phorge-api.yml, its members are added in authentik.
+                      - name: PLATFORM_ADMIN_GROUP
+                        value: phorge-platform-admins
+                      # An API key acts as its owner and carries no group, so the API asks authentik whether the owner is still a
+                      # member of the group above, with the token of the service account phorge-api-directory, which can read
+                      # that one group (blueprint-phorge-api.yml).
+                      - name: AUTHENTIK_URL
+                        value: https://auth.phorge.fr
+                      - name: AUTHENTIK_TOKEN
+                        valueFrom:
+                            secretKeyRef:
+                                name: phorge-api-authentik
+                                key: token
+                      # The container limit is 192 MiB: make the GC reclaim before it is reached.
+                      - name: GOMEMLIMIT
+                        value: 150MiB
+                  volumeMounts:
+                      - name: ca
+                        mountPath: /etc/phorge-api/ca
+                        readOnly: true
+                  readinessProbe:
+                      httpGet:
+                          path: /readyz
+                          port: http
+                      periodSeconds: 5
+                      timeoutSeconds: 2
+                  livenessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 10
+                      timeoutSeconds: 2
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          cpu: 20m
+                          memory: 48Mi
+                      limits:
+                          memory: 192Mi
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop:
+                              - ALL
+            volumes:
+                - name: ca
+                  configMap:
+                      name: phorge-api-ca
+                      items:
+                          - key: ca.crt
+                            path: ca.crt
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+    name: phorge-api
+    namespace: phorge-api
+spec:
+    maxUnavailable: 1
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: phorge-api
