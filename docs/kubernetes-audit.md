@@ -6,7 +6,7 @@ The API server of each cluster (`control`, `core`, `svc`) writes an audit record
 
 1. **The API server** (`kube-apiserver` of k0s, run by `k0scontroller` as the user `kube-apiserver`) writes a JSON file, `/var/lib/k0s-audit/audit.log`, on every control plane node. The flags are in `spec.api.extraArgs` of `clusters/<cluster>/setup/k0s-cluster.yml`. The file is only a buffer: 3 files of 100 MiB at most, 3 days (`audit-log-maxsize`, `audit-log-maxbackup`, `audit-log-maxage`). Loki is the record.
 2. **The policy** is `clusters/audit-policy.yaml`, shared by the three clusters and uploaded by k0sctl to `/etc/k0s/audit-policy.yaml`. The first rule that matches a request decides its level. **Who is audited** is the point of it:
-   - **People** (a certificate or a token used with `kubectl`, anybody that is not a program): everything, reads included.
+   - **People** (a token or a certificate used with `kubectl`): everything, reads included, **except the admin certificate** (`kubernetes-admin`): k0s itself uses it and polls the whole API every 40 seconds or so (the nodes, the etcd members, a list of every kind of object), which was 97% of the first log on `svc` (2 700 records in 12 minutes on one node). The reads of that identity are left out; its changes, its secret accesses and its shells are kept.
    - **Service accounts** (Flux, Crossplane, Cilium, Longhorn, cert-manager, the applications): what they **change** (spec, not status), every access to a **secret**, and nothing else. Their reads, their status updates and their configmap reads are routine and constant, and are left out.
    - **Left out for everybody**: the kubelets and the control plane talking to itself; health, metrics and discovery URLs; leases (leader election and node heartbeats are about 11 requests a second on each cluster, the largest item by far), events, endpoints; token and permission reviews.
    - **Levels**: `Metadata` (who, what, when, from where, result, never the content) for almost everything, always for secrets; `RequestResponse` for every change of a role or a binding (RBAC); `Request` for `exec`, `attach`, `port-forward` (the command is in the URI). One record per request, when it is answered (`RequestReceived` and `ResponseStarted` are omitted).
@@ -31,33 +31,39 @@ An audit log of everything is enormous: the API servers answer about 25 requests
 | control | 0.7 per second | 0.17 | 60 000 to 75 000 | 50 to 60 MB |
 | svc | 0.13 per second | 0.09 | 10 000 to 20 000 | 10 to 15 MB |
 
-The upper bound for the secrets counts the reads of the kubelets too, which the policy leaves out, and a record is about 0.8 KB. Loki compresses JSON like this by about ten. These are estimates from metrics, not measures: check them after the first day, with `sum(count_over_time({job="k8s-audit"}[1d]))` and `sum(bytes_over_time({job="k8s-audit"}[1d]))` in Loki, and with `rate(apiserver_audit_event_total[1h])` in Prometheus (the API server exposes it once the audit is on). If a cluster is louder than this, look at the top `user_username` and `objectRef_resource` of the dashboard: it is almost always one controller that is worth adding to the policy.
+The upper bound for the secrets counts the reads of the kubelets too, which the policy leaves out, and a record is about 0.8 KB. Loki compresses JSON like this by about ten. **First measure (`svc`, 2026-10-27, 12 minutes after the first node restarted):** 2 715 records, 2 574 of them from `kubernetes-admin`, 2 519 of those from k0s itself and 72 from `k9s` and `kubectl`; the other service accounts made 140. After leaving the admin reads out, what is left is the 140 plus the changes of the person, about 0.2 records a second.
 
-## Turning it on, cluster by cluster
+These are estimates from metrics, not measures: check them after the first day, with `sum(count_over_time({job="k8s-audit"}[1d]))` and `sum(bytes_over_time({job="k8s-audit"}[1d]))` in Loki, and with `rate(apiserver_audit_event_total[1h])` in Prometheus (the API server exposes it once the audit is on). If a cluster is louder than this, look at the top `user_username` and `objectRef_resource` of the dashboard: it is almost always one controller that is worth adding to the policy.
 
-Everything that Flux manages (Alloy, the dashboard) is deployed by the merge and does nothing until the file exists. The API server changes only when k0sctl is applied, which restarts the controllers one after the other; the cluster has three, so it stays up, but do **one cluster at a time**, least critical first (`svc`, then `core`, then `control`), and check each before the next. Do not do it while the end-to-end tests of the API run on `control`.
+## Turning it on
 
-For each cluster, from `clusters/<cluster>/setup`:
+Everything that Flux manages (Alloy, the dashboard) is deployed by the merge and does nothing until the file exists. The API server changes only when the script `clusters/audit-rollout.sh` is run, from a terminal that has the SSH key of the nodes and the kubectl contexts `svc`, `core` and `control`, on the merged `main`:
 
-1. Create the directory on the three nodes (the drop-in does it at each start, but k0sctl may restart before systemd has read the new drop-in):
-   ```
-   for ip in <the three node addresses>; do ssh root@$ip 'install -d -o kube-apiserver -g kube-apiserver -m 0750 /var/lib/k0s-audit'; done
-   ```
-2. Apply, as in the README of the cluster (the VRRP password is SOPS-encrypted and k0sctl does not read SOPS):
-   ```
-   sops -d --in-place k0s-cluster.yml
-   ../../../k0sctl/k0sctl apply -c k0s-cluster.yml
-   sops -e --in-place k0s-cluster.yml
-   ```
-   Before the first apply, `/etc/k0s/k0s.yaml` of every cluster was compared with the config in Git: they are identical apart from the node addresses that k0sctl adds to `api.sans` and the encrypted password, so the apply changes nothing but the audit.
-3. Check: `kubectl get nodes` (all Ready), `ssh root@<node> 'ls -l /var/lib/k0s-audit; tail -n1 /var/lib/k0s-audit/audit.log'` (the file grows), and in Grafana `{job="k8s-audit", cluster="<cluster>"}` has lines from the three nodes.
+```
+clusters/audit-rollout.sh --dry-run     # reads only: what would be done on every node
+clusters/audit-rollout.sh               # svc, then core, then control; asks before each cluster
+clusters/audit-rollout.sh --clusters svc
+```
 
-If a node does not come back (the API server refuses an option), the other two keep the cluster up: on that node remove the `audit-*` lines from `/etc/k0s/k0s.yaml` and run `systemctl restart k0scontroller`, then fix the config in Git.
+It does **not** use `k0sctl apply`, which restarts the controllers all at once and has cut the clusters before (issue #70). It does what the GOMEMLIMIT drop-in rollout did (issue #203), one node at a time:
+
+1. Before anything: `main` is up to date and the policy is the merged one, every cluster is healthy, every node answers SSH.
+2. On a node: upload the policy and the drop-in, create `/var/lib/k0s-audit` (owned by `kube-apiserver`), add the five `audit-*` flags to `/etc/k0s/k0s.yaml` right after `default-watch-cache-size` (the original is kept as `k0s.yaml.pre-audit`), restart `k0scontroller` on that node only.
+3. Wait until the node is Ready, the API server runs with the flags (a new process) and the audit file is written. If that is not the case after 5 minutes, put the node back as it was and stop.
+4. Wait 60 seconds, check that the cluster is healthy and that no more than 6 containers restarted during this node (a restart loop is the symptom of issue #70), then the next node.
+5. A node that already has the flags but another policy only gets the new policy and a restart: the API server reads the file when it starts. Run the script again after any change of `clusters/audit-policy.yaml`.
+
+`control` asks one more question: do **not** run it while the end-to-end tests of the API run there. The order is the least critical first (`svc`, `core`, `control`). The log of a run is `/tmp/k8s-audit-rollout-<date>.log`.
+
+By hand, for one node, the same thing is: copy the two files, `install -d -o kube-apiserver -g kube-apiserver -m 0750 /var/lib/k0s-audit`, add the flags, `systemctl daemon-reload && systemctl restart k0scontroller`. `/etc/k0s/k0s.yaml` of every cluster was compared with the config in Git beforehand: identical apart from the node addresses that k0sctl adds to `api.sans` and the encrypted VRRP password, so a later `k0sctl apply` has nothing else to change.
+
+To check afterwards: `kubectl get nodes` (all Ready), `ssh root@<node> 'tail -n1 /var/lib/k0s-audit/audit.log'`, and in Grafana `{job="k8s-audit", cluster="<cluster>"}` has lines from the three nodes. If a node cannot be brought back by the script: remove the `audit-*` lines from `/etc/k0s/k0s.yaml` (or restore `k0s.yaml.pre-audit`) and `systemctl restart k0scontroller`; the other two keep the cluster up.
 
 ## What it does not cover
 
 - Access to a node (SSH, `kubectl debug node`), to etcd or to the kubelet API directly: the audit log is the one of the API server. SSH logins are in the journal of each node, not collected here.
 - The `comp` cluster (Incus) has its own audit: Incus lifecycle events are not collected yet (only its logs are: see `incus-logs-dashboard` and `logging` in `group_vars/compute.yml` of the Ansible repo).
+- **A shared identity.** Today every administrator uses the same certificate, `kubernetes-admin` (group `system:masters`), so the log says that the admin did something, not which person. That is enough for one administrator; with several, give each one an identity of their own (OIDC through Authentik, which the API server supports) before the audit is relied on to tell them apart. On the path through the control plane address, the source address of that identity is a node (`10.3.0.2` was seen for a `k9s` run from a workstation), not the workstation.
 - The content of a secret or a configmap is never in the log, but a command line given to `exec`, and the query string of any request, are in the URI: do not type a secret in a command.
 - Reads by service accounts are not recorded (volume): a stolen service account token that only reads (apart from secrets, which are recorded) leaves no trace.
 
