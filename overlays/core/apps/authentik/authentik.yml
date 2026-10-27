@@ -72,6 +72,12 @@ spec:
                       secretKeyRef:
                           name: authentik-crossview-oidc
                           key: client-secret
+                # The secret of the Cap site key of the sign-in, read by blueprint-brand.yml (!Env).
+                - name: CAP_SECRET_KEY
+                  valueFrom:
+                      secretKeyRef:
+                          name: authentik-cap
+                          key: secret-key
             envFrom: []
             volumeMounts: []
             volumes: []

@@ -203,8 +203,23 @@ spec:
         - host: cap.phorge.fr
           http:
               paths:
-                  # The widget. The paths of the site key (challenge, redeem) are added with the Authentik side.
+                  # The widget, and the two calls it makes for the site key of the Authentik sign-in. The check of the token
+                  # (siteverify) is not public: Authentik calls the service directly.
                   - path: /assets
+                    pathType: Prefix
+                    backend:
+                        service:
+                            name: cap
+                            port:
+                                number: 3000
+                  - path: /832d1723b8/challenge
+                    pathType: Prefix
+                    backend:
+                        service:
+                            name: cap
+                            port:
+                                number: 3000
+                  - path: /832d1723b8/redeem
                     pathType: Prefix
                     backend:
                         service:
