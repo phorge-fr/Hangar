@@ -82,6 +82,29 @@ spec:
                             secretKeyRef:
                                 name: phorge-api-authentik
                                 key: token
+                      # What decides how the API behaves is written here and nowhere in its code: it refuses to start without these.
+                      # A stop sent while a VM boots is lost (the power button is pressed before anything listens) and then hangs for
+                      # up to an hour, so the API refuses one for this long after a creation or a start. Measured on
+                      # debian/13/cloud: the guest listens about 15 s after the start, and neither Incus nor Crossplane say when it does,
+                      # so an image that boots slower needs a bigger value.
+                      - name: INSTANCE_BOOT_GRACE
+                        value: 60s
+                      # A start or a stop that lasts longer than this is reported in the problems of the instance.
+                      - name: INSTANCE_STUCK_AFTER
+                        value: 10m
+                      # An API key expires, within this: 366 days. 0 would allow permanent keys.
+                      - name: API_KEY_MAX_LIFETIME
+                        value: 8784h
+                      # Who creates and changes API keys: platform-admins, or users to open it to every person signed in
+                      # (a key never exceeds its owner). Anyone lists and revokes their own.
+                      - name: API_KEY_CREATION
+                        value: platform-admins
+                      # How long the members of the platform administrators group are remembered, which is also how long a person
+                      # removed from it keeps what it gave to their keys, and how long a request to authentik may last.
+                      - name: AUTHENTIK_CACHE_TTL
+                        value: 1m
+                      - name: AUTHENTIK_TIMEOUT
+                        value: 10s
                       # The container limit is 192 MiB: make the GC reclaim before it is reached.
                       - name: GOMEMLIMIT
                         value: 150MiB
