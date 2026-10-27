@@ -1,7 +1,8 @@
 # Throttles what a password guesser or a token farmer hits: the sign-in flow executor and the OAuth endpoints, per client
-# address. The address is the real one for visitors from outside (PROXY protocol through the edge HAProxy); the LAN and the
-# cluster share one address, hence a burst that a person or a service never reaches. The rest of the site (the static
-# files of the UI) is not limited.
+# address. The address is the real one: PROXY protocol through the edge HAProxy for visitors from outside, the address of the
+# client itself on the LAN (traefik-public keeps the source, see overlays/core/controllers/traefik). The pods that call
+# auth.phorge.fr through the public address leave the cluster by their node, so they share the address of the site, hence a
+# burst that a person or a service never reaches. The rest of the site (the static files of the UI) is not limited.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:

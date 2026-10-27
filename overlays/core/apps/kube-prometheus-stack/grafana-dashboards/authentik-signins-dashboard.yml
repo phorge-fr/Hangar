@@ -426,6 +426,41 @@ data:
                 "dedupStrategy": "none",
                 "prettifyLogMessage": false
               }
+            },
+            {
+              "id": 8,
+              "type": "logs",
+              "title": "Addresses and reputation",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "description": "A line each time the sign-in flow starts (address, country, network, score of the address at that moment) and each time a sign-in changes a score (the new score). The score of an address is the sum of its identifiers, each kept between -5 and 5; at -5 or under the flow is closed to the address.",
+              "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 24
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "queryType": "range",
+                  "expr": "{namespace=\"authentik\"} |~ \"Sign-in flow started|Updated score\" | json | line_format \"{{ .event }} ip={{ or .client_ip .for_ip }} country={{ .country }} network={{ .as_org }} score={{ or .reputation .amount }}\""
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": false,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              }
             }
           ]
         }
