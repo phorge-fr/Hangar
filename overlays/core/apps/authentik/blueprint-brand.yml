@@ -28,7 +28,7 @@ data:
               authentication: require_authenticated
           # The sign-in flow. The default one carries the title "Welcome to authentik!" and the default blueprints are applied
           # again at every start, so it cannot be renamed: the brand uses this one instead. Same steps as the default flow
-          # (identification, password, MFA if the user has a device, login). Users without a device are not forced to enrol
+          # (captcha, identification, password, MFA if the user has a device, login). Users without a device are not forced to enrol
           # yet (not_configured_action: skip), so nobody is locked out before the passkeys are set up.
           - model: authentik_flows.flow
             id: authentication-flow
@@ -40,6 +40,21 @@ data:
               designation: authentication
               layout: stacked
               authentication: none
+          # The captcha comes first: nothing is asked of a bot but the proof of work. The widget and the challenge are served
+          # by Cap (cap.phorge.fr), the token is checked through the service inside the cluster.
+          - model: authentik_stages_captcha.captchastage
+            id: authentication-captcha
+            identifiers:
+              name: phorge-authentication-captcha
+            attrs:
+              # For Cap the public key is the endpoint of the widget (data-cap-api-endpoint): the site key at the end of the URL
+              public_key: https://cap.phorge.fr/832d1723b8/
+              private_key: !Env CAP_SECRET_KEY
+              js_url: https://cap.phorge.fr/assets/widget.js
+              api_url: http://cap.cap.svc.cluster.local:3000/832d1723b8/siteverify
+              request_content_type: application/json
+              interactive: true
+              error_on_invalid_score: false
           - model: authentik_stages_identification.identificationstage
             id: authentication-identification
             identifiers:
@@ -71,6 +86,11 @@ data:
             identifiers:
               name: phorge-authentication-login
             attrs: {}
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-captcha
+              order: 5
           - model: authentik_flows.flowstagebinding
             identifiers:
               target: !KeyOf authentication-flow
@@ -146,6 +166,10 @@ data:
                 .branding-logo {
                   max-height: 88px;
                   width: auto;
+                }
+                /* The captcha widget (Cap) is in an iframe that authentik sizes to 65px: the widget needs more and shows a scrollbar */
+                iframe[src^="blob:"] {
+                  height: 84px !important;
                 }
                 /* white on the light background by default: readable in both themes */
                 ak-flow-executor::part(footer),
