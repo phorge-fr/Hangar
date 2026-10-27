@@ -40,6 +40,8 @@ spec:
             # config reloader) on the loopback, and skip the usage reporting to Grafana Labs.
             listenAddr: 127.0.0.1
             enableReporting: false
+            # Where Alloy keeps the read position of the files it tails (the audit log): on the node, not lost with the pod
+            storagePath: /var/lib/alloy-data
             configMap:
                 create: true
                 content: |
@@ -236,6 +238,23 @@ spec:
                         }
                     }
 
+                    // The audit log of the kube-apiserver (docs/kubernetes-audit.md): a JSON file on every control plane node, written by
+                    // the API server itself (clusters/*/setup/k0s-cluster.yml). The lines go to Loki untouched, with the node; the
+                    // writer adds the cluster. The read position is kept on the node (storagePath), so a restart of Alloy neither
+                    // loses lines nor sends them twice.
+                    local.file_match "k8s_audit" {
+                        path_targets = [{
+                            "__path__" = "/host/root/var/lib/k0s-audit/audit.log",
+                            "job"      = "k8s-audit",
+                            "node"     = sys.env("K8S_NODE_NAME"),
+                        }]
+                    }
+
+                    loki.source.file "k8s_audit" {
+                        targets    = local.file_match.k8s_audit.targets
+                        forward_to = [loki.write.local.receiver]
+                    }
+
                     loki.write "local" {
                         endpoint {
                             url = "http://loki.loki.svc.cluster.local:3100/loki/api/v1/push"
@@ -254,6 +273,8 @@ spec:
                     - name: geoip
                       mountPath: /geoip
                       readOnly: true
+                    - name: data
+                      mountPath: /var/lib/alloy-data
         controller:
             type: daemonset
             hostNetwork: true
@@ -267,6 +288,10 @@ spec:
                     - name: geoip
                       hostPath:
                           path: /var/lib/alloy-geoip
+                          type: DirectoryOrCreate
+                    - name: data
+                      hostPath:
+                          path: /var/lib/alloy-data
                           type: DirectoryOrCreate
             # Fetches the free DB-IP country and network databases (monthly, CC BY 4.0: "IP Geolocation by DB-IP") at each start.
             # Best effort: the old file stays when the download fails, and the pod starts either way.

@@ -1,0 +1,1049 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: k8s-audit-dashboard
+    namespace: kube-prometheus-stack
+    annotations:
+        grafana_folder: "Core"
+    labels:
+        grafana_dashboard: "1"
+data:
+    k8s-audit.json: |
+        {
+          "uid": "k8s-audit",
+          "title": "Kubernetes audit",
+          "description": "Audit log of the API server of every cluster (control, core, svc): who did what to which object, from where, with which result. Read from the JSON file that kube-apiserver writes on each control plane node (/var/lib/k0s-audit/audit.log) and Alloy ships to Loki ({job=\"k8s-audit\"}). The policy is clusters/audit-policy.yaml: secrets and configmaps are logged without their content, the routine traffic of kubelets and controllers is left out. See docs/kubernetes-audit.md and docs/gdpr.md.",
+          "tags": [
+            "kubernetes",
+            "audit",
+            "logs",
+            "security"
+          ],
+          "schemaVersion": 39,
+          "version": 1,
+          "editable": true,
+          "graphTooltip": 1,
+          "refresh": "1m",
+          "time": {
+            "from": "now-24h",
+            "to": "now"
+          },
+          "timezone": "browser",
+          "templating": {
+            "list": [
+              {
+                "name": "cluster",
+                "label": "Cluster",
+                "type": "query",
+                "datasource": {
+                  "type": "loki",
+                  "uid": "loki"
+                },
+                "query": {
+                  "query": "label_values({job=\"k8s-audit\"}, cluster)",
+                  "refId": "LokiVar"
+                },
+                "definition": "label_values({job=\"k8s-audit\"}, cluster)",
+                "includeAll": true,
+                "multi": true,
+                "allValue": ".*",
+                "refresh": 2,
+                "sort": 1,
+                "current": {
+                  "selected": true,
+                  "text": [
+                    "All"
+                  ],
+                  "value": [
+                    "$__all"
+                  ]
+                }
+              },
+              {
+                "name": "user",
+                "label": "User (regex)",
+                "type": "textbox",
+                "query": ".*",
+                "current": {
+                  "text": ".*",
+                  "value": ".*"
+                },
+                "hide": 0
+              }
+            ]
+          },
+          "annotations": {
+            "list": []
+          },
+          "links": [],
+          "panels": [
+            {
+              "id": 1,
+              "type": "row",
+              "title": "What happened",
+              "collapsed": false,
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 0
+              },
+              "panels": []
+            },
+            {
+              "id": 2,
+              "type": "stat",
+              "title": "Events",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 0,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "Requests recorded by the API server of the selected clusters, as the audit policy lets them through (clusters/audit-policy.yaml): no health checks, no kubelets, no routine reads by the applications."
+            },
+            {
+              "id": 3,
+              "type": "stat",
+              "title": "Changes",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 4,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | verb=~\"create|update|patch|delete|deletecollection\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "create, update, patch and delete."
+            },
+            {
+              "id": 4,
+              "type": "stat",
+              "title": "Refused (401/403)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 8,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | responseStatus_code=~\"401|403\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "Requests the API server refused: a wrong credential, or a permission that is missing."
+            },
+            {
+              "id": 5,
+              "type": "stat",
+              "title": "Shells and tunnels",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 12,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | objectRef_subresource=~\"exec|attach|portforward|ephemeralcontainers\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "exec, attach, port-forward: somebody went into a pod."
+            },
+            {
+              "id": 6,
+              "type": "stat",
+              "title": "Secret accesses",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 16,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | objectRef_resource=\"secrets\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "Every access to a secret, by anybody (never the content)."
+            },
+            {
+              "id": 7,
+              "type": "stat",
+              "title": "Permission changes",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 20,
+                "y": 1
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | objectRef_apiGroup=\"rbac.authorization.k8s.io\" | verb=~\"create|update|patch|delete|deletecollection\" [$__range]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              },
+              "description": "Roles and bindings created, changed or deleted. Expected: only through Flux."
+            },
+            {
+              "id": 8,
+              "type": "timeseries",
+              "title": "Events by verb",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 5
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum by (verb) (count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" [$__auto]))",
+                  "legendFormat": "{{verb}}",
+                  "queryType": "range"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "custom": {
+                    "drawStyle": "bars",
+                    "fillOpacity": 60,
+                    "stacking": {
+                      "mode": "normal"
+                    },
+                    "lineWidth": 0
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "sum"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 9,
+              "type": "timeseries",
+              "title": "Events by cluster",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 5
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum by (cluster) (count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" [$__auto]))",
+                  "legendFormat": "{{cluster}}",
+                  "queryType": "range"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "custom": {
+                    "drawStyle": "bars",
+                    "fillOpacity": 60,
+                    "stacking": {
+                      "mode": "normal"
+                    },
+                    "lineWidth": 0
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "sum"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 10,
+              "type": "row",
+              "title": "Who",
+              "collapsed": false,
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 13
+              },
+              "panels": []
+            },
+            {
+              "id": 11,
+              "type": "table",
+              "title": "Who acts",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 8,
+                "x": 0,
+                "y": 14
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(15, sum by (user_username) (count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "user_username": "User",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "user_username": 0,
+                      "Value": 1
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              },
+              "description": "The account that made the request: a service account (system:serviceaccount:<namespace>:<name>), a person (the certificate or token user) or system:anonymous."
+            },
+            {
+              "id": 12,
+              "type": "table",
+              "title": "From where",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 8,
+                "x": 8,
+                "y": 14
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(15, sum by (sourceIPs_0, user_username) (count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "sourceIPs_0": "Address",
+                      "user_username": "User",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "sourceIPs_0": 0,
+                      "user_username": 1,
+                      "Value": 2
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              },
+              "description": "The address of the client as the API server sees it: a pod, a node, or the machine of an administrator."
+            },
+            {
+              "id": 13,
+              "type": "table",
+              "title": "Tools",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 8,
+                "x": 16,
+                "y": 14
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(15, sum by (userAgent) (count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "userAgent": "User agent",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "userAgent": 0,
+                      "Value": 1
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 14,
+              "type": "row",
+              "title": "What changed and what was refused",
+              "collapsed": false,
+              "gridPos": {
+                "h": 1,
+                "w": 24,
+                "x": 0,
+                "y": 23
+              },
+              "panels": []
+            },
+            {
+              "id": 15,
+              "type": "table",
+              "title": "Changes by resource",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 0,
+                "y": 24
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(20, sum by (verb, objectRef_resource, objectRef_namespace) (count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | verb=~\"create|update|patch|delete|deletecollection\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "verb": "Verb",
+                      "objectRef_resource": "Resource",
+                      "objectRef_namespace": "Namespace",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "verb": 0,
+                      "objectRef_resource": 1,
+                      "objectRef_namespace": 2,
+                      "Value": 3
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 16,
+              "type": "table",
+              "title": "Refused",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 12,
+                "x": 12,
+                "y": 24
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "topk(20, sum by (user_username, sourceIPs_0, verb, objectRef_resource, responseStatus_code) (count_over_time({job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | responseStatus_code=~\"401|403\" [$__range])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "user_username": "User",
+                      "sourceIPs_0": "Address",
+                      "verb": "Verb",
+                      "objectRef_resource": "Resource",
+                      "responseStatus_code": "Status",
+                      "Value #A": "Requests",
+                      "Value": "Requests"
+                    },
+                    "indexByName": {
+                      "user_username": 0,
+                      "sourceIPs_0": 1,
+                      "verb": 2,
+                      "objectRef_resource": 3,
+                      "responseStatus_code": 4,
+                      "Value": 5
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Requests",
+                    "desc": true
+                  }
+                ]
+              },
+              "description": "A service account or a person that tries what it is not allowed to, or somebody without credentials (system:anonymous)."
+            },
+            {
+              "id": 17,
+              "type": "logs",
+              "title": "Permission changes",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 7,
+                "w": 24,
+                "x": 0,
+                "y": 33
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "{job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | objectRef_apiGroup=\"rbac.authorization.k8s.io\" | verb=~\"create|update|patch|delete|deletecollection\" | line_format \"{{.user_username}} from {{.sourceIPs_0}}: {{.verb}} {{.objectRef_resource}}/{{.objectRef_subresource}} {{.objectRef_namespace}}/{{.objectRef_name}} -> {{.responseStatus_code}} ua={{.userAgent}}\"",
+                  "queryType": "range"
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": false,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "description": "Every change of a role or a binding, with the full request and response in the line."
+            },
+            {
+              "id": 18,
+              "type": "logs",
+              "title": "Shells and tunnels (exec, attach, port-forward)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 7,
+                "w": 24,
+                "x": 0,
+                "y": 40
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "{job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | objectRef_subresource=~\"exec|attach|portforward|ephemeralcontainers\" | line_format \"{{.user_username}} from {{.sourceIPs_0}}: {{.verb}} {{.objectRef_namespace}}/{{.objectRef_name}} {{.objectRef_subresource}} -> {{.responseStatus_code}} {{.requestURI}}\"",
+                  "queryType": "range"
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": false,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "description": "The URI carries the command that was run."
+            },
+            {
+              "id": 19,
+              "type": "logs",
+              "title": "Events",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 12,
+                "w": 24,
+                "x": 0,
+                "y": 47
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "{job=\"k8s-audit\", cluster=~\"$cluster\"} | json | user_username=~\"$user\" | line_format \"{{.user_username}} from {{.sourceIPs_0}}: {{.verb}} {{.objectRef_resource}}/{{.objectRef_subresource}} {{.objectRef_namespace}}/{{.objectRef_name}} -> {{.responseStatus_code}} ua={{.userAgent}}\"",
+                  "queryType": "range"
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": false,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              },
+              "description": "One line per event. Open a line for the whole audit record."
+            }
+          ]
+        }

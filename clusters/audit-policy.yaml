@@ -1,0 +1,83 @@
+# Audit policy of the kube-apiserver of the three clusters (control, core, svc), uploaded by k0sctl to /etc/k0s/audit-policy.yaml
+# (see docs/kubernetes-audit.md). The first rule that matches a request decides its level. Nothing here records the body of a
+# secret or of a configmap: those are always Metadata (who, what, when, from where, with which result).
+apiVersion: audit.k8s.io/v1
+kind: Policy
+# A request is recorded once, when it is answered (the RequestReceived copy only doubles the volume)
+omitStages:
+    - RequestReceived
+# The copies of the objects in the events keep the managed fields, which are long and of no use here
+omitManagedFields: true
+rules:
+    # Health, metrics, version and API discovery: polled all the time by probes, Prometheus and every client
+    - level: None
+      nonResourceURLs:
+          - /healthz*
+          - /livez*
+          - /readyz*
+          - /version
+          - /metrics
+          - /openapi*
+          - /api
+          - /api/*
+          - /apis
+          - /apis/*
+
+    # The control plane talking to itself, and the kubelets: thousands of requests an hour, no decision of a person
+    - level: None
+      users:
+          - system:kube-proxy
+          - system:kube-scheduler
+          - system:kube-controller-manager
+          - system:apiserver
+    - level: None
+      userGroups:
+          - system:nodes
+
+    # Churn that says nothing about who did what: events, leases, endpoints and the status of what the controllers keep updating
+    - level: None
+      resources:
+          - group: ""
+            resources: ["events", "endpoints", "pods/status", "nodes/status"]
+          - group: "events.k8s.io"
+            resources: ["events"]
+          - group: "coordination.k8s.io"
+            resources: ["leases"]
+          - group: "discovery.k8s.io"
+            resources: ["endpointslices"]
+    # The checks that the apiserver makes of tokens and permissions for other components
+    - level: None
+      resources:
+          - group: "authentication.k8s.io"
+            resources: ["tokenreviews"]
+          - group: "authorization.k8s.io"
+            resources: ["subjectaccessreviews", "selfsubjectaccessreviews", "selfsubjectrulesreviews", "localsubjectaccessreviews"]
+
+    # Secrets and configmaps: every access, by anybody, but never the content (Metadata)
+    - level: Metadata
+      resources:
+          - group: ""
+            resources: ["secrets", "configmaps", "serviceaccounts/token"]
+
+    # Reading by the service accounts of the applications (Flux, Crossplane, Cilium, cert-manager...) is routine and constant:
+    # only what they change is kept, below. A person reading with kubectl is kept.
+    - level: None
+      userGroups:
+          - system:serviceaccounts
+      verbs: ["get", "list", "watch"]
+
+    # Who gets permissions: the whole request and the response, for every change
+    - level: RequestResponse
+      resources:
+          - group: "rbac.authorization.k8s.io"
+            resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+      verbs: ["create", "update", "patch", "delete", "deletecollection"]
+
+    # A shell or a tunnel into a pod: the request (the command is in the URI), no output
+    - level: Request
+      resources:
+          - group: ""
+            resources: ["pods/exec", "pods/attach", "pods/portforward", "pods/ephemeralcontainers"]
+
+    # Everything else, reads by people included: who, what, when, from where, result
+    - level: Metadata
