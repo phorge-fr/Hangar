@@ -24,17 +24,24 @@ spec:
                     summary: "comp: no Ceph mgr is reporting metrics"
                     description: "ceph_health_status reported series during the last day and none now: every mgr may be down, or its Alloy can no longer reach the active one."
               # HEALTH_WARN and HEALTH_ERR (health_status_to_number: OK=0, WARN=1, ERR=2).
+              # Ceph's health is cluster-wide, but the series carries the `instance` of whichever mgr
+              # is active: aggregated by cluster, a mgr failover does not start the alert over under
+              # a new label. A failover also leaves a gap of about a minute with no series (Alloy only
+              # scrapes the active mgr, see alloy-compute.alloy in the Ansible repository), which
+              # keep_firing_for bridges instead of resolving and re-notifying.
               - alert: CephHealthWarn
-                expr: ceph_health_status == 1
+                expr: max by (cluster) (ceph_health_status) == 1
                 for: 5m
+                keep_firing_for: 5m
                 labels:
                     severity: warning
                 annotations:
                     summary: "comp: Ceph health is WARN"
                     description: "Run `ceph health detail` on the cluster for the failing checks."
               - alert: CephHealthError
-                expr: ceph_health_status == 2
+                expr: max by (cluster) (ceph_health_status) == 2
                 for: 2m
+                keep_firing_for: 5m
                 labels:
                     severity: critical
                 annotations:

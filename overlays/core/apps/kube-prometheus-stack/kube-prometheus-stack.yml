@@ -248,16 +248,6 @@ spec:
                           group_wait: 0s
                           group_interval: 3m
                           repeat_interval: 3m
-                        # TargetDown (the chart's rule, >10% of a job's targets down) can never be
-                        # right about ceph-mgr on comp: only the active mgr listens on its metrics
-                        # port, so 2 of its 3 targets are down by design, permanently over the 10%
-                        # threshold. The rule stays as the chart ships it, only this one case is
-                        # muted; TargetDown still notifies for every other job and cluster.
-                        - matchers:
-                              - alertname = TargetDown
-                              - job = ceph-mgr
-                              - cluster = comp
-                          receiver: "null"
                         # Critical alerts are sent quickly and repeated often, warnings are batched.
                         - matchers:
                               - severity = critical
