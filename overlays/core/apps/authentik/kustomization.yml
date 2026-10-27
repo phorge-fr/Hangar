@@ -7,10 +7,13 @@ resources:
     - secret-crossview.yml
     - secret-smtp.yml
     - secret-cap.yml
+    - secret-alerts.yml
     - blueprint-grafana.yml
     - blueprint-forgejo.yml
     - blueprint-incus.yml
     - blueprint-phorge-api.yml
     - blueprint-crossview.yml
     - blueprint-brand.yml
+    - blueprint-hardening.yml
+    - ratelimit.yml
     - networkpolicy.yml

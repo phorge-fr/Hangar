@@ -1,0 +1,118 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: authentik-hardening
+    namespace: authentik
+data:
+    hardening.yaml: |-
+        # yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+        version: 1
+
+        metadata:
+          name: phorge-hardening
+          labels:
+            blueprints.goauthentik.io/description: Alerts on the sign-ins of Phorge
+
+        entries:
+          - model: authentik_core.group
+            id: platform-admins-group
+            identifiers:
+              name: phorge-platform-admins
+            attrs:
+              name: phorge-platform-admins
+          # The alerts go to a Discord channel through a webhook (ALERT_WEBHOOK_URL, secret-alerts.yml), not by mail. The message
+          # carries what is needed to decide whether to look further and nothing more: the action, the user name, the country and
+          # the request id. The address, the e-mail and the browser stay in the logs (Loki, {namespace="authentik"}), where the
+          # request id finds the line. send_once: the notification exists once per member of the group, the channel gets one message.
+          - model: authentik_events.notificationwebhookmapping
+            id: alert-body
+            identifiers:
+              name: phorge-alert-discord
+            attrs:
+              expression: |
+                event = notification.event
+                context = (event.context if event else None) or {}
+                action = event.action if event else "event"
+                who = ((event.user if event else None) or {}).get("username") or "anonymous"
+                country = (context.get("geo") or {}).get("country") or "unknown"
+                request_id = (context.get("http_request") or {}).get("request_id") or "-"
+                colors = {"alert": 0xE74C3C, "warning": 0xF39C12, "notice": 0x3498DB}
+                return {
+                    "username": "authentik",
+                    "allowed_mentions": {"parse": []},
+                    "embeds": [{
+                        "title": "Sign-in: " + action,
+                        "color": colors.get(notification.severity, 0x95A5A6),
+                        "fields": [
+                            {"name": "Severity", "value": notification.severity, "inline": True},
+                            {"name": "User", "value": who, "inline": True},
+                            {"name": "Country", "value": country, "inline": True},
+                            {"name": "Request id", "value": request_id},
+                        ],
+                    }],
+                }
+          - model: authentik_events.notificationtransport
+            id: alert-transport
+            identifiers:
+              name: phorge-alert-discord
+            attrs:
+              mode: webhook
+              webhook_url: !Env ALERT_WEBHOOK_URL
+              webhook_mapping_body: !KeyOf alert-body
+              send_once: true
+          # Detection only, nothing is blocked: an alert when somebody signs in from outside France. The country comes from
+          # the GeoIP data authentik adds to the event, so a local or in-cluster client (no country) never triggers it.
+          - model: authentik_policies_expression.expressionpolicy
+            id: login-outside-france
+            identifiers:
+              name: phorge-login-outside-france
+            attrs:
+              expression: |
+                event = request.context.get("event")
+                if event is None or event.action != "login":
+                    return False
+                country = (event.context.get("geo") or {}).get("country")
+                return bool(country) and country != "FR"
+          - model: authentik_events.notificationrule
+            id: login-outside-france-rule
+            identifiers:
+              name: phorge-login-outside-france
+            attrs:
+              severity: alert
+              destination_group: !KeyOf platform-admins-group
+              transports:
+                - !KeyOf alert-transport
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf login-outside-france-rule
+              policy: !KeyOf login-outside-france
+              order: 0
+            attrs:
+              enabled: true
+              negate: false
+              timeout: 30
+          # authentik records a suspicious_request when a request looks malformed or hostile (bad host, forged parameters).
+          - model: authentik_policies_event_matcher.eventmatcherpolicy
+            id: suspicious-request
+            identifiers:
+              name: phorge-suspicious-request
+            attrs:
+              action: suspicious_request
+          - model: authentik_events.notificationrule
+            id: suspicious-request-rule
+            identifiers:
+              name: phorge-suspicious-request
+            attrs:
+              severity: warning
+              destination_group: !KeyOf platform-admins-group
+              transports:
+                - !KeyOf alert-transport
+          - model: authentik_policies.policybinding
+            identifiers:
+              target: !KeyOf suspicious-request-rule
+              policy: !KeyOf suspicious-request
+              order: 0
+            attrs:
+              enabled: true
+              negate: false
+              timeout: 30

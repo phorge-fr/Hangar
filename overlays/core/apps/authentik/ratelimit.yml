@@ -1,0 +1,49 @@
+# Throttles what a password guesser or a token farmer hits: the sign-in flow executor and the OAuth endpoints, per client
+# address. The address is the real one for visitors from outside (PROXY protocol through the edge HAProxy); the LAN and the
+# cluster share one address, hence a burst that a person or a service never reaches. The rest of the site (the static
+# files of the UI) is not limited.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+    name: authentik-ratelimit
+    namespace: authentik
+spec:
+    rateLimit:
+        average: 5
+        period: 1s
+        burst: 20
+---
+# Same host as the ingress of the chart, longer paths: Traefik picks them first.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: authentik-ratelimited
+    namespace: authentik
+    annotations:
+        traefik.ingress.kubernetes.io/router.middlewares: authentik-authentik-ratelimit@kubernetescrd
+spec:
+    ingressClassName: traefik-public
+    tls:
+        - hosts:
+              - auth.phorge.fr
+          secretName: authentik-tls
+    rules:
+        - host: auth.phorge.fr
+          http:
+              paths:
+                  - path: /api/v3/flows/executor
+                    pathType: Prefix
+                    backend: &backend
+                        service:
+                            name: authentik-server
+                            port:
+                                number: 80
+                  - path: /application/o/authorize
+                    pathType: Prefix
+                    backend: *backend
+                  - path: /application/o/token
+                    pathType: Prefix
+                    backend: *backend
+                  - path: /application/o/device
+                    pathType: Prefix
+                    backend: *backend

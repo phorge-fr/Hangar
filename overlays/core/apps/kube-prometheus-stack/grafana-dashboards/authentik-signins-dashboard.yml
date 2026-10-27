@@ -1,0 +1,431 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: authentik-signins-dashboard
+    namespace: kube-prometheus-stack
+    annotations:
+        grafana_folder: "Core"
+    labels:
+        grafana_dashboard: "1"
+data:
+    authentik-signins.json: |
+        {
+          "uid": "authentik-signins",
+          "title": "Authentik sign-ins",
+          "description": "Sign-in events of authentik (core), read from its JSON logs in Loki ({namespace=\"authentik\"}, lines 'Created Event'). The fields (action, client_ip, ...) are extracted at query time with | json, they are not Loki labels. Retention is the one of Loki (see docs/authentik-hardening.md and docs/gdpr.md).",
+          "tags": [
+            "authentik",
+            "core",
+            "logs",
+            "security"
+          ],
+          "schemaVersion": 39,
+          "version": 1,
+          "editable": true,
+          "graphTooltip": 1,
+          "refresh": "1m",
+          "time": {
+            "from": "now-24h",
+            "to": "now"
+          },
+          "timezone": "browser",
+          "templating": {
+            "list": []
+          },
+          "annotations": {
+            "list": []
+          },
+          "links": [],
+          "panels": [
+            {
+              "id": 1,
+              "type": "stat",
+              "title": "Sign-ins (24h)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 0,
+                "y": 0
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"authentik\"} |= \"Created Event\" | json | action=\"login\" [24h]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 2,
+              "type": "stat",
+              "title": "Failed sign-ins (24h)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 6,
+                "y": 0
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"authentik\"} |= \"Created Event\" | json | action=\"login_failed\" [24h]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "orange",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 3,
+              "type": "stat",
+              "title": "Suspicious requests (24h)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 0
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "sum(count_over_time({namespace=\"authentik\"} |= \"Created Event\" | json | action=\"suspicious_request\" [24h]))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 4,
+              "type": "stat",
+              "title": "Addresses with a failure (24h)",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 0
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "expr": "count(sum by (client_ip) (count_over_time({namespace=\"authentik\"} |= \"Created Event\" | json | action=\"login_failed\" [24h])))",
+                  "queryType": "instant",
+                  "instant": true
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "noValue": "0",
+                  "unit": "none",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "textMode": "value",
+                "justifyMode": "center",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                }
+              }
+            },
+            {
+              "id": 5,
+              "type": "timeseries",
+              "title": "Security events",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "gridPos": {
+                "h": 8,
+                "w": 14,
+                "x": 0,
+                "y": 4
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "legendFormat": "{{action}}",
+                  "expr": "sum by (action) (count_over_time({namespace=\"authentik\"} |= \"Created Event\" | json | action=~\"login|login_failed|logout|suspicious_request|password_set|authorize_application\" [$__auto]))"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "none",
+                  "custom": {
+                    "drawStyle": "bars",
+                    "fillOpacity": 60,
+                    "stacking": {
+                      "mode": "normal"
+                    },
+                    "lineWidth": 0
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "table",
+                  "placement": "bottom",
+                  "calcs": [
+                    "sum"
+                  ]
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            {
+              "id": 6,
+              "type": "table",
+              "title": "Failed sign-ins by address",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "description": "Source address as authentik sees it. The LAN and the cluster share one address (10.2.0.254 / 10.244.1.91), the visitors from outside keep their own (PROXY protocol at the edge).",
+              "gridPos": {
+                "h": 8,
+                "w": 10,
+                "x": 14,
+                "y": 4
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "queryType": "instant",
+                  "instant": true,
+                  "format": "table",
+                  "expr": "topk(10, sum by (client_ip) (count_over_time({namespace=\"authentik\"} |= \"Created Event\" | json | action=\"login_failed\" [$__range])))"
+                }
+              ],
+              "transformations": [
+                {
+                  "id": "labelsToFields",
+                  "options": {
+                    "mode": "columns"
+                  }
+                },
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true
+                    },
+                    "renameByName": {
+                      "client_ip": "Address",
+                      "Value #A": "Failures"
+                    },
+                    "indexByName": {
+                      "client_ip": 0,
+                      "Value #A": 1
+                    }
+                  }
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "custom": {
+                    "align": "auto"
+                  }
+                },
+                "overrides": []
+              },
+              "options": {
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "displayName": "Failures",
+                    "desc": true
+                  }
+                ]
+              }
+            },
+            {
+              "id": 7,
+              "type": "logs",
+              "title": "Sign-in events",
+              "datasource": {
+                "type": "loki",
+                "uid": "loki"
+              },
+              "description": "One line per event: action, user, address, country. The user agent, the e-mail and the typed user name stay in the raw line, open a line to see them.",
+              "gridPos": {
+                "h": 12,
+                "w": 24,
+                "x": 0,
+                "y": 12
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "datasource": {
+                    "type": "loki",
+                    "uid": "loki"
+                  },
+                  "queryType": "range",
+                  "expr": "{namespace=\"authentik\"} |= \"Created Event\" | json | action=~\"login|login_failed|logout|suspicious_request|password_set\" | line_format \"{{.action}} user={{.user_username}} ip={{.client_ip}} country={{.context_geo_country}} request={{.request_id}}\""
+                }
+              ],
+              "options": {
+                "showTime": true,
+                "wrapLogMessage": false,
+                "sortOrder": "Descending",
+                "enableLogDetails": true,
+                "dedupStrategy": "none",
+                "prettifyLogMessage": false
+              }
+            }
+          ]
+        }
