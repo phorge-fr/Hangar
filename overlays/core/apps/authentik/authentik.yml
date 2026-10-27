@@ -254,6 +254,10 @@ spec:
                 username: authentik
                 database: authentik
             primary:
+                # The NetworkPolicy of the chart accepts every source and all the egress. The policy of
+                # this namespace (networkpolicy.yml) only lets the authentik pods reach the database.
+                networkPolicy:
+                    enabled: false
                 args:
                     - -c
                     - config_file=/bitnami/postgresql/conf/postgresql.conf
