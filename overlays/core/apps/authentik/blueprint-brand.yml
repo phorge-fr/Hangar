@@ -26,6 +26,71 @@ data:
               title: Authorize a device
               designation: authentication
               authentication: require_authenticated
+          # The sign-in flow. The default one carries the title "Welcome to authentik!" and the default blueprints are applied
+          # again at every start, so it cannot be renamed: the brand uses this one instead. Same steps as the default flow
+          # (identification, password, MFA if the user has a device, login). Users without a device are not forced to enrol
+          # yet (not_configured_action: skip), so nobody is locked out before the passkeys are set up.
+          - model: authentik_flows.flow
+            id: authentication-flow
+            identifiers:
+              slug: phorge-authentication-flow
+            attrs:
+              name: Phorge sign-in
+              title: Sign in to Phorge
+              designation: authentication
+              layout: stacked
+              authentication: none
+          - model: authentik_stages_identification.identificationstage
+            id: authentication-identification
+            identifiers:
+              name: phorge-authentication-identification
+            attrs:
+              user_fields: [email, username]
+              case_insensitive_matching: true
+              show_matched_user: true
+              pretend_user_exists: true
+          - model: authentik_stages_password.passwordstage
+            id: authentication-password
+            identifiers:
+              name: phorge-authentication-password
+            attrs:
+              backends:
+                - authentik.core.auth.InbuiltBackend
+                - authentik.core.auth.TokenBackend
+              failed_attempts_before_cancel: 5
+          - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+            id: authentication-mfa
+            identifiers:
+              name: phorge-authentication-mfa
+            attrs:
+              device_classes: [webauthn, totp, static]
+              not_configured_action: skip
+              webauthn_user_verification: preferred
+          - model: authentik_stages_user_login.userloginstage
+            id: authentication-login
+            identifiers:
+              name: phorge-authentication-login
+            attrs: {}
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-identification
+              order: 10
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-password
+              order: 20
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-mfa
+              order: 30
+          - model: authentik_flows.flowstagebinding
+            identifiers:
+              target: !KeyOf authentication-flow
+              stage: !KeyOf authentication-login
+              order: 100
           - model: authentik_brands.brand
             id: phorge-brand
             identifiers:
@@ -33,6 +98,7 @@ data:
             attrs:
               default: true
               flow_device_code: !KeyOf device-code-flow
+              flow_authentication: !KeyOf authentication-flow
               branding_title: Phorge
               branding_logo: https://avatars.githubusercontent.com/u/187407936
               branding_favicon: https://avatars.githubusercontent.com/u/187407936
