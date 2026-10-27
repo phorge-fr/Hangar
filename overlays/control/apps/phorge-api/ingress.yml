@@ -1,6 +1,6 @@
-# Public, through the edge HAProxy: it sends every host it does not know to the control ingress (traefik-public,
-# 10.1.0.11), so a new host needs no change in the Network repository, only its DNS record (api.phorge.fr, same address as
-# the others) and the certificate, which cert-manager gets with the HTTP-01 challenge through the same path.
+# Public, through the edge HAProxy: api.phorge.fr is routed by SNI to the control ingress (traefik-public, 10.1.0.11), as
+# is every host the HAProxy does not know. The host is listed in the Network repository (templates/haproxy.cfg.tftpl). The
+# certificate comes from cert-manager with the HTTP-01 challenge through the same path.
 #
 # Only the API, its OpenAPI document and its Swagger UI are routed. /metrics, /healthz and /readyz stay inside the cluster:
 # Alloy scrapes the pods directly (podmonitor.yml) and the kubelet probes them.

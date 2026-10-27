@@ -4,6 +4,7 @@ resources:
     - ../../../base/apps/monitoring
     - ../../../base/apps/network-policies
     - authentik
+    - cap
     - kube-prometheus-stack
     - longhorn
     - loki
