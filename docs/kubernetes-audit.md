@@ -37,27 +37,18 @@ These are estimates from metrics, not measures: check them after the first day, 
 
 ## Turning it on
 
-Everything that Flux manages (Alloy, the dashboard) is deployed by the merge and does nothing until the file exists. The API server changes only when the script `clusters/audit-rollout.sh` is run, from a terminal that has the SSH key of the nodes and the kubectl contexts `svc`, `core` and `control`, on the merged `main`:
+Everything that Flux manages (Alloy, the dashboard) is deployed by the merge and does nothing until the file exists. The API server changes with `k0sctl apply`, through the script that wraps it (`docs/k0sctl-apply.md` says what the tool does and why the script is built the way it is):
 
 ```
-clusters/audit-rollout.sh --dry-run     # reads only: what would be done on every node
-clusters/audit-rollout.sh               # svc, then core, then control; asks before each cluster
-clusters/audit-rollout.sh --clusters svc
+clusters/k0sctl-apply.sh svc --dry-run     # the plan, nothing is changed
+clusters/k0sctl-apply.sh svc               # asks, then applies; then core, then control
 ```
 
-It does **not** use `k0sctl apply`, which restarts the controllers all at once and has cut the clusters before (issue #70). It does what the GOMEMLIMIT drop-in rollout did (issue #203), one node at a time:
+One cluster at a time, `svc`, `core`, then `control`, and look at the result printed at the end before the next one. Expect, for each controller of the cluster, a stop and a start of the k0s service (30 to 90 seconds) while the API server of that node is down: the dry run shows that `k0sctl apply` does this on every controller as soon as one uploaded file has a different date from the remote one, which is the case here for the policy, the drop-in of the audit directory and the GOMEMLIMIT drop-in that was put on the nodes by hand (issue #203). Do not run it on `control` while the end-to-end tests of the API run.
 
-1. Before anything: `main` is up to date and the policy is the merged one, every cluster is healthy, every node answers SSH.
-2. On a node: upload the policy and the drop-in, create `/var/lib/k0s-audit` (owned by `kube-apiserver`), add the five `audit-*` flags to `/etc/k0s/k0s.yaml` right after `default-watch-cache-size` (the original is kept as `k0s.yaml.pre-audit`), restart `k0scontroller` on that node only.
-3. Wait until the node is Ready, the API server runs with the flags (a new process) and the audit file is written. If that is not the case after 5 minutes, put the node back as it was and stop.
-4. Wait 60 seconds, check that the cluster is healthy and that no more than 6 containers restarted during this node (a restart loop is the symptom of issue #70), then the next node.
-5. A node that already has the flags but another policy only gets the new policy and a restart: the API server reads the file when it starts. Run the script again after any change of `clusters/audit-policy.yaml`.
+`svc` was first configured by hand on 2026-10-27 (the flags in `/etc/k0s/k0s.yaml`, the files, the directory), before the dry run showed what `k0sctl apply` does; `k0sctl apply` brings it back to what Git says, and the restart it does loads the current policy. `core` and `control` have not been touched.
 
-`control` asks one more question: do **not** run it while the end-to-end tests of the API run there. The order is the least critical first (`svc`, `core`, `control`). The log of a run is `/tmp/k8s-audit-rollout-<date>.log`.
-
-By hand, for one node, the same thing is: copy the two files, `install -d -o kube-apiserver -g kube-apiserver -m 0750 /var/lib/k0s-audit`, add the flags, `systemctl daemon-reload && systemctl restart k0scontroller`. `/etc/k0s/k0s.yaml` of every cluster was compared with the config in Git beforehand: identical apart from the node addresses that k0sctl adds to `api.sans` and the encrypted VRRP password, so a later `k0sctl apply` has nothing else to change.
-
-To check afterwards: `kubectl get nodes` (all Ready), `ssh root@<node> 'tail -n1 /var/lib/k0s-audit/audit.log'`, and in Grafana `{job="k8s-audit", cluster="<cluster>"}` has lines from the three nodes. If a node cannot be brought back by the script: remove the `audit-*` lines from `/etc/k0s/k0s.yaml` (or restore `k0s.yaml.pre-audit`) and `systemctl restart k0scontroller`; the other two keep the cluster up.
+To check afterwards (the script prints most of it): `kubectl get nodes` (all Ready), `ssh root@<node> 'tail -n1 /var/lib/k0s-audit/audit.log'`, and in Grafana `{job="k8s-audit", cluster="<cluster>"}` has lines from the three nodes.
 
 ## What it does not cover
 
