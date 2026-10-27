@@ -1,0 +1,44 @@
+# Who may reach Crossview: the ingress, which carries the browser's traffic, and the nodes, where the kubelet probes
+# come from. What Crossview may reach: the Kubernetes API, which it reads, and authentik (auth.phorge.fr, outside the
+# cluster) for the sign-in. The cluster-wide default-deny leaves DNS as the only other way out.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: crossview
+    namespace: crossview
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: crossview
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+          toPorts:
+              - ports:
+                    - port: "3001"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "3001"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - kube-apiserver
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+                    - port: "6443"
+                      protocol: TCP
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
