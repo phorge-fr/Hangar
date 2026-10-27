@@ -3,3 +3,17 @@ kind: Kustomization
 resources:
     - gotk-components.yaml
     - gotk-sync.yaml
+    - ../../../base/flux-system
+patches:
+    # The egress of the controllers is limited by base/flux-system/networkpolicy.yml: this one keeps
+    # only what lets the controllers talk to each other.
+    - target:
+          kind: NetworkPolicy
+          name: allow-egress
+      patch: |
+          - op: remove
+            path: /spec/egress
+          - op: replace
+            path: /spec/policyTypes
+            value:
+                - Ingress
