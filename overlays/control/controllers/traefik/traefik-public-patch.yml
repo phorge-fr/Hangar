@@ -5,9 +5,18 @@ metadata:
     namespace: traefik
 spec:
     values:
+        # One pod on every node (a new one is ready before the old one stops) and externalTrafficPolicy Local: with Cluster the
+        # node that answers for the address of the service (Cilium L2 announcement) rewrites the source of a connection whose pod
+        # is on another node, so the PROXY header of the edge HAProxy comes from an address that is not in trustedIPs and is
+        # ignored (every client showed up as the address of a node). With Local a node without a local pod drops the traffic, hence
+        # the DaemonSet. See docs/authentik-hardening.md, "The client address".
+        deployment:
+            kind: DaemonSet
         service:
             annotations:
                 lbipam.cilium.io/ips: 10.1.0.11
+            spec:
+                externalTrafficPolicy: Local
         ports:
             websecure:
                 proxyProtocol:
