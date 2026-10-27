@@ -1,6 +1,6 @@
 # Authentik sign-in hardening
 
-What stands between a visitor and `auth.phorge.fr`, where each piece lives, how to turn MFA on and how to get back in when something locks you out. Everything is in `overlays/core/apps/` and applied by Flux, except the Cap site key (see below).
+What stands between a visitor and `auth.phorge.fr`, where each piece lives, how the MFA works and how to get back in when something locks you out. Everything is in `overlays/core/apps/` and applied by Flux, except the Cap site key (see below).
 
 ## Layers, in the order a sign-in meets them
 
@@ -10,9 +10,9 @@ What stands between a visitor and `auth.phorge.fr`, where each piece lives, how 
 | Reputation policy | Closes the sign-in flow to an address whose score falls to -5 (authentik lowers it by 1 at each failed sign-in and raises it by 1 at each success). Address only: the user is not known when the flow starts. The score of an address is the sum of its identifiers, each one kept between -5 and 5 by the tenant, so -5 is the lowest value a single user name can reach: a lower threshold would never trigger. | `blueprint-brand.yml` |
 | Cap captcha | Proof of work, first step of the flow. Served by `cap.phorge.fr`, token checked inside the cluster. | `cap/`, `blueprint-brand.yml` |
 | Identification and password | `pretend_user_exists`: an unknown name looks like a known one. The password stage gives up after 5 attempts. | `blueprint-brand.yml` |
-| MFA validation | Asks for a passkey, a TOTP code or a recovery code **when the user has a device**. Not mandatory yet (below). | `blueprint-brand.yml` |
+| MFA | **Mandatory for everybody.** Asks for a passkey, a TOTP code or a recovery code; a user without a device enrols one right after the password (below). | `blueprint-brand.yml` |
 | Session | Lasts 12 hours and is bound to the autonomous system and the country it was opened from. A private client address (LAN, cluster) has none, so those sessions are not bound. | `blueprint-brand.yml` |
-| Alerts | A message in a Discord channel, through a webhook, on a sign-in from outside France (detection only, nothing is blocked) and on a `suspicious_request`. It carries the action, the user name, the country and a request id, nothing else. | `blueprint-hardening.yml`, `secret-alerts.yml` |
+| Alerts | A message in a Discord channel, through a webhook, on a sign-in from outside France (detection only, nothing is blocked), on a `suspicious_request`, on every sign-in of a superuser (severity alert), on every failed sign-in against one, and on the creation of a token or a user. It carries the action, the user name, the country and a request id, nothing else. | `blueprint-hardening.yml`, `secret-alerts.yml` |
 | Tracking | Every event (sign-in, failure, logout, password change, suspicious request) is a JSON line in the logs of authentik, collected into Loki, and so is each start of the sign-in flow with the address, country, network and score. A dashboard reads them. | `grafana-dashboards/authentik-signins-dashboard.yml` |
 
 The OIDC clients (Incus, Crossview, Phorge) use strict redirect URIs. Grafana and Forgejo are restricted to `phorge-platform-admins` (`blueprint-brand.yml`).
@@ -58,15 +58,17 @@ from authentik.blueprints.v1.tasks import apply_blueprint
 apply_blueprint.send(str(BlueprintInstance.objects.get(name='phorge-hardening').pk))"
 ```
 
-## Turning MFA on
+## MFA
 
-MFA is validated but not required, because nobody can be forced to enrol before having a device.
+MFA is mandatory for every account: the validation stage of the flow is `not_configured_action: configure`. A user who has no device is sent, after the password, to a choice between a passkey (WebAuthn) and a TOTP app, enrols it, and is signed in. The recovery codes (static) are accepted at sign-in but are not offered as the first device (someone could stop at a list of codes); create them afterwards. This was checked end to end with a throwaway user before it was turned on: password, choice of TOTP, code, signed in.
 
-1. Sign in, open `https://auth.phorge.fr/if/user/`, Settings, MFA Devices and enrol two supports: a passkey (WebAuthn) on two devices, or a passkey and a TOTP app. Also create the static recovery codes and keep them offline.
-2. Sign out and in again to check that the second factor is asked.
-3. In `blueprint-brand.yml`, set `not_configured_action: configure` on `phorge-authentication-mfa`, open a PR and merge. A user without a device is then sent to one of the setup flows already listed in `configuration_stages`.
+What to do for an account, once:
 
-Do step 3 only after step 2 worked for every account that must still sign in.
+1. Sign in. The enrolment is proposed by the flow itself (for `akadmin` it is the next sign-in).
+2. Open `https://auth.phorge.fr/if/user/`, Settings, MFA Devices, and add a **second** support: a passkey on another device, or a passkey and a TOTP app. Then create the static recovery codes and keep them offline. One device is enough to sign in, two is what stops a lost phone from locking the account.
+3. Sign out and in again to check that the second factor is asked.
+
+A user created later goes through the same enrolment at the first sign-in. The accounts that do not use the flow (service accounts, API tokens) are not concerned.
 
 ## Getting back in
 
@@ -98,12 +100,12 @@ print(Reputation.objects.filter(score__lte=-5).delete())"
 
 **Signed out all the time.** The session binding (ASN and country) may be too strict for a network that changes address. Set `network_binding` and `geoip_binding` to `no_binding` in `blueprint-brand.yml`.
 
-**MFA locks an account out** after step 3 of the previous section: set `not_configured_action` back to `skip` through the same blueprint, or use the recovery key above to reach the account settings and enrol a device.
+**MFA locks an account out** (a lost device and no recovery code): the recovery key above signs the account in without the flow, then add a new device from the account settings. If the enrolment itself breaks for everybody, set `not_configured_action` back to `skip` in `blueprint-brand.yml` (a PR, or live with Flux suspended).
 
 If authentik itself does not answer, `kubectl -n authentik rollout restart deploy/authentik-server deploy/authentik-worker` and look at `kubectl -n authentik logs deploy/authentik-server`.
 
 ## Not done, and why
 
 - **Stronger password rules.** The default password-change flow has its own policy (8 characters, zxcvbn) and its blueprint is applied again by authentik, so a stricter policy would be undone. It becomes worthwhile with an own password-change or enrolment flow.
-- **Admin console restricted by address.** The administrators come from an address that changes; an allow-list would lock them out. The console is protected by the sign-in flow above, the MFA once required and `phorge-platform-admins`.
+- **Admin console restricted by address.** The administrators come from an address that changes; an allow-list would lock them out. The console is protected by the sign-in flow above, the MFA and `phorge-platform-admins`.
 - **Account creation with a verified e-mail.** There is no enrolment flow, so no public sign-up. When there is one, it needs the verification stage and the `Phorge email` mapping of `blueprint-phorge-api.yml` (it returns `email_verified: True` for everybody today) changed together.
