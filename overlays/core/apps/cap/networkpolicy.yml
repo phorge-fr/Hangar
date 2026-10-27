@@ -1,0 +1,69 @@
+# Cap needs the internet at startup and every hour: it downloads the widget and the WASM it serves (ENABLE_ASSETS_SERVER).
+# Alloy runs in the host network: its probes come from the host or remote-node identity.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: cap
+    namespace: cap
+spec:
+    endpointSelector:
+        matchLabels:
+            app: cap
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-public-traefik
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+        # Authentik checks the token of the sign-in (siteverify)
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: authentik
+                    app.kubernetes.io/name: authentik
+                    app.kubernetes.io/component: server
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+    egress:
+        - toEndpoints:
+              - matchLabels:
+                    app: cap-valkey
+          toPorts:
+              - ports:
+                    - port: "6379"
+                      protocol: TCP
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: cap-valkey
+    namespace: cap
+spec:
+    endpointSelector:
+        matchLabels:
+            app: cap-valkey
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    app: cap
+          toPorts:
+              - ports:
+                    - port: "6379"
+                      protocol: TCP
