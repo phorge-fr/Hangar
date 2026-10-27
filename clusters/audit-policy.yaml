@@ -112,6 +112,14 @@ rules:
           - system:serviceaccounts
       verbs: ["get", "list", "watch"]
 
+    # The admin identity (the certificate of kubectl, and of k0s itself) is shared by the people and by k0s, which polls the whole API
+    # every 40 seconds or so: the nodes, the etcd members, a list of every kind of object. That was 97% of the log on svc. Its
+    # reads are left out (secrets are recorded above, whoever reads them); what it changes, and its shells, are kept below.
+    - level: None
+      users:
+          - kubernetes-admin
+      verbs: ["get", "list", "watch"]
+
     # Who gets permissions: the whole request and the response, for every change
     - level: RequestResponse
       resources:
