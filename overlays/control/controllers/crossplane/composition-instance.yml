@@ -31,6 +31,13 @@ spec:
                       {{- end -}}
                       {{- if and $ready $synced -}}True{{- else -}}False{{- end -}}
                       {{- end -}}
+                      {{- /* When the operation that is changing the VM began: the AsyncOperation condition of the Incus resource is
+                               False/Ongoing while the provider waits for Incus (a start, a stop, a resize). Empty when none runs. The
+                               Phorge API shows it as the date of a transition and flags one that lasts too long. */ -}}
+                      {{- $operationSince := "" -}}
+                      {{- range (dig "resource" "status" "conditions" (list) (default (dict) (index (default (dict) .observed.resources) "instance"))) -}}
+                      {{- if and (eq .type "AsyncOperation") (eq .status "False") (eq .reason "Ongoing") -}}{{- $operationSince = .lastTransitionTime -}}{{- end -}}
+                      {{- end -}}
                       {{- /* What is wrong with the composed resources, for status.problems. */ -}}
                       {{- $problems := list -}}
                       {{- range $rname, $res := (default (dict) .observed.resources) -}}
@@ -139,3 +146,4 @@ spec:
                         state: {{ dig "resource" "status" "atProvider" "status" "" $inst | quote }}
                         ipv4: {{ dig "resource" "status" "atProvider" "ipv4Address" "" $inst | quote }}
                         problems: {{ join " | " $problems | trunc 800 | quote }}
+                        operationSince: {{ $operationSince | quote }}

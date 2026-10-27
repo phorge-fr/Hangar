@@ -88,3 +88,6 @@ spec:
                                   type: string
                               ipv4:
                                   type: string
+                              operationSince:
+                                  description: When the operation that is changing the VM began (a start, a stop, a resize). Empty when none runs.
+                                  type: string
