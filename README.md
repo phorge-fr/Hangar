@@ -14,7 +14,7 @@ GitOps repository for all Phorge Kubernetes clusters, managed with [FluxCD](http
 
 ## Repository Structure
 
-```
+```text
 base/          # Shared base manifests (controllers, configs, apps)
 clusters/      # Per-cluster Flux entrypoints and setup guides
 overlays/      # Per-cluster Kustomize overlays
@@ -31,7 +31,7 @@ with its own dependency on the previous one (`overlay-controllers` -> `overlay-c
 | `apps/` | Workloads that run in this cluster |
 | `resources/` | Resources Crossplane provisions outside this cluster (Incus, OpenFGA...), not Kubernetes workloads. Depends on `overlay-controllers` directly, not the full chain - its only real prerequisite is Crossplane and its providers being installed |
 
-The multi-tenant API kinds (`Tenant`, `Image`, `Instance`, `Membership`) are documented in [docs/phorge-api.md](docs/phorge-api.md).
+The multi-tenant API kinds (`Tenant`, `Image`, `Instance`, `Membership`) are documented in [docs/reference/phorge-api-kinds.md](docs/reference/phorge-api-kinds.md).
 
 ## Metrics labels
 
@@ -54,3 +54,15 @@ On core, `cluster=core` comes from the default scrape class in `overlays/core/ap
 | [Cilium](https://cilium.io/) | CNI — networking & L2 load balancing |
 | [FluxCD](https://fluxcd.io/) | GitOps continuous delivery |
 | [Mozilla SOPS](https://getsops.io/) + [age](https://github.com/FiloSottile/age) | Secret encryption |
+
+## Contributing
+
+Every change starts from an issue and goes through a pull request; the rules (issue link, label, milestone, assignee, reviewer) are in the organization's [GOVERNANCE](https://github.com/phorge-fr/.github/blob/main/GOVERNANCE.md) and [CONTRIBUTING](https://github.com/phorge-fr/.github/blob/main/CONTRIBUTING.md). Planned work is on the public [Roadmap](https://github.com/orgs/phorge-fr/projects/3). Everyone taking part follows the [Code of Conduct](https://github.com/phorge-fr/.github/blob/main/CODE_OF_CONDUCT.md).
+
+## Security
+
+Report vulnerabilities privately, as described in the [security policy](https://github.com/phorge-fr/.github/blob/main/SECURITY.md). Do not open a public issue for them.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).

@@ -9,7 +9,7 @@ spec:
         # node that answers for the address of the service (Cilium L2 announcement) rewrites the source of a connection whose pod
         # is on another node, so the PROXY header of the edge HAProxy comes from an address that is not in trustedIPs and is
         # ignored (every client showed up as the address of a node). With Local a node without a local pod drops the traffic, hence
-        # the DaemonSet. See docs/authentik-hardening.md, "The client address".
+        # the DaemonSet. See docs/explanation/authentik-sign-in-hardening.md, "The client address".
         deployment:
             kind: DaemonSet
         service:
