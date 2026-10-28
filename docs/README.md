@@ -36,10 +36,10 @@ None yet.
 
 | Page | Question it answers |
 | --- | --- |
-| [How the Phorge API is built](explanation/phorge-api-implementation-plan.md) | How the API, the platform and the authorization fit together |
+| [How the Phorge API is built](explanation/phorge-api-implementation-plan.md) | How the API, the platform, and the authorization fit together |
 | [How k0sctl apply behaves](explanation/k0sctl-apply-behavior.md) | What `k0sctl apply` really does, measured |
 | [Authentik sign-in hardening](explanation/authentik-sign-in-hardening.md) | Why the sign-in is built this way |
-| [The HTTP audit log](explanation/http-audit-log.md) | How requests are logged, enriched and read |
+| [The HTTP audit log](explanation/http-audit-log.md) | How requests are logged, enriched, and read |
 | [The Kubernetes audit log](explanation/kubernetes-audit-log.md) | What is audited, how much, and what is not |
 | [Monitoring scrape pitfalls](explanation/monitoring-scrape-pitfalls.md) | Why a scrape or a series can be missing |
 | [GDPR: decisions still to take](explanation/gdpr-open-decisions.md) | Open choices on retention and visitor information |

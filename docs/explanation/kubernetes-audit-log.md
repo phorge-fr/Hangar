@@ -23,7 +23,7 @@ The API server of each cluster (`control`, `core`, `svc`) writes an audit record
 
 ## Volume
 
-An audit log of everything is enormous: the API servers answer about 25 requests a second each, 2.2 million a day (Prometheus, `apiserver_request_total`, 24 hours on 2026-10-27), and most of it is leases, health checks and kubelets. What the policy keeps, estimated from the same metrics by resource, verb and subresource:
+An audit log of everything is enormous: the API servers answer about 25 requests a second each, 2.2 million a day (Prometheus, `apiserver_request_total`, 24 hours on 2026-10-27), and most of it is leases, health checks, and kubelets. What the policy keeps, estimated from the same metrics by resource, verb and subresource:
 
 | Cluster | Changes kept | Secret accesses (upper bound) | Records a day | About, uncompressed |
 |---|---|---|---|---|
@@ -35,8 +35,8 @@ The upper bound for the secrets counts the reads of the kubelets too, which the 
 
 | Cluster | Records | Bytes (uncompressed) | Per day | What fills it |
 |---|---|---|---|---|
-| `svc` | 7 109 in 10.5 h | 10.8 MB | about 16 000 records, 25 MB | `helm-controller` and `kustomize-controller` patches, secret reads and watches |
-| `core` | 19 947 in 10 h | 30.4 MB | about 48 000 records, 73 MB | the same, plus Grafana and Longhorn watching secrets |
+| `svc` | 7 109 in 10.5 h | 10.8 MB | about 16 000 records, 25 MB | `helm-controller` and `kustomize-controller` patches, secret reads, and watches |
+| `core` | 19 947 in 10 h | 30.4 MB | about 48 000 records, 73 MB | the same, plus Grafana, and Longhorn watching secrets |
 | `control` | 1 077 in 7 min, just after the restarts | | to measure again after a day (Crossplane updates its CRDs and managed resource definitions, 337 `update` of `managedresourcedefinitions` in the first 7 minutes) | Crossplane |
 
 A record is about 1.5 KB, twice the 0.8 KB assumed, and the records are 1.2 to 2.4 times the estimate. Most of it is **Flux**: its two controllers apply with server-side apply, which is a `patch` that is recorded at every reconciliation even when nothing changes (`configmaps`, `ciliumnetworkpolicies`, `helmcharts`, `namespaces`, `secrets`), and read secrets for the decryption (`get`, `list`). Loki compresses this JSON about ten times, so the three clusters are roughly 15 to 25 MB a day stored, which is nothing for the volume of Loki. If it has to go down, the lever is to leave out the `patch` and `update` of the two Flux service accounts (what Flux applies is in Git, and the log would then say who did something by hand but not what Flux applied): not done, it is a decision about what the audit is for.
@@ -53,7 +53,7 @@ These are estimates from metrics, not measures: check them after the first day, 
 
 ## Personal data and retention
 
-The records hold the user name (a person's certificate, or a service account), the address and the tool of the client. That is administrators' data: see [the personal data inventory](../reference/gdpr-personal-data.md). On the node the file lives 3 days; in Loki the lines follow the retention of Loki (30 days). Whether the audit of the administrators' actions should be kept longer than the other logs is a decision for the report (one year is common for this kind of record); a retention per stream (`retention_stream` for `{job="k8s-audit"}`) can give it its own period once the volume is known.
+The records hold the user name (a person's certificate, or a service account), the address, and the tool of the client. That is administrators' data: see [the personal data inventory](../reference/gdpr-personal-data.md). On the node the file lives 3 days; in Loki the lines follow the retention of Loki (30 days). Whether the audit of the administrators' actions should be kept longer than the other logs is a decision for the report (one year is common for this kind of record); a retention per stream (`retention_stream` for `{job="k8s-audit"}`) can give it its own period once the volume is known.
 
 ## Related
 

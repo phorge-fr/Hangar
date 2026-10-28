@@ -6,7 +6,7 @@ verified: 2026-10-28
 
 # Test a Flux change live
 
-Use this for a HelmRelease, a ConfigMap or any object Flux owns, before opening the pull request. It tests byte for byte what will run once merged.
+Use this for a HelmRelease, a ConfigMap or any object Flux owns, before opening the pull request. It tests byte for byte what runs once merged.
 
 ## Procedure
 

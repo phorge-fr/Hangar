@@ -17,7 +17,7 @@ What a visitor meets, in order, on `auth.phorge.fr`. Everything is in `overlays/
 | MFA | **Mandatory for everybody.** Asks for a passkey, a TOTP code or a recovery code; a user without a device enrols one right after the password (below). | `blueprint-brand.yml` |
 | Session | Lasts 12 hours and is bound to the autonomous system and the country it was opened from. A private client address (LAN, cluster) has none, so those sessions are not bound. | `blueprint-brand.yml` |
 | Alerts | A message in a Discord channel, through a webhook, on a sign-in from outside France (detection only, nothing is blocked), on a `suspicious_request`, on every sign-in of a superuser (severity alert), on every failed sign-in against one, and on the creation of a token or a user. It carries the action, the user name, the country and a request id, nothing else. | `blueprint-hardening.yml`, `secret-alerts.yml` |
-| Tracking | Every event (sign-in, failure, logout, password change, suspicious request) is a JSON line in the logs of authentik, collected into Loki, and so is each start of the sign-in flow with the address, country, network and score. A dashboard reads them. | `grafana-dashboards/authentik-signins-dashboard.yml` |
+| Tracking | Every event (sign-in, failure, logout, password change, suspicious request) is a JSON line in the logs of authentik, collected into Loki, and so is each start of the sign-in flow with the address, country, network, and score. A dashboard reads them. | `grafana-dashboards/authentik-signins-dashboard.yml` |
 
 The OIDC clients (Incus, Crossview, Phorge) use strict redirect URIs. Grafana and Forgejo are restricted to `phorge-platform-admins` (`blueprint-brand.yml`).
 
