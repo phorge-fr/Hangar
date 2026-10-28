@@ -1,4 +1,10 @@
-# Testing a change to a Flux-managed resource live
+---
+type: how-to
+audience: maintainer testing a change on a live cluster
+verified: 2026-10-28
+---
+
+# Test a Flux change live
 
 Use this for a HelmRelease, a ConfigMap or any object Flux owns, before opening the pull request. It tests byte for byte what will run once merged.
 

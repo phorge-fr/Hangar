@@ -1,4 +1,10 @@
-# k0sctl apply: what it really does
+---
+type: explanation
+audience: maintainer who runs or reviews `k0sctl apply`
+verified: 2026-10-28
+---
+
+# How k0sctl apply behaves
 
 `k0sctl` is the tool of this repository for the k0s clusters (`clusters/<cluster>/setup/k0s-cluster.yml`). The procedure to run it is in the README of each cluster (`clusters/<cluster>/setup/README.md`, "Deploy the cluster, or apply a change to it"). This page says what the tool does and why that procedure is built the way it is. It was measured with `k0sctl apply --dry-run` and `--debug` (v0.31.0), then with real applies, on 2026-10-27 and 28.
 
@@ -27,20 +33,8 @@ marked for upgrade because file was changed for upload .../k0scontroller-gomemli
 
 Prometheus saw no failed scrape of the API servers of `control` during the apply (its interval is too coarse for a cut of a few seconds, so it proves nothing). The audit flags, the policy checksum (the one of Git) and a written audit file were checked on every node at the same time. `svc` had been configured by hand for the audit the evening before; `k0sctl apply` brought it back to what Git says.
 
-## SOPS and the plain lines of `k0s-cluster.yml`
+## SOPS signs the whole file
 
-SOPS signs the **whole** file: the MAC covers every value, encrypted or not. Editing a plain line by hand (a flag, a path) makes `sops -d` fail with "MAC mismatch". It happened with the audit flags added in #246, which made the three files unreadable by the procedure of the READMEs until they were resealed (#250). `sops -e` signs again but rewrites the file with 2-space indents under lists, which `.yamllint.yml` refuses, so the committed layout has to be kept and only what SOPS changes carried over. After a hand edit of a plain line, from the directory of the cluster:
-
-```bash
-C=svc                                        # the cluster
-REPO=$(git rev-parse --show-toplevel); SETUP=$REPO/clusters/$C/setup
-export SOPS_AGE_KEY_FILE="$REPO/age.agekey"
-sops -d --ignore-mac "$SETUP/k0s-cluster.yml" > /tmp/plain.yml                       # the plaintext, whatever the MAC says (it holds the VRRP password: delete it after)
-sops -e --filename-override "$SETUP/k0s-cluster.yml" /tmp/plain.yml > /tmp/new.yml   # signed again, laid out the SOPS way
-# in k0s-cluster.yml, keeping its layout: replace the `authPass:` line by the one of /tmp/new.yml,
-# and the whole `sops:` block (age enc, lastmodified, mac, version) by the one of /tmp/new.yml
-sops -d "$SETUP/k0s-cluster.yml" > /dev/null && yamllint -c "$REPO/.yamllint.yml" "$SETUP/k0s-cluster.yml"
-rm /tmp/plain.yml /tmp/new.yml
-```
+SOPS signs the **whole** file: the MAC covers every value, encrypted or not. Editing a plain line by hand (a flag, a path) makes `sops -d` fail with "MAC mismatch". It happened with the audit flags added in #246, which made the three files unreadable by the procedure of the READMEs until they were resealed (#250). `sops -e` signs again but rewrites the file with 2-space indents under lists, which `.yamllint.yml` refuses, so the committed layout has to be kept and only what SOPS changes carried over. [Reseal a k0s cluster file after a hand edit](../how-to/reseal-a-k0s-cluster-file.md) has the steps.
 
 The paths of `src:` in `files:` are relative to the directory of the config (`../../audit-policy.yaml` from `clusters/<cluster>/setup`); the dry run catches a wrong one before anything is touched.

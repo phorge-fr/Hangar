@@ -1,15 +1,42 @@
-# 0005: A cluster's ingress never routes outside the cluster
+---
+status: accepted
+date: 2026-10-26
+decision-makers: l-nmch
+---
 
-Status: accepted.
+# A cluster's ingress never routes outside the cluster
 
-## Decision
+## Context and problem statement
 
-An ingress controller (Traefik `IngressRoute`, `IngressRouteTCP`, `ExternalName` or `Endpoints` pointing at outside addresses) serves that cluster's workloads only. It must not route to targets outside the cluster, in particular tenant instances of the Incus platform.
+Tenant instances of the Incus platform need HTTP and TCP exposure. A first idea was to use the Kubernetes ingress as the dynamic layer. Should a cluster's ingress route to targets outside the cluster?
 
-## Why
+## Decision drivers
 
-Putting tenant traffic through a cluster ingress couples the data path of the IaaS to the control-plane cluster (which runs on small ARM single-board computers) and blurs the boundary between the clusters and the Incus platform. The IaaS and Kubernetes planes stay independent.
+* The IaaS plane and the Kubernetes planes must stay independent.
+* `control` runs on small ARM boards; tenant traffic would load it.
 
-## Consequences
+## Considered options
 
-Exposure of tenant HTTP or TCP services keeps its dynamic routing layer on the Incus side (a platform-owned proxy in an Incus project, reached through a static address). The router only gets static pipes from `phorge-fr/Network`, and `control` gets no router access. The `Expose` kind is deferred until a safe mechanism is found. Do not propose the Traefik route again.
+* Route tenant traffic through Traefik (`IngressRoute`, `IngressRouteTCP`, `ExternalName` or `Endpoints` to outside addresses).
+* A platform-owned proxy on the Incus side, reached through a static address.
+
+## Decision outcome
+
+Chosen option: "a proxy on the Incus side", because it keeps the data path of the IaaS out of the control-plane cluster. The router only gets static pipes from `phorge-fr/Network`, and `control` gets no router access.
+
+### Consequences
+
+* Good, because the planes stay independent.
+* Bad, because the `Expose` kind is deferred until a safe mechanism is found; a restricted-rights router token does not work since RouterOS cannot scope write rights per path.
+
+## Pros and cons of the options
+
+### Traefik for tenant traffic
+
+* Good, because the machinery exists.
+* Bad, because it couples the IaaS to the clusters. Banned; do not propose it again.
+
+### Proxy on the Incus side
+
+* Good, because it matches the boundary.
+* Bad, because it is new work.

@@ -31,7 +31,7 @@ with its own dependency on the previous one (`overlay-controllers` -> `overlay-c
 | `apps/` | Workloads that run in this cluster |
 | `resources/` | Resources Crossplane provisions outside this cluster (Incus, OpenFGA...), not Kubernetes workloads. Depends on `overlay-controllers` directly, not the full chain - its only real prerequisite is Crossplane and its providers being installed |
 
-The multi-tenant API kinds (`Tenant`, `Image`, `Instance`, `Membership`) are documented in [docs/phorge-api.md](docs/phorge-api.md).
+The multi-tenant API kinds (`Tenant`, `Image`, `Instance`, `Membership`) are documented in [docs/reference/phorge-api-kinds.md](docs/reference/phorge-api-kinds.md).
 
 ## Metrics labels
 

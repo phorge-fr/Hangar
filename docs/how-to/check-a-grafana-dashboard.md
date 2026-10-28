@@ -1,4 +1,10 @@
-# Checking a Grafana dashboard headless
+---
+type: how-to
+audience: maintainer proving that a dashboard renders
+verified: 2026-10-28
+---
+
+# Check a Grafana dashboard
 
 A query returning data (Prometheus API, `/api/ds/query`) does not prove a dashboard renders: `/api/ds/query` returns labels as field metadata, while the browser builds the table columns (`Value #A` with several visible queries, `Value` with one). Take a screenshot and look at it.
 

@@ -1,4 +1,10 @@
-# Bumping a Crossplane provider after its release
+---
+type: how-to
+audience: maintainer releasing a Crossplane provider
+verified: 2026-10-28
+---
+
+# Bump a Crossplane provider
 
 After `provider-incus`, `provider-openfga` or `provider-authentik` publishes a release, open the Hangar pull request yourself right away; do not wait for Renovate. A fixed provider that is published but not deployed leaves the cluster on the old version.
 

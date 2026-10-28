@@ -14,7 +14,7 @@ The **Control** cluster is the main entry point of the infrastructure. It acts a
 
 ### 1. Deploy the cluster, or apply a change to it
 
-`k0s-cluster.yml` has its `authPass` (VRRP/Keepalived) field SOPS-encrypted and k0sctl does not understand SOPS, so it is applied from a decrypted copy: the tracked file is never touched (decrypting and encrypting it `--in-place` rewrites the whole file and leaves a diff). What `k0sctl apply` does with this config, and why the steps below are in this order, is in [docs/k0sctl-apply.md](../../../docs/k0sctl-apply.md): read it before the first apply. In short, **`k0sctl apply` stops, reinstalls and starts the k0s service of every host that has an uploaded file whose date differs from the remote one**, so the API server of each node is down for 30 to 90 seconds.
+`k0s-cluster.yml` has its `authPass` (VRRP/Keepalived) field SOPS-encrypted and k0sctl does not understand SOPS, so it is applied from a decrypted copy: the tracked file is never touched (decrypting and encrypting it `--in-place` rewrites the whole file and leaves a diff). What `k0sctl apply` does with this config, and why the steps below are in this order, is in [docs/explanation/k0sctl-apply-behavior.md](../../../docs/explanation/k0sctl-apply-behavior.md): read it before the first apply. In short, **`k0sctl apply` stops, reinstalls and starts the k0s service of every host that has an uploaded file whose date differs from the remote one**, so the API server of each node is down for 30 to 90 seconds.
 
 Every command below uses absolute paths built from `$REPO`: it works from any directory inside the repository, and nothing depends on where the terminal is. The values of this cluster are set once, here, so a block cannot be run with the values of another cluster:
 
@@ -83,7 +83,7 @@ The value is about 1.4 to 1.9 times the estimated peak live heap of this cluster
 
 ### Kubernetes audit log
 
-The API server writes an audit log (`audit-*` flags of `k0s-cluster.yml`, policy `../../audit-policy.yaml`, buffer `/var/lib/k0s-audit/audit.log` on every node), which Alloy ships to Loki. See [docs/kubernetes-audit.md](../../../docs/kubernetes-audit.md). A change of the policy needs the API server to restart, so it is an apply of this cluster as in step 1.
+The API server writes an audit log (`audit-*` flags of `k0s-cluster.yml`, policy `../../audit-policy.yaml`, buffer `/var/lib/k0s-audit/audit.log` on every node), which Alloy ships to Loki. See [docs/explanation/kubernetes-audit-log.md](../../../docs/explanation/kubernetes-audit-log.md). A change of the policy needs the API server to restart, so it is an apply of this cluster as in step 1.
 
 ### 2. Retrieve the kubeconfig
 
