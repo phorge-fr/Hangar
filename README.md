@@ -54,3 +54,15 @@ On core, `cluster=core` comes from the default scrape class in `overlays/core/ap
 | [Cilium](https://cilium.io/) | CNI — networking & L2 load balancing |
 | [FluxCD](https://fluxcd.io/) | GitOps continuous delivery |
 | [Mozilla SOPS](https://getsops.io/) + [age](https://github.com/FiloSottile/age) | Secret encryption |
+
+## Contributing
+
+Every change starts from an issue and goes through a pull request; the rules (issue link, label, milestone, assignee, reviewer) are in the organization's [GOVERNANCE](https://github.com/phorge-fr/.github/blob/main/GOVERNANCE.md) and [CONTRIBUTING](https://github.com/phorge-fr/.github/blob/main/CONTRIBUTING.md). Planned work is on the public [Roadmap](https://github.com/orgs/phorge-fr/projects/3). Everyone taking part follows the [Code of Conduct](https://github.com/phorge-fr/.github/blob/main/CODE_OF_CONDUCT.md).
+
+## Security
+
+Report vulnerabilities privately, as described in the [security policy](https://github.com/phorge-fr/.github/blob/main/SECURITY.md). Do not open a public issue for them.
+
+## License
+
+No license has been chosen yet, so the code is not yet open for reuse; the decision is tracked in [phorge-fr/.github#18](https://github.com/phorge-fr/.github/issues/18).
