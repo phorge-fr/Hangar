@@ -1,4 +1,10 @@
-# Kubernetes audit log
+---
+type: explanation
+audience: maintainer who relies on or changes the Kubernetes audit log
+verified: 2026-10-28
+---
+
+# The Kubernetes audit log
 
 The API server of each cluster (`control`, `core`, `svc`) writes an audit record for every request that matters: who (user, groups, address, tool), did what (verb, resource, namespace, name), when, and with which result. Alloy ships the records to the Loki of core and the dashboard "Kubernetes audit" (folder Core, uid `k8s-audit`) reads them.
 
@@ -13,13 +19,7 @@ The API server of each cluster (`control`, `core`, `svc`) writes an audit record
    The policy was loaded with the validator of Kubernetes itself (`k8s.io/apiserver` v0.36.4, the version of k0s 1.36) and 24 sample requests were checked against the level they must get (a kubelet reading a secret: none; Flux reading a secret: metadata; Flux patching a HelmRelease status: none, its spec: metadata; an administrator creating a role binding: request and response; and so on). The API server does not start with an invalid policy, so do this again after any change: a small Go program that calls `policy.LoadPolicyFromFile` and `NewPolicyRuleEvaluator(...).EvaluatePolicyRule(...)` is enough. The list of groups whose status is left out is the one seen on 2026-10-27: a new kind of object that is not in it shows up in the log, which is the cue to add its group.
 3. **The directory** `/var/lib/k0s-audit` has to belong to `kube-apiserver` (it cannot create it under `/var/lib`). A systemd drop-in (`clusters/k0scontroller-audit-dir.conf`, uploaded to `/etc/systemd/system/k0scontroller.service.d/audit-dir.conf`) creates it at each start of `k0scontroller`; the `-` in front of the command keeps a new node from failing to start before k0s has created the user. `/var/log` is not used: on `svc` it is a 47 MiB volume in memory.
 4. **Alloy** (`base/controllers/alloy` for `control` and `svc`, `overlays/core/controllers/alloy` for `core`) tails `/host/root/var/lib/k0s-audit/audit.log` with the labels `job="k8s-audit"` and `node`; the writer adds `cluster`. The lines are sent untouched. The read position is kept in `/var/lib/alloy-data` on the node, so a restart of Alloy neither loses nor repeats lines.
-5. **The dashboard** reads `{job="k8s-audit"} | json`. The fields are `user_username`, `sourceIPs_0`, `userAgent`, `verb`, `objectRef_resource`, `objectRef_namespace`, `objectRef_name`, `objectRef_subresource`, `objectRef_apiGroup`, `responseStatus_code`, `requestURI`.
-
-```
-{job="k8s-audit", cluster="core"} | json | verb=~"create|update|patch|delete" | user_username !~ "system:serviceaccount:.*"
-{job="k8s-audit"} | json | responseStatus_code=~"401|403"
-{job="k8s-audit"} | json | objectRef_resource="secrets" | user_username !~ "system:serviceaccount:flux-system:.*"
-```
+5. **The dashboard** reads `{job="k8s-audit"} | json`.
 
 ## Volume
 
@@ -43,12 +43,6 @@ A record is about 1.5 KB, twice the 0.8 KB assumed, and the records are 1.2 to 2
 
 These are estimates from metrics, not measures: check them after the first day, with `sum(count_over_time({job="k8s-audit"}[1d]))` and `sum(bytes_over_time({job="k8s-audit"}[1d]))` in Loki, and with `rate(apiserver_audit_event_total[1h])` in Prometheus (the API server exposes it once the audit is on). If a cluster is louder than this, look at the top `user_username` and `objectRef_resource` of the dashboard: it is almost always one controller that is worth adding to the policy.
 
-## Turning it on
-
-Everything that Flux manages (Alloy, the dashboard) is deployed by the merge and does nothing until the file exists. The API server changes with `k0sctl apply`, following the procedure in the README of the cluster (`clusters/<cluster>/setup/README.md`); [k0sctl-apply.md](k0sctl-apply.md) says what the tool does and what was measured. Short version: one cluster at a time, `svc`, then `core`, then `control`; it stops and starts the k0s service of every controller one after the other, and the API server of each node is down for 30 to 90 seconds. Do not do it on `control` while the end-to-end tests of the API run. A change of `clusters/audit-policy.yaml` needs the same (the API server reads it when it starts).
-
-`svc` was first configured by hand on 2026-10-27, before the dry run showed what `k0sctl apply` does; the apply of 2026-10-28 brought it back to what Git says. To check the audit afterwards: `ssh root@<node> 'tail -n1 /var/lib/k0s-audit/audit.log'`, and in Grafana `{job="k8s-audit", cluster="<cluster>"}` has lines from the three nodes.
-
 ## What it does not cover
 
 - Access to a node (SSH, `kubectl debug node`), to etcd or to the kubelet API directly: the audit log is the one of the API server. SSH logins are in the journal of each node, not collected here.
@@ -59,4 +53,9 @@ Everything that Flux manages (Alloy, the dashboard) is deployed by the merge and
 
 ## Personal data and retention
 
-The records hold the user name (a person's certificate, or a service account), the address and the tool of the client. That is administrators' data: see [gdpr.md](gdpr.md). On the node the file lives 3 days; in Loki the lines follow the retention of Loki (30 days). Whether the audit of the administrators' actions should be kept longer than the other logs is a decision for the report (one year is common for this kind of record); a retention per stream (`retention_stream` for `{job="k8s-audit"}`) can give it its own period once the volume is known.
+The records hold the user name (a person's certificate, or a service account), the address and the tool of the client. That is administrators' data: see [the personal data inventory](../reference/gdpr-personal-data.md). On the node the file lives 3 days; in Loki the lines follow the retention of Loki (30 days). Whether the audit of the administrators' actions should be kept longer than the other logs is a decision for the report (one year is common for this kind of record); a retention per stream (`retention_stream` for `{job="k8s-audit"}`) can give it its own period once the volume is known.
+
+## Related
+
+- [Fields and queries](../reference/kubernetes-audit-fields.md)
+- [Enable the Kubernetes audit on a cluster](../how-to/enable-the-kubernetes-audit.md)

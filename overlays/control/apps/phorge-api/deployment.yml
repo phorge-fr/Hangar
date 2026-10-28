@@ -1,5 +1,5 @@
 # The Phorge API (phorge-fr/phorge-api): a REST API that creates, reads and deletes the phorge.fr objects of this cluster,
-# which Crossplane turns into Incus and OpenFGA objects (docs/phorge-api.md). It keeps nothing: tenants, images, instances,
+# which Crossplane turns into Incus and OpenFGA objects (docs/reference/phorge-api-kinds.md). It keeps nothing: tenants, images, instances,
 # memberships and API keys are Kubernetes objects, and what a caller may do is decided by OpenFGA.
 #
 # Configuration is the environment. Nothing in it is secret except the OpenFGA key, which is the Secret phorge-api-openfga

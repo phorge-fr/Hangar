@@ -1,3 +1,9 @@
+---
+type: reference
+audience: developer or operator of the Phorge API kinds
+verified: 2026-10-26
+---
+
 # Phorge API kinds (`phorge.fr/v1alpha1`)
 
 The resources a tenant of the Phorge cloud is made of. They are Crossplane composite resources (XRs) on the `control` cluster. An API, a console or a Terraform provider only has to create, read and delete these; Crossplane turns them into Incus and OpenFGA objects. The schemas are the contract: the source of truth is the XRD in `overlays/control/controllers/crossplane/` (`xrd-*.yml`), this page explains them.
@@ -83,7 +89,7 @@ An image pulled into the tenant's project. Instances start from an `Image`, neve
 
 | Field | Type | Rule |
 |---|---|---|
-| `spec.source.name` | string, required | Name on the remote, e.g. `debian/13/cloud` |
+| `spec.source.name` | string, required | Name on the remote, for example `debian/13/cloud` |
 | `spec.source.remote` | string | Default `images` (linuxcontainers.org) |
 | `spec.source.type` | enum | `virtual-machine` only (default) |
 | `spec.source.architecture` | string | Default `x86_64`, see below |
@@ -105,7 +111,7 @@ A virtual machine in the tenant's project.
 | `spec.running` | boolean | Default `true` |
 | `spec.nesting` | boolean | Default `false`. Allows virtualization or containers inside the VM |
 | `spec.sshPublicKeys` | list of string | Injected with cloud-init, so the image must be a `cloud` variant |
-| `status.state` | string | Incus state, e.g. `Running` |
+| `status.state` | string | Incus state, for example `Running` |
 | `status.ipv4` | string | Address on the tenant's network |
 
 The per-instance bounds are the XRD's. The plan's totals are enforced on top by the project: a second VM on a `small` tenant is refused by Incus with `Reached maximum number of instances`, and the instance stays `Synced=False` with that message.
@@ -178,7 +184,7 @@ Traffic from a tenant leaves through the `comp-ns` VLAN. The router drops traffi
 
 - **Delete in the foreground.** Deleting an XR in the default (background) mode removes the object at once while its composed resources and the Incus objects last for up to a minute or two: a `Tenant` was gone after 1 s, its resources after 58 s. With `propagationPolicy: Foreground` (`kubectl delete --cascade=foreground`) the object stays until everything it composed is gone, so its absence is a real completion signal. An API should always delete this way and treat "not found" as "deleted".
 - **An `Instance` whose first start failed is stuck and must be deleted and created again.** Incus creates the VM, the start then fails (for instance "incompatible with secureboot", see `spec.secureBoot`), and the provider keeps the resource as failed: every later reconcile wants to destroy and recreate it, which `prevent_destroy` refuses. `status.problems` then shows the original error as well as the `prevent_destroy` one.
-- **An `Image` used by an `Instance` cannot be deleted.** The request is refused ("in-use by 1 usage(s)"). The refusal is remembered and replayed: the `Image` goes by itself, a few seconds after the last `Instance` that uses it, without a second delete.
+- **An `Image` used by an `Instance` cannot be deleted.** The request is refused with an "in-use" message that counts the usages. The refusal is remembered and replayed: the `Image` goes by itself, a few seconds after the last `Instance` that uses it, without a second delete.
 - `status.problems` on every kind says what is wrong with the composed resources (the Incus or OpenFGA error), empty when everything is up. `Ready` now needs the composed resources to be `Ready` **and** `Synced`.
 
 - Deleting an `Instance` or an `Image` removes the Incus object.

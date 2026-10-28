@@ -1,4 +1,10 @@
-# Monitoring scrape gotchas
+---
+type: explanation
+audience: maintainer adding a scrape or a dashboard on Flux objects
+verified: 2026-10-28
+---
+
+# Monitoring scrape pitfalls
 
 Pitfalls met adding Flux, Longhorn and cert-manager scrapes that the manifests do not show. PodMonitors are shared in `base/apps/monitoring/`.
 

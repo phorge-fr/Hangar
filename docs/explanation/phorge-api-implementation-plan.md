@@ -1,6 +1,12 @@
-# Building the Phorge API: guide for the implementer
+---
+type: explanation
+audience: developer building or extending the Phorge API
+verified: 2026-10-26
+---
 
-Written for an engineer or coding agent who starts the Phorge API from scratch. Read [phorge-api.md](phorge-api.md) first: it describes the `phorge.fr` kinds the API manages. This page says what to build around them, in what order, and what the platform has already shown it does.
+# How the Phorge API is built
+
+Written for an engineer or coding agent who starts the Phorge API from scratch. Read [Phorge API kinds](../reference/phorge-api-kinds.md) first: it describes the `phorge.fr` kinds the API manages. This page says what to build around them, in what order, and what the platform has already shown it does.
 
 ## 1. What you are building
 
@@ -144,12 +150,12 @@ These are measured behaviours (see `tests/e2e/` and the issues). Build around th
 
 1. **Delete in the foreground.** Send `propagationPolicy: Foreground`. In the default mode a `Tenant` object is gone after 1 to 2 seconds while its resources and the Incus project last 20 to 60 seconds; in the foreground it stays until everything is gone (about 2 minutes for a tenant with a running VM). Treat "not found" as "deleted". Deleting a `Membership` still leaves its OpenFGA tuples for up to about a minute (9 to 55 seconds measured): permissions are not revoked instantly. If you need an instant cutoff, also check `deletionTimestamp`. A key has no tuple: it stops as soon as its object is deleting.
 2. **A `Membership` cannot be edited.** A tuple cannot be changed in place; the XRD refuses the edit. To change a role: delete, wait until it is gone, create. There is **one `Membership` per user per tenant**; a second one is not composed (`Ready=False`). The owner of a tenant has `admin` from the `Tenant` itself and cannot be given a `Membership`; to hand a tenant over, give the new person `admin`.
-3. **An `Image` that a VM uses cannot be deleted.** An admission webhook refuses the delete with "in-use by 1 usage(s)" (check the status code you actually get, do not rely on a particular one) and the API should answer `409 Conflict`. The refusal is remembered: when the last VM goes, the image goes by itself a few seconds later.
+3. **An `Image` that a VM uses cannot be deleted.** An admission webhook refuses the delete with an "in-use" message that counts the usages (check the status code you actually get, do not rely on a particular one) and the API should answer `409 Conflict`. The refusal is remembered: when the last VM goes, the image goes by itself a few seconds later.
 4. **An `Instance` whose first start failed is stuck.** The provider keeps it as failed and refuses to destroy it. The only way out is to delete the `Instance` and create it again. The usual cause is an image that does not boot with secure boot (`alpine/3.22/cloud`): set `spec.secureBoot: false`. `status.problems` shows both errors.
 5. **Quotas are Incus's.** A plan limits VMs, CPU, memory, disk and networks per tenant. The refusal comes back in `status.problems` (`Reached maximum number of instances`, `Reached maximum aggregate value "100GiB" for "limits.disk"`), not as an error of your request: surface it. Stopped VMs count.
 6. **A VM deleted directly in Incus is recreated blank** by Crossplane. This is why Incus is read-only.
 7. **A tenant network subnet is chosen by Incus.** The provider does not return it, so the API cannot see it from Kubernetes. It could, in rare cases, fall in one of the router's VLANs (`10.1` to `10.5`, `10.10` to `10.12`); reading it from Incus after the tenant is `Ready` would need an Incus client certificate and a firewall rule from `control` to the Incus nodes. Out of scope for v1, keep it in mind.
-8. `Image` has `spec.source.remote` (default `images`, i.e. linuxcontainers.org), `name` (for example `debian/13/cloud`), `architecture` (default `x86_64`, the compute nodes'). Use a `cloud` image if the VM must accept `spec.sshPublicKeys`.
+8. `Image` has `spec.source.remote` (default `images`, that is linuxcontainers.org), `name` (for example `debian/13/cloud`), `architecture` (default `x86_64`, the compute nodes'). Use a `cloud` image if the VM must accept `spec.sshPublicKeys`.
 
 ## 6. Order of work
 

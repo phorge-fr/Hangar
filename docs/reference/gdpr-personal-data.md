@@ -1,4 +1,10 @@
-# GDPR notes: cookies, third parties and personal data
+---
+type: reference
+audience: maintainer or contributor who adds a cookie, a third-party host, or a log of personal data
+verified: 2026-10-27
+---
+
+# GDPR: cookies, third parties and personal data inventory
 
 Working notes for the sign-in (`auth.phorge.fr`, `cap.phorge.fr`) and the rules the frontend will have to follow. Facts marked **checked** were measured on the live sign-in page on 2026-10-27 (headless Chromium, DevTools: cookies, storage and every host contacted). The legal readings come from the CNIL guidance as remembered, they are not legal advice: have a DPO or a lawyer confirm them before they go in a privacy policy.
 
@@ -36,19 +42,11 @@ Server side, authentik can also ask Gravatar for an avatar (the network policy o
 | authentik database, events | Action, user name, e-mail, **client address**, **user agent**, country and network (GeoIP) | 365 days (`event_retention`) | `gdpr_compliance` is on: the events of a user are deleted with the user. |
 | authentik database, reputation | Address, score, country and network of an address that failed a sign-in | Until the entry expires | Used to close the flow to an abusive address. |
 | Loki, `{namespace="authentik"}` | The same events as JSON log lines (`Created Event`), the `Updated score` lines (address, typed identifier, score) and the `Sign-in flow started` lines (address, country, network, score, request id), one per start of the flow, so also for visitors who never sign in | 30 days (`retention_period: 720h`) | Includes the raw `context.username`: what a visitor typed in the user name field, which can be a password typed in the wrong field. The password field itself is masked. |
-| Loki, `{namespace="traefik"}` | The HTTP audit log of the Traefik of every cluster (`docs/http-audit.md`): client **address**, host and path requested (query string dropped), method, status, duration, **user agent**, router and service, country and network of the client | 30 days (`retention_period: 720h`) | Every visitor of a public host is in it, whether or not they sign in. The `Authorization` and `Cookie` headers and the `Referer` are not kept. |
-| Kubernetes API server audit log (`docs/kubernetes-audit.md`) | The **user** of each request (a person's certificate or a service account), the **address** and the **tool** of the client, the verb, the object (resource, namespace, name) and the result. Never the content of a secret or a configmap. | 3 days on the node, then Loki: 30 days | Data of the administrators. A command given to `exec` is in the URI. |
+| Loki, `{namespace="traefik"}` | The HTTP audit log of the Traefik of every cluster ([the HTTP audit log](../explanation/http-audit-log.md)): client **address**, host and path requested (query string dropped), method, status, duration, **user agent**, router and service, country and network of the client | 30 days (`retention_period: 720h`) | Every visitor of a public host is in it, whether or not they sign in. The `Authorization` and `Cookie` headers and the `Referer` are not kept. |
+| Kubernetes API server audit log ([the Kubernetes audit log](../explanation/kubernetes-audit-log.md)) | The **user** of each request (a person's certificate or a service account), the **address** and the **tool** of the client, the verb, the object (resource, namespace, name) and the result. Never the content of a secret or a configmap. | 3 days on the node, then Loki: 30 days | Data of the administrators. A command given to `exec` is in the URI. |
 | Discord (alert webhook) | Action, user name, country, request id, nothing else | Discord's own | Minimised on purpose: no address, no e-mail, no browser. The request id finds the full line in Loki. A US processor: record it in the register. |
 | Brevo (SMTP relay) | The e-mail address and the content of the mails authentik sends (recovery, notifications) | Brevo's own | French provider, still a processor to list. |
 | GeoIP | Nothing leaves the cluster: the lookups are local (authentik uses MaxMind GeoLite2, Alloy the DB-IP lite databases). The only thing fetched from outside is the database files, by the init container of Alloy, which sends nothing about the visitors. | | DB-IP lite is CC BY 4.0: keep the credit "IP Geolocation by DB-IP" where the map is shown. |
-
-## Decisions still to take
-
-1. **Retention of the logs.** 30 days in Loki and 365 days in the database do not match, and neither was chosen against a rule. The CNIL recommends a few months for connection logs (6 months is the figure remembered). As a hosting provider (tenants, VMs) Phorge may also owe the authorities identification and connection data for one year (LCEN, 2021 decree on the data kept by hosting providers). To settle with a lawyer, then set one duration: `limits_config.retention_stream` in `overlays/core/apps/loki/loki.yml` can give `{namespace="authentik"}` its own period without changing the rest of Loki (check the size of the volume first).
-2. **The two third-party hosts above.** Fix them, or document the legal basis and the transfer.
-3. **A privacy policy and a legal notice**, linked from the sign-in page (the brand has footer links, `branding_footer_links` or the brand's `attributes`, to check). It must say which data is kept, why, for how long and who the processors are (this page is the source).
-4. **Rights of the persons.** Access and erasure: the database part is covered by `gdpr_compliance` and the user deletion. For Loki, the delete API is available (`delete_request_store: filesystem`), but there is no procedure written; write it before the first request.
-5. **A register of processing** (article 30) with the table above as a start.
 
 ## Rules for the frontend
 
@@ -59,6 +57,4 @@ Server side, authentik can also ask Gravatar for an avatar (the network policy o
 - Do not put personal data in URLs or in client-side logs.
 - Links to the privacy policy and the legal notice on every page, the sign-in included.
 
-## Measuring again
-
-After any change to the sign-in (a new stage, a new asset, a new widget), repeat the measure: open the flow in a clean headless Chromium over the DevTools protocol, wait for the captcha, then read `Network.getAllCookies`, `localStorage`, `sessionStorage` and the list of hosts from `Network.requestWillBeSent`. The cookies of a signed-in session are still to measure.
+Open decisions are in [GDPR: decisions still to take](../explanation/gdpr-open-decisions.md).

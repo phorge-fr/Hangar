@@ -1,4 +1,10 @@
-# Router monitoring (MKTXP)
+---
+type: how-to
+audience: maintainer whose Network dashboard went empty
+verified: 2026-10-28
+---
+
+# Fix an empty router dashboard
 
 MKTXP runs on `core` (`overlays/core/apps/mktxp/`); its dashboard is `grafana-dashboards/mktxp-dashboard.yml` (Grafana folder "Network"). It reads the router through the RouterOS API over TLS, checked against the router CA stored in a ConfigMap, as a read-only RouterOS user allowed only from the `core` nodes.
 
