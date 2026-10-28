@@ -31,24 +31,23 @@ An audit log of everything is enormous: the API servers answer about 25 requests
 | control | 0.7 per second | 0.17 | 60 000 to 75 000 | 50 to 60 MB |
 | svc | 0.13 per second | 0.09 | 10 000 to 20 000 | 10 to 15 MB |
 
-The upper bound for the secrets counts the reads of the kubelets too, which the policy leaves out, and a record is about 0.8 KB. Loki compresses JSON like this by about ten. **First measure (`svc`, 2026-10-27, 12 minutes after the first node restarted):** 2 715 records, 2 574 of them from `kubernetes-admin`, 2 519 of those from k0s itself and 72 from `k9s` and `kubectl`; the other service accounts made 140. After leaving the admin reads out, what is left is the 140 plus the changes of the person, about 0.2 records a second.
+The upper bound for the secrets counts the reads of the kubelets too, which the policy leaves out, and a record is about 0.8 KB. Loki compresses JSON like this by about ten. **Measured on 2026-10-28, with the policy of this page, about ten hours after each apply** (Loki, `{job="k8s-audit"}`):
+
+| Cluster | Records | Bytes (uncompressed) | Per day | What fills it |
+|---|---|---|---|---|
+| `svc` | 7 109 in 10.5 h | 10.8 MB | about 16 000 records, 25 MB | `helm-controller` and `kustomize-controller` patches, secret reads and watches |
+| `core` | 19 947 in 10 h | 30.4 MB | about 48 000 records, 73 MB | the same, plus Grafana and Longhorn watching secrets |
+| `control` | 1 077 in 7 min, just after the restarts | | to measure again after a day (Crossplane updates its CRDs and managed resource definitions, 337 `update` of `managedresourcedefinitions` in the first 7 minutes) | Crossplane |
+
+A record is about 1.5 KB, twice the 0.8 KB assumed, and the records are 1.2 to 2.4 times the estimate. Most of it is **Flux**: its two controllers apply with server-side apply, which is a `patch` that is recorded at every reconciliation even when nothing changes (`configmaps`, `ciliumnetworkpolicies`, `helmcharts`, `namespaces`, `secrets`), and read secrets for the decryption (`get`, `list`). Loki compresses this JSON about ten times, so the three clusters are roughly 15 to 25 MB a day stored, which is nothing for the volume of Loki. If it has to go down, the lever is to leave out the `patch` and `update` of the two Flux service accounts (what Flux applies is in Git, and the log would then say who did something by hand but not what Flux applied): not done, it is a decision about what the audit is for.
 
 These are estimates from metrics, not measures: check them after the first day, with `sum(count_over_time({job="k8s-audit"}[1d]))` and `sum(bytes_over_time({job="k8s-audit"}[1d]))` in Loki, and with `rate(apiserver_audit_event_total[1h])` in Prometheus (the API server exposes it once the audit is on). If a cluster is louder than this, look at the top `user_username` and `objectRef_resource` of the dashboard: it is almost always one controller that is worth adding to the policy.
 
 ## Turning it on
 
-Everything that Flux manages (Alloy, the dashboard) is deployed by the merge and does nothing until the file exists. The API server changes with `k0sctl apply`, through the script that wraps it (`docs/k0sctl-apply.md` says what the tool does and why the script is built the way it is):
+Everything that Flux manages (Alloy, the dashboard) is deployed by the merge and does nothing until the file exists. The API server changes with `k0sctl apply`, following the procedure in the README of the cluster (`clusters/<cluster>/setup/README.md`); [k0sctl-apply.md](k0sctl-apply.md) says what the tool does and what was measured. Short version: one cluster at a time, `svc`, then `core`, then `control`; it stops and starts the k0s service of every controller one after the other, and the API server of each node is down for 30 to 90 seconds. Do not do it on `control` while the end-to-end tests of the API run. A change of `clusters/audit-policy.yaml` needs the same (the API server reads it when it starts).
 
-```
-clusters/k0sctl-apply.sh svc --dry-run     # the plan, nothing is changed
-clusters/k0sctl-apply.sh svc               # asks, then applies; then core, then control
-```
-
-One cluster at a time, `svc`, `core`, then `control`, and look at the result printed at the end before the next one. Expect, for each controller of the cluster, a stop and a start of the k0s service (30 to 90 seconds) while the API server of that node is down: the dry run shows that `k0sctl apply` does this on every controller as soon as one uploaded file has a different date from the remote one, which is the case here for the policy, the drop-in of the audit directory and the GOMEMLIMIT drop-in that was put on the nodes by hand (issue #203). Do not run it on `control` while the end-to-end tests of the API run.
-
-`svc` was first configured by hand on 2026-10-27 (the flags in `/etc/k0s/k0s.yaml`, the files, the directory), before the dry run showed what `k0sctl apply` does; `k0sctl apply` brings it back to what Git says, and the restart it does loads the current policy. `core` and `control` have not been touched.
-
-To check afterwards (the script prints most of it): `kubectl get nodes` (all Ready), `ssh root@<node> 'tail -n1 /var/lib/k0s-audit/audit.log'`, and in Grafana `{job="k8s-audit", cluster="<cluster>"}` has lines from the three nodes.
+`svc` was first configured by hand on 2026-10-27, before the dry run showed what `k0sctl apply` does; the apply of 2026-10-28 brought it back to what Git says. To check the audit afterwards: `ssh root@<node> 'tail -n1 /var/lib/k0s-audit/audit.log'`, and in Grafana `{job="k8s-audit", cluster="<cluster>"}` has lines from the three nodes.
 
 ## What it does not cover
 

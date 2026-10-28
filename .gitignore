@@ -6,3 +6,5 @@ age.agekey
 k0s_backup_*
 kubeconfig
 .claude
+# The decrypted copy of a k0s-cluster.yml that k0sctl is applied from (it holds the VRRP password in clear)
+.k0s-cluster.apply.yml
