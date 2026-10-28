@@ -297,7 +297,7 @@ spec:
             # Best effort: the old file stays when the download fails, and the pod starts either way.
             initContainers:
                 - name: geoip
-                  image: docker.io/curlimages/curl:8.15.0
+                  image: docker.io/curlimages/curl:8.23.0
                   securityContext:
                       runAsUser: 0
                   command:
