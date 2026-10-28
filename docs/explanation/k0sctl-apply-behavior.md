@@ -12,7 +12,7 @@ verified: 2026-10-28
 
 For every file of `files:` (the GOMEMLIMIT drop-in, the audit policy, the audit directory drop-in), k0sctl compares the **modification date** with the one of the remote file. When they differ the host is "marked for upgrade", and for every host marked it will *stop the k0s service, reinstall it and start it*, even when k0s is already in the version of the config ("k0s will be upgraded"). The `--debug` trace says it:
 
-```
+```text
 file modtimes for .../k0scontroller-gomemlimit.conf differ (2026-10-27 02:16:04 +0100 CET vs 2026-10-24 18:58:06 +0200 CEST)
 marked for upgrade because file was changed for upload .../k0scontroller-gomemlimit.conf
 ```

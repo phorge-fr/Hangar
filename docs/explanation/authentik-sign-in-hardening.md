@@ -24,7 +24,7 @@ What the address is now: a visitor from outside, the real address; a client of t
 
 **The logs.** authentik writes each event as a JSON line (`"event": "Created Event"`) on the standard output of the server, and Alloy sends every pod log to Loki. The fields (`action`, `client_ip`, `user_username`, `context_geo_country`, `request_id`) are not Loki labels, they are extracted at query time with `| json`. In Grafana, Explore, Loki:
 
-```
+```logql
 {namespace="authentik"} |= "Created Event" | json | action="login_failed"
 {namespace="authentik"} |= "Created Event" | json | action="login" | context_geo_country != "FR"
 {namespace="authentik"} |= "Created Event" | json | request_id="<id from the Discord message>"
@@ -32,7 +32,7 @@ What the address is now: a visitor from outside, the real address; a client of t
 
 Two kinds of line carry the reputation. authentik logs `Updated score` (`for_ip`, `for_user`, `amount` = the new score of that identifier) at each failed or successful sign-in. The policy `phorge-authentication-audit` logs `Sign-in flow started` (`client_ip`, `country`, `continent`, `asn`, `as_org`, `reputation` = the score of the address before the attempt) each time the flow starts, including for a visitor who stops at the captcha, who raises no event. It always returns False and the flow passes when any of its policies passes, so it never decides anything: keep the flow in mode `any`.
 
-```
+```logql
 {namespace="authentik"} |= "Sign-in flow started" | json | country != "FR"
 {namespace="authentik"} |= "Updated score" | json | amount < 0
 {namespace="authentik"} |= "Sign-in flow started" | json | reputation <= -3
@@ -44,7 +44,7 @@ Loki keeps the lines for 30 days and the authentik database keeps the events for
 
 **A blueprint in `error` right after a deploy.** Changing a blueprint and the variable it reads in the same change makes the worker that is still running apply the new blueprint before it has the variable: the instance goes to `error` and nothing of the new content exists. `blueprints_discovery` applies it again every hour (at :32) and fixes it by itself; to do it at once:
 
-```
+```bash
 kubectl --context core -n authentik exec deploy/authentik-worker -- ak shell -c "
 from authentik.blueprints.models import BlueprintInstance
 from authentik.blueprints.v1.tasks import apply_blueprint

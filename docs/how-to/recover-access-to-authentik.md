@@ -10,13 +10,13 @@ Everything below runs on the `core` cluster. Start with the least invasive.
 
 **A sign-in loop or a locked account.** Create a recovery key for the account (valid 60 minutes by default) and open the link it prints:
 
-```
+```bash
 kubectl --context core -n authentik exec deploy/authentik-server -- ak create_recovery_key 60 akadmin
 ```
 
 **The captcha does not load** (Cap down, key lost, widget broken). Unbind the stage from the flow so the sign-in works without it, fix Cap, then let Flux restore the binding (it comes back by itself at the next blueprint apply, or suspend `apps` and `flux-system` first to keep it off):
 
-```
+```bash
 kubectl --context core -n authentik exec deploy/authentik-server -- ak shell -c "
 from authentik.flows.models import FlowStageBinding
 print(FlowStageBinding.objects.filter(target__slug='phorge-authentication-flow', stage__name='phorge-authentication-captcha').delete())"
@@ -26,7 +26,7 @@ If the Cap site key is gone (the Valkey volume was lost), create a new one: log 
 
 **An address is refused by the reputation policy.** Clear its score:
 
-```
+```bash
 kubectl --context core -n authentik exec deploy/authentik-server -- ak shell -c "
 from authentik.policies.reputation.models import Reputation
 print(Reputation.objects.filter(score__lte=-5).delete())"

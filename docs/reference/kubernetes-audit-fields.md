@@ -14,7 +14,7 @@ The dashboard reads `{job="k8s-audit"} | json`. The fields are `user_username`, 
 
 ## Queries
 
-```
+```logql
 {job="k8s-audit", cluster="core"} | json | verb=~"create|update|patch|delete" | user_username !~ "system:serviceaccount:.*"
 {job="k8s-audit"} | json | responseStatus_code=~"401|403"
 {job="k8s-audit"} | json | objectRef_resource="secrets" | user_username !~ "system:serviceaccount:flux-system:.*"

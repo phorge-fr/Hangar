@@ -10,7 +10,7 @@ The log is written by Traefik and read in Loki; [how it works](../explanation/ht
 
 ## Queries and fields
 
-```
+```logql
 {namespace="traefik"} |= "ClientHost" | json | GeoCountry != "FR" | GeoCountry != ""
 {namespace="traefik"} |= "ClientHost" | json | DownstreamStatus >= 400
 {namespace="traefik"} |= "ClientHost" | json | RequestHost = "git.phorge.fr" | ClientHost = "<address>"

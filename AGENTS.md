@@ -6,7 +6,7 @@ Instructions for anyone working in this repository, human or AI assistant. The o
 
 The GitOps source of truth of the three Kubernetes clusters (`control`, `core`, `svc`), reconciled by Flux. Whatever is on `main` is what the clusters run. Secrets are encrypted with SOPS and age.
 
-```
+```text
 base/        shared manifests (controllers, configs, apps)
 overlays/    per-cluster Kustomize overlays: controllers/, configs/, apps/, resources/
 clusters/    per-cluster Flux entrypoints and setup guides (k0sctl)

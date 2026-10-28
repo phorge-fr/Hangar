@@ -14,7 +14,7 @@ GitOps repository for all Phorge Kubernetes clusters, managed with [FluxCD](http
 
 ## Repository Structure
 
-```
+```text
 base/          # Shared base manifests (controllers, configs, apps)
 clusters/      # Per-cluster Flux entrypoints and setup guides
 overlays/      # Per-cluster Kustomize overlays
