@@ -73,7 +73,7 @@ curl -s https://auth.phorge.fr/application/o/device/ -d client_id=49a1375b-c52a-
 #   with grant_type=urn:ietf:params:oauth:grant-type:device_code, device_code=..., client_id=...
 ```
 
-From a pod the URL is `https://openfga.core.phorge` with the CA above; from your machine use the port-forward (plain HTTP on `127.0.0.1`), the `.phorge` names do not resolve there. Never print, log or commit a key or a token. Never put a secret in a file that is not SOPS-encrypted (`age.agekey` at the root of Hangar decrypts; the rules are in `.sops.yaml`).
+From a pod the URL is `https://openfga.core.phorge` with the CA above; from your machine use the port-forward (plain HTTP on `127.0.0.1`), the `.phorge` names do not resolve there. Never print, log or commit a key, or a token. Never put a secret in a file that is not SOPS-encrypted (`age.agekey` at the root of Hangar decrypts; the rules are in `.sops.yaml`).
 
 The platform has an end-to-end suite you can run to check it is healthy before and after your work: `tests/e2e/run.sh fast` (a few minutes, no VM), the whole suite takes about an hour. Read `tests/e2e/README.md`. It creates tenants named `e2e-*`; **name yours differently** (`apitest-<run>-*`) so that its cleanup never touches your data and yours never touches its.
 
@@ -112,7 +112,7 @@ Rules that are yours to enforce, nothing below does it:
 
 - A key never exceeds its creator: to create a key, check that the caller holds the right behind **each** requested scope (`instances:write` needs `can_write_instances`, and so on). A key can only create keys if it has `memberships:write`, with a subset of its own scopes.
 - Tenants a user can see: `ListObjects(user:<email>, can_read_tenant, tenant)`.
-- The model has no relation for creating, resizing or deleting a **tenant**. In v1 those are reserved to a list of platform administrators (emails) read from the configuration. Do not change the model for this without asking: a model is immutable and versioned.
+- The model has no relation for creating, resizing, or deleting a **tenant**. In v1 those are reserved to a list of platform administrators (emails) read from the configuration. Do not change the model for this without asking: a model is immutable and versioned.
 
 ### 4.3 Resources
 
@@ -152,7 +152,7 @@ These are measured behaviours (see `tests/e2e/` and the issues). Build around th
 2. **A `Membership` cannot be edited.** A tuple cannot be changed in place; the XRD refuses the edit. To change a role: delete, wait until it is gone, create. There is **one `Membership` per user per tenant**; a second one is not composed (`Ready=False`). The owner of a tenant has `admin` from the `Tenant` itself and cannot be given a `Membership`; to hand a tenant over, give the new person `admin`.
 3. **An `Image` that a VM uses cannot be deleted.** An admission webhook refuses the delete with an "in-use" message that counts the usages (check the status code you actually get, do not rely on a particular one) and the API should answer `409 Conflict`. The refusal is remembered: when the last VM goes, the image goes by itself a few seconds later.
 4. **An `Instance` whose first start failed is stuck.** The provider keeps it as failed and refuses to destroy it. The only way out is to delete the `Instance` and create it again. The usual cause is an image that does not boot with secure boot (`alpine/3.22/cloud`): set `spec.secureBoot: false`. `status.problems` shows both errors.
-5. **Quotas are Incus's.** A plan limits VMs, CPU, memory, disk and networks per tenant. The refusal comes back in `status.problems` (`Reached maximum number of instances`, `Reached maximum aggregate value "100GiB" for "limits.disk"`), not as an error of your request: surface it. Stopped VMs count.
+5. **Quotas are Incus's.** A plan limits VMs, CPU, memory, disk, and networks per tenant. The refusal comes back in `status.problems` (`Reached maximum number of instances`, `Reached maximum aggregate value "100GiB" for "limits.disk"`), not as an error of your request: surface it. Stopped VMs count.
 6. **A VM deleted directly in Incus is recreated blank** by Crossplane. This is why Incus is read-only.
 7. **A tenant network subnet is chosen by Incus.** The provider does not return it, so the API cannot see it from Kubernetes. It could, in rare cases, fall in one of the router's VLANs (`10.1` to `10.5`, `10.10` to `10.12`); reading it from Incus after the tenant is `Ready` would need an Incus client certificate and a firewall rule from `control` to the Incus nodes. Out of scope for v1, keep it in mind.
 8. `Image` has `spec.source.remote` (default `images`, that is linuxcontainers.org), `name` (for example `debian/13/cloud`), `architecture` (default `x86_64`, the compute nodes'). Use a `cloud` image if the VM must accept `spec.sshPublicKeys`.
@@ -164,7 +164,7 @@ Each step ends with tests you ran, not only written. Open a pull request per ste
 | Step | Deliverable | Done when |
 |---|---|---|
 | 0 | Repository, `go.mod`, linter, CI, a `Dockerfile`, health (`/healthz`, `/readyz`) and `/metrics`, JSON logs, configuration from the environment (issuer, audience, OpenFGA URL and key, store id, platform admins) | `make test` and `make build` pass in CI, the image builds |
-| 1 | Authentication: JWT validation against the live JWKS, API key lookup and hash check | A real token from the device flow and a hand-made `ApiKey` object both authenticate; an expired or wrong one does not |
+| 1 | Authentication: JWT validation against the live JWKS, API key lookup, and hash check | A real token from the device flow and a hand-made `ApiKey` object both authenticate; an expired or wrong one does not |
 | 2 | Authorization: the `Check` and `ListObjects` wrappers, the scope-to-relation table, "a key never exceeds its creator" | Table-driven tests against the real `phorge-api` store with tuples you create and remove |
 | 3 | Tenants: list, get, create, patch, delete (foreground) | A tenant created through the API becomes `Ready`, and deleting it leaves nothing in Kubernetes nor in Incus |
 | 4 | Images and instances, with `status.problems` surfaced and the quota refusals | A VM boots from an image created through the API and is stopped and started with a patch |

@@ -4,9 +4,9 @@ audience: maintainer or contributor who adds a cookie, a third-party host, or a 
 verified: 2026-10-27
 ---
 
-# GDPR: cookies, third parties and personal data inventory
+# GDPR: cookies, third parties, and personal data inventory
 
-Working notes for the sign-in (`auth.phorge.fr`, `cap.phorge.fr`) and the rules the frontend will have to follow. Facts marked **checked** were measured on the live sign-in page on 2026-10-27 (headless Chromium, DevTools: cookies, storage and every host contacted). The legal readings come from the CNIL guidance as remembered, they are not legal advice: have a DPO or a lawyer confirm them before they go in a privacy policy.
+Working notes for the sign-in (`auth.phorge.fr`, `cap.phorge.fr`) and the rules the frontend has to follow. Facts marked **checked** were measured on the live sign-in page on 2026-10-27 (headless Chromium, DevTools: cookies, storage and every host contacted). The legal readings come from the CNIL guidance as remembered, they are not legal advice: have a DPO or a lawyer confirm them before they go in a privacy policy.
 
 ## Cookies and browser storage
 
@@ -42,7 +42,7 @@ Server side, authentik can also ask Gravatar for an avatar (the network policy o
 | authentik database, events | Action, user name, e-mail, **client address**, **user agent**, country and network (GeoIP) | 365 days (`event_retention`) | `gdpr_compliance` is on: the events of a user are deleted with the user. |
 | authentik database, reputation | Address, score, country and network of an address that failed a sign-in | Until the entry expires | Used to close the flow to an abusive address. |
 | Loki, `{namespace="authentik"}` | The same events as JSON log lines (`Created Event`), the `Updated score` lines (address, typed identifier, score) and the `Sign-in flow started` lines (address, country, network, score, request id), one per start of the flow, so also for visitors who never sign in | 30 days (`retention_period: 720h`) | Includes the raw `context.username`: what a visitor typed in the user name field, which can be a password typed in the wrong field. The password field itself is masked. |
-| Loki, `{namespace="traefik"}` | The HTTP audit log of the Traefik of every cluster ([the HTTP audit log](../explanation/http-audit-log.md)): client **address**, host and path requested (query string dropped), method, status, duration, **user agent**, router and service, country and network of the client | 30 days (`retention_period: 720h`) | Every visitor of a public host is in it, whether or not they sign in. The `Authorization` and `Cookie` headers and the `Referer` are not kept. |
+| Loki, `{namespace="traefik"}` | The HTTP audit log of the Traefik of every cluster ([the HTTP audit log](../explanation/http-audit-log.md)): client **address**, host and path requested (query string dropped), method, status, duration, **user agent**, router and service, country, and network of the client | 30 days (`retention_period: 720h`) | Every visitor of a public host is in it, whether, or not they sign in. The `Authorization` and `Cookie` headers and the `Referer` are not kept. |
 | Kubernetes API server audit log ([the Kubernetes audit log](../explanation/kubernetes-audit-log.md)) | The **user** of each request (a person's certificate or a service account), the **address** and the **tool** of the client, the verb, the object (resource, namespace, name) and the result. Never the content of a secret or a configmap. | 3 days on the node, then Loki: 30 days | Data of the administrators. A command given to `exec` is in the URI. |
 | Discord (alert webhook) | Action, user name, country, request id, nothing else | Discord's own | Minimised on purpose: no address, no e-mail, no browser. The request id finds the full line in Loki. A US processor: record it in the register. |
 | Brevo (SMTP relay) | The e-mail address and the content of the mails authentik sends (recovery, notifications) | Brevo's own | French provider, still a processor to list. |
@@ -50,7 +50,7 @@ Server side, authentik can also ask Gravatar for an avatar (the network policy o
 
 ## Rules for the frontend
 
-- First-party only: no CDN for scripts, fonts, icons or images. Bundle and serve them from our own hosts. This is the only way not to repeat the two findings above.
+- First-party only: no CDN for scripts, fonts, icons, or images. Bundle and serve them from our own hosts. This is the only way not to repeat the two findings above.
 - A session or authentication token is strictly necessary, whether it is a cookie or in `localStorage`; the exemption covers storage as much as cookies. Use `HttpOnly`, `Secure`, `SameSite=Lax` (or `Strict`) and the shortest lifetime that works. Anything else is optional and needs consent.
 - Any optional cookie or tracker waits for consent: nothing is written or loaded before the visitor answers, "reject all" is as visible as "accept all", the choice is remembered (the CNIL asks to ask again after 6 months at most) and no cookie lives longer than 13 months.
 - No analytics, session replay, chat or error-reporting widget from a third party without going through this page first. If one is needed, prefer a self-hosted tool configured to be exempt.

@@ -10,7 +10,8 @@ verified: 2026-10-28
 
 ## The rule that matters: the date of the files, not their content
 
-For every file of `files:` (the GOMEMLIMIT drop-in, the audit policy, the audit directory drop-in), k0sctl compares the **modification date** with the one of the remote file. When they differ the host is "marked for upgrade", and for every host marked it will *stop the k0s service, reinstall it and start it*, even when k0s is already in the version of the config ("k0s will be upgraded"). The `--debug` trace says it:
+<!-- vale Google.Will = NO -->
+For every file of `files:` (the GOMEMLIMIT drop-in, the audit policy, the audit directory drop-in), k0sctl compares the **modification date** with the one of the remote file. When they differ the host is "marked for upgrade", and for every host marked it *stops the k0s service, reinstalls it and starts it*, even when k0s is already in the version of the config (the plan says "k0s will be upgraded"). The `--debug` trace says it:
 
 ```text
 file modtimes for .../k0scontroller-gomemlimit.conf differ (2026-10-27 02:16:04 +0100 CET vs 2026-10-24 18:58:06 +0200 CEST)
@@ -21,7 +22,9 @@ marked for upgrade because file was changed for upload .../k0scontroller-gomemli
 - The GOMEMLIMIT drop-in (issue #203) had been put on the nodes by hand, so its remote date was not the local one: **the first apply that carried it restarted the controllers of every cluster**. That is the first test of the drop-in with k0sctl, and very likely what cut the clusters in issue #70.
 - **The date of a file in a Git checkout is the date of the checkout** (or of the last pull that changed it). On a fresh clone, or after changing branch, every uploaded file looks modified and the next apply restarts every controller, whatever the content. This is why the procedure starts by setting the date of the uploaded files to the date of their last commit: the same date on every machine and every checkout.
 - k0sctl configures 30 hosts at once by default. `--concurrency 1` makes it one host at a time. Within the phase "Upgrade controllers" it also waits for each k0s service to start before the next host.
-- `k0sctl apply --dry-run` (experimental, v0.31) reads only and prints what it would do: use it, and read "k0s will be upgraded" as "this node's API server will be down for 30 to 90 seconds".
+- `k0sctl apply --dry-run` (experimental, v0.31) reads only and prints what it would do: use it, and read "k0s will be upgraded" as "this node's API server is down for 30 to 90 seconds".
+
+<!-- vale Google.Will = YES -->
 
 ## What was measured
 
@@ -35,6 +38,6 @@ Prometheus saw no failed scrape of the API servers of `control` during the apply
 
 ## SOPS signs the whole file
 
-SOPS signs the **whole** file: the MAC covers every value, encrypted or not. Editing a plain line by hand (a flag, a path) makes `sops -d` fail with "MAC mismatch". It happened with the audit flags added in #246, which made the three files unreadable by the procedure of the READMEs until they were resealed (#250). `sops -e` signs again but rewrites the file with 2-space indents under lists, which `.yamllint.yml` refuses, so the committed layout has to be kept and only what SOPS changes carried over. [Reseal a k0s cluster file after a hand edit](../how-to/reseal-a-k0s-cluster-file.md) has the steps.
+SOPS signs the **whole** file: the MAC covers every value, encrypted, or not. Editing a plain line by hand (a flag, a path) makes `sops -d` fail with "MAC mismatch". It happened with the audit flags added in #246, which made the three files unreadable by the procedure of the READMEs until they were resealed (#250). `sops -e` signs again but rewrites the file with 2-space indents under lists, which `.yamllint.yml` refuses, so the committed layout has to be kept and only what SOPS changes carried over. [Reseal a k0s cluster file after a hand edit](../how-to/reseal-a-k0s-cluster-file.md) has the steps.
 
 The paths of `src:` in `files:` are relative to the directory of the config (`../../audit-policy.yaml` from `clusters/<cluster>/setup`); the dry run catches a wrong one before anything is touched.
