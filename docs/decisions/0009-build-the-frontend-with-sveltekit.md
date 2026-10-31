@@ -4,7 +4,7 @@ date: 2026-10-31
 decision-makers: l-nmch
 ---
 
-# Build the frontend with SvelteKit, UnoCSS and pnpm
+# Build the frontend with SvelteKit, UnoCSS, and pnpm
 
 ## Context and problem statement
 
@@ -21,7 +21,7 @@ The showcase site and the console of Phorge share one repository, `phorge-consol
 
 ## Considered options
 
-* Go with `templ`, HTMX and UnoCSS, in one binary.
+* Go with `templ`, HTMX, and UnoCSS, in one binary.
 * Astro in server mode, with UnoCSS.
 * SvelteKit with UnoCSS.
 * A single-page application (rejected at the outset: bad for SEO, tokens in the browser).
@@ -39,7 +39,7 @@ Chosen option: "SvelteKit with UnoCSS", with pnpm, deployed with `adapter-node`.
 * Good, because the showcase site is static HTML at the first response, which suits SEO and GEO, and the console and the showcase site share one toolchain.
 * Good, because UnoCSS only generates the classes the pages use, through its Vite plugin.
 * Bad, because a Node server uses more memory than a Go binary, on `svc` nodes that already use 58 % to 71 % of theirs ([0008](0008-keep-svc-and-host-the-frontend-on-it.md)).
-* Bad, because a pnpm dependency tree is a supply-chain surface: commit `pnpm-lock.yaml`, run `pnpm audit` in the CI and let Renovate keep it current, as `phorge-api` does for Go.
+* Bad, because a pnpm dependency tree is a surface for supply chain attacks: commit `pnpm-lock.yaml`, run `pnpm audit` in the CI and let Renovate keep it current, as `phorge-api` does for Go.
 * Neutral: the SEO and GEO work is still to do on the showcase site (structured data, sitemap, `hreflang`, `noindex` on the console). An `llms.txt` file has no proven effect.
 
 ### Confirmation
@@ -48,7 +48,7 @@ Measure the memory of the `svc` nodes before and after the first deployment, and
 
 ## Pros and cons of the options
 
-### Go with `templ`, HTMX and UnoCSS
+### Go with `templ`, HTMX, and UnoCSS
 
 * Good, because it is one small binary, with no JavaScript runtime.
 * Bad, because HTMX swaps HTML, so the console needs a server that renders it, and the maintainer already uses Node and pnpm: it would add a second toolchain for no gain.
@@ -67,4 +67,4 @@ Measure the memory of the `svc` nodes before and after the first deployment, and
 
 * [phorge-fr/.github#49](https://github.com/phorge-fr/.github/issues/49), [phorge-fr/.github#11](https://github.com/phorge-fr/.github/issues/11), [phorge-fr/.github#12](https://github.com/phorge-fr/.github/issues/12).
 * The edge routes of the showcase hosts are in [phorge-fr/Network#32](https://github.com/phorge-fr/Network/issues/32), the one of the console in [phorge-fr/Network#30](https://github.com/phorge-fr/Network/issues/30).
-* I did not check the current versions of SvelteKit, UnoCSS or Node, nor measured the memory of a SvelteKit server.
+* The current versions of SvelteKit, UnoCSS, and Node were not checked, and the memory of a SvelteKit server is not measured.
