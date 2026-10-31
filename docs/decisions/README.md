@@ -11,3 +11,4 @@ Records of choices that shaped the platform, in [MADR 4.0](https://adr.github.io
 | [0005 A cluster's ingress never routes outside the cluster](0005-no-ingress-outside-the-cluster.md) | accepted |
 | [0006 Authentik is configured only through blueprints](0006-authentik-as-code.md) | accepted |
 | [0007 Deny-all-by-default policy for tenant projects](0007-tenant-policy.md) | accepted |
+| [0008 Keep the svc cluster and host the frontend on it](0008-keep-svc-and-host-the-frontend-on-it.md) | accepted |

@@ -66,8 +66,8 @@ data:
                 - authorization_code
                 - refresh_token
                 - urn:ietf:params:oauth:grant-type:device_code
-              # TODO: the console host is not decided; this is the one the API's own host suggests. Add
-              # the real redirect URI (and a localhost one for development) when the console exists.
+              # The console is served at console.phorge.fr, on the svc cluster (docs/decisions/0008). A
+              # localhost redirect URI for development goes in with the console, once its dev server port is known.
               redirect_uris:
                 - matching_mode: strict
                   url: https://console.phorge.fr/oidc/callback
