@@ -10,9 +10,9 @@ data:
         metadata:
           name: crossplane
           labels:
-            blueprints.goauthentik.io/description: Service account of the Crossplane provider-authentik
+            blueprints.goauthentik.io/description: Service account of the Crossplane provider-http
         entries:
-          # An API key of Phorge is an Authentik identity: Crossplane (provider-authentik, control cluster) creates a service
+          # An API key of Phorge is an Authentik identity: Crossplane (provider-http, control cluster) creates a service
           # account and its token for each ApiKey, the way the admin interface of authentik does (POST
           # /api/v3/core/users/service_account/, which creates the account and an app password in one call). The token of
           # this account is the one the provider presents. It reaches Authentik on the API paths only, at
@@ -23,52 +23,58 @@ data:
           # Nobody but akadmin is a superuser, so this account is not one. A non-superuser cannot create a token for
           # somebody else through /core/tokens/ (authentik forces the owner to the caller), which is why the keys go
           # through the service account endpoint: it needs the right to add a user and to add a token, and the token it
-          # creates there belongs to the new account. The role holds those and the right to read and delete users (a
-          # global permission: authentik cannot scope it to the accounts of the keys). It cannot change a user, so it
-          # cannot put an account in a group, and it cannot read the key of a token.
+          # creates there belongs to the new account. The role holds those, and the right to read and delete tokens to
+          # observe and revoke a key (global permissions: authentik cannot scope them to the tokens of the keys).
+          # It holds no right on users beyond adding one: delete_user is global and let an account like this one delete
+          # akadmin, so an account of a key stays after its token is deleted, with no credential. It cannot change a
+          # user, so it cannot put an account in a group, and it cannot read the key of a token.
           # A blueprint only adds the permissions of a role, never removes them: to narrow a role, give the group a new one
-          # and delete the old one.
+          # and delete the old ones.
           - model: authentik_core.user
             id: crossplane-provider-user
             identifiers:
               username: crossplane-provider
             attrs:
               username: crossplane-provider
-              name: Crossplane provider-authentik (creates the identities of the API keys)
+              name: Crossplane provider-http (creates the identities of the API keys)
               type: service_account
               path: goauthentik.io/service-accounts
               is_active: true
           - model: authentik_rbac.role
-            id: crossplane-provider-service-accounts-role
+            id: crossplane-provider-api-keys-role
             identifiers:
-              name: crossplane-provider-service-accounts
+              name: crossplane-provider-api-keys
             attrs:
-              name: crossplane-provider-service-accounts
+              name: crossplane-provider-api-keys
               permissions:
-                - authentik_core.view_user
                 - authentik_core.add_user
-                - authentik_core.delete_user
                 - authentik_core.add_token
-          # The first role of this account held more (change user, tokens): replaced by the one above.
-          - model: authentik_rbac.role
-            state: absent
-            identifiers:
-              name: crossplane-provider
+                - authentik_core.view_token
+                - authentik_core.delete_token
           - model: authentik_core.group
             identifiers:
               name: crossplane-provider
             attrs:
               name: crossplane-provider
               roles:
-                - !KeyOf crossplane-provider-service-accounts-role
+                - !KeyOf crossplane-provider-api-keys-role
               users:
                 - !KeyOf crossplane-provider-user
+          # The earlier roles of this account held more (change user, tokens, delete user): replaced by the one above.
+          - model: authentik_rbac.role
+            state: absent
+            identifiers:
+              name: crossplane-provider-service-accounts
+          - model: authentik_rbac.role
+            state: absent
+            identifiers:
+              name: crossplane-provider
           - model: authentik_core.token
             identifiers:
               identifier: crossplane-provider
             attrs:
               identifier: crossplane-provider
-              description: Read by provider-authentik (control cluster) to manage the service accounts of the API keys
+              description: Read by provider-http (control cluster) to manage the service accounts of the API keys
               intent: api
               user: !KeyOf crossplane-provider-user
               expiring: false
