@@ -19,6 +19,10 @@ resources:
     - provider-kubernetes-local-rbac.yml
     - provider-kubernetes-local-clusterproviderconfig.yml
     - provider-openfga-clusterproviderconfig.yml
+    - provider-authentik.yml
+    - provider-authentik-secret.yml
+    - provider-authentik-providerconfig.yml
+    - provider-authentik-clusterproviderconfig.yml
     - function-environment-configs.yml
     - environmentconfig-phorge.yml
     - xrd-tenant.yml

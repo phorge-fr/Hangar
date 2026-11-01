@@ -1,0 +1,13 @@
+# Same reasoning as provider-openfga-clusterproviderconfig.yml: the namespaced resources (*.authentik.m.crossplane.io,
+# used by the phorge.fr compositions) reference a ClusterProviderConfig. Same credentials, nothing new to manage.
+apiVersion: authentik.m.crossplane.io/v1beta1
+kind: ClusterProviderConfig
+metadata:
+    name: default
+spec:
+    credentials:
+        source: Secret
+        secretRef:
+            namespace: crossplane-system
+            name: provider-authentik-creds
+            key: credentials
