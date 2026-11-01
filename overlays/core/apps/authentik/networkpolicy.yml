@@ -18,6 +18,15 @@ spec:
               - ports:
                     - port: "9000"
                       protocol: TCP
+        # The API for provider-authentik, on authentik.core.phorge (ingress-local.yml)
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-local-traefik
+          toPorts:
+              - ports:
+                    - port: "9000"
+                      protocol: TCP
         - fromEntities:
               - host
               - remote-node

@@ -1,0 +1,29 @@
+# The API of authentik for provider-authentik on the control cluster, through traefik-local (10.2.0.10, internal CA), as
+# openfga.core.phorge does for provider-openfga. Only /api/ is routed: the sign-in flows, the admin interface and the OIDC
+# endpoints stay on auth.phorge.fr. The name is in Network (authentik.core.phorge) and the control nodes reach 10.2.0.10:443
+# through the Alloy rule (see docs/reference/network-plan.md there).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: authentik-local
+    namespace: authentik
+    annotations:
+        cert-manager.io/cluster-issuer: local-issuer
+        cert-manager.io/common-name: authentik.core.phorge
+spec:
+    ingressClassName: traefik-local
+    tls:
+        - hosts:
+              - authentik.core.phorge
+          secretName: authentik-local-tls
+    rules:
+        - host: authentik.core.phorge
+          http:
+              paths:
+                  - path: /api/
+                    pathType: Prefix
+                    backend:
+                        service:
+                            name: authentik-server
+                            port:
+                                number: 80

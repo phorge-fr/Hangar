@@ -129,7 +129,7 @@ spec:
                     - port: "6443"
                       protocol: TCP
 ---
-# provider-incus manages the Incus nodes, provider-openfga the OpenFGA of core
+# provider-incus manages the Incus nodes, provider-openfga and provider-authentik the OpenFGA and the authentik of core
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -143,6 +143,7 @@ spec:
               values:
                   - provider-incus
                   - provider-openfga
+                  - provider-authentik
     egress:
         - toEntities:
               - world

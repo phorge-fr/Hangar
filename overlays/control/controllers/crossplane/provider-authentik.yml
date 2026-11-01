@@ -1,0 +1,10 @@
+# Crossplane provider for authentik (github.com/l-nmch/provider-authentik, published to the Upbound marketplace), an
+# Upjet port of goauthentik/terraform-provider-authentik. It creates the identity of an API key of Phorge (a service
+# account and its token). The credentials are in provider-authentik-secret.yml, the ProviderConfig in
+# provider-authentik-providerconfig.yml.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+    name: provider-authentik
+spec:
+    package: xpkg.upbound.io/l-nmch/provider-authentik:v0.1.0

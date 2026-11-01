@@ -5,6 +5,7 @@ resources:
     - secrets.yml
     - secret-phorge-api-directory.yml
     - secret-crossview.yml
+    - secret-crossplane-provider.yml
     - secret-smtp.yml
     - secret-cap.yml
     - secret-alerts.yml
@@ -13,7 +14,9 @@ resources:
     - blueprint-incus.yml
     - blueprint-phorge-api.yml
     - blueprint-crossview.yml
+    - blueprint-crossplane.yml
     - blueprint-brand.yml
     - blueprint-hardening.yml
     - ratelimit.yml
+    - ingress-local.yml
     - networkpolicy.yml

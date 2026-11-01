@@ -34,7 +34,7 @@ Chosen option: "blueprints only", because an unused or hand-copied secret is dri
 ### Blueprints only
 
 * Good, because reviewable and repeatable.
-* Bad, because a blueprint can grant object-level permissions only.
+* Bad, because a blueprint creates objects of its own list only: what Crossplane creates later (the service accounts and tokens of the API keys, see `provider-authentik`) is not in a blueprint. Its service account and its role are, so the permissions it holds stay in Git.
 
 ### Imperative steps
 
@@ -44,6 +44,6 @@ Chosen option: "blueprints only", because an unused or hand-copied secret is dri
 ## More information
 
 * A credential shared between Authentik and a workload is generated once and stored in two SOPS secrets that are both consumed: Authentik reads it with `!Env` in the blueprint, the workload with `secretKeyRef`.
-* Authentik 2026.8: an `authentik_core.token` entry accepts `key`; a blueprint grants object-level permissions only (`permissions:` on an entry), so scope a service account to one object; `Importer.validate()` is a dry run and safe against production.
+* Authentik 2026.8: an `authentik_core.token` entry accepts `key`; a blueprint grants object-level permissions on an entry (`permissions:`), and global permissions on a role (`permissions:` on an `authentik_rbac.role` entry, checked on 2026.8.5 by a dry run), so scope a service account to the objects it needs; `Importer.validate()` is a dry run and safe against production.
 * The default sign-in flow cannot be renamed because default blueprints are re-applied; Phorge has its own ([hardening](../explanation/authentik-sign-in-hardening.md)).
 * Applying a blueprint ConfigMap and the HelmRelease environment it reads in the same change leaves the instance in `error` until the hourly re-apply.
