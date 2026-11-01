@@ -1,0 +1,11 @@
+# Crossplane provider for HTTP APIs (github.com/crossplane-contrib/provider-http). It makes the one call the Terraform
+# provider of authentik has no resource for: POST /api/v3/core/users/service_account/, which creates the identity of an API
+# key of Phorge (a service account and its token). The credentials and the CA are in provider-http-authentik-secret.yml,
+# the ProviderConfig in provider-http-providerconfig.yml. Why this provider and not a patched provider-authentik: see
+# docs/decisions/0010-evaluate-zitadel-against-authentik.md.
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+    name: provider-http
+spec:
+    package: xpkg.upbound.io/crossplane-contrib/provider-http:v1.0.15
