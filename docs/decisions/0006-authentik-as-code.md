@@ -34,7 +34,7 @@ Chosen option: "blueprints only", because an unused or hand-copied secret is dri
 ### Blueprints only
 
 * Good, because reviewable and repeatable.
-* Bad, because a blueprint creates objects of its own list only: what Crossplane creates later (the service accounts and tokens of the API keys, see `provider-authentik`) is not in a blueprint. Its service account and its role are, so the permissions it holds stay in Git.
+* Bad, because a blueprint creates objects of its own list only: what Crossplane creates later (the service accounts and tokens of the API keys, created through `provider-http`) is not in a blueprint. Its service account and its role are, so the permissions it holds stay in Git.
 
 ### Imperative steps
 

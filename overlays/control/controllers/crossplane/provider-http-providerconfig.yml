@@ -1,0 +1,19 @@
+# ProviderConfig for provider-http, for the API of authentik. The token (Secret provider-http-authentik, key token) is the
+# one of the service account crossplane-provider, created by overlays/core/apps/authentik/blueprint-crossplane.yml: the same
+# value is in the Secret authentik-crossplane-provider of core, which authentik reads. A Request presents it with
+# "Bearer {{ provider-http-authentik:crossplane-system:token }}" in its headers. The API is on authentik.core.phorge
+# (traefik-local of core, certificate of the local CA): the CA is the public part of local-root-ca, as for provider-openfga.
+# Same reachability note as provider-openfga-providerconfig.yml: the control nodes reach 10.2.0.10:443 through the Alloy
+# rule of the Network repository.
+apiVersion: http.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+    name: authentik
+spec:
+    credentials:
+        source: None
+    tls:
+        caCertSecretRef:
+            namespace: crossplane-system
+            name: provider-http-authentik
+            key: ca.crt
