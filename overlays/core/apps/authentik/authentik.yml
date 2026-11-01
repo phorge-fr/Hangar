@@ -73,7 +73,7 @@ spec:
                           name: authentik-crossview-oidc
                           key: client-secret
                 # The key of the token of the service account crossplane-provider, read by blueprint-crossplane.yml (!Env). The same
-                # value is in the credentials of the Secret provider-authentik-creds of the control cluster, which is what the provider presents.
+                # value is in the Secret provider-http-authentik of the control cluster, which is what the provider presents.
                 - name: CROSSPLANE_PROVIDER_TOKEN
                   valueFrom:
                       secretKeyRef:

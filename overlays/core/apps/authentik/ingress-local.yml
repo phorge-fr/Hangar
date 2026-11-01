@@ -1,4 +1,4 @@
-# The API of authentik for provider-authentik on the control cluster, through traefik-local (10.2.0.10, internal CA), as
+# The API of authentik for provider-http on the control cluster, through traefik-local (10.2.0.10, internal CA), as
 # openfga.core.phorge does for provider-openfga. Only /api/ is routed: the sign-in flows, the admin interface and the OIDC
 # endpoints stay on auth.phorge.fr. The name is in Network (authentik.core.phorge) and the control nodes reach 10.2.0.10:443
 # through the Alloy rule (see docs/reference/network-plan.md there).
