@@ -66,6 +66,11 @@ data:
                 - authorization_code
                 - refresh_token
                 - urn:ietf:params:oauth:grant-type:device_code
+                # The API keys: a service account (created by Crossplane for each ApiKey, see Hangar#230) exchanges its user
+                # name and the app password of its token for a JWT of this client. The grant needs both, which only those
+                # accounts have; a person signs in with the flows above. A JWT that was issued stays valid for the lifetime
+                # of the access token of this provider, so a revoked key is refused at once by its OpenFGA tuples, not here.
+                - client_credentials
               # The console is served at console.phorge.fr, on the svc cluster (docs/decisions/0008). A
               # localhost redirect URI for development goes in with the console, once its dev server port is known.
               redirect_uris:
