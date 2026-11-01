@@ -75,9 +75,9 @@ If it fails, `/etc/k0s/k0s.yaml` is the config that k0sctl wrote: keep a copy of
 
 ### kube-apiserver memory limit
 
-`k0s-cluster.yml` uploads `k0scontroller-gomemlimit.conf` to `/etc/systemd/system/k0scontroller.service.d/gomemlimit.conf` on every node, which sets `GOMEMLIMIT=1100MiB` for `k0scontroller` and so for everything k0s spawns (kube-apiserver, etcd, kubelet). Without it the Go garbage collector lets the apiserver heap reach about twice the live heap (`GOGC=100`), and the apiserver is the largest process on every node.
+`k0s-cluster.yml` uploads `k0scontroller-gomemlimit.conf` to `/etc/systemd/system/k0scontroller.service.d/gomemlimit.conf` on every node, which sets `GOMEMLIMIT=1400MiB` for `k0scontroller` and so for everything k0s spawns (kube-apiserver, etcd, kubelet). Without it the Go garbage collector lets the apiserver heap reach about twice the live heap (`GOGC=100`), and the apiserver is the largest process on every node.
 
-The value is about 1.4 to 1.9 times the estimated peak live heap of this cluster's apiserver (~770 MiB): a limit closer to the live heap makes the GC run continuously (an A/B on `svc` with 700 MiB against a ~460 MiB peak showed GC CPU spikes four times higher than without the limit). Check `go_cpu_classes_gc_total_cpu_seconds_total` for the apiserver job before lowering it.
+The value is about 1.8 times the estimated peak live heap of this cluster's apiserver (~770 MiB), after the 1100 MiB of the first measurement proved too tight ([0011](../../../docs/decisions/0011-raise-the-control-apiserver-memory-limit.md)): a limit closer to the live heap makes the GC run continuously (an A/B on `svc` with 700 MiB against a ~460 MiB peak showed GC CPU spikes four times higher than without the limit). Check `go_cpu_classes_gc_total_cpu_seconds_total` for the apiserver job before lowering it.
 
 `k0sctl apply` uploads the file and restarts the controllers when its date differs from the remote one (the first time it did, on 2026-10-28, because the file had been put on the nodes by hand; the value in the API server process environment was then checked on every node). Nothing has to be restarted by hand: a change of the value is an apply of this cluster, as in step 1 above. Check `go_cpu_classes_gc_total_cpu_seconds_total` of the apiserver job after a change.
 
