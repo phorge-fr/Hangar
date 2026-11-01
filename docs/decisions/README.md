@@ -13,3 +13,4 @@ Records of choices that shaped the platform, in [MADR 4.0](https://adr.github.io
 | [0007 Deny-all-by-default policy for tenant projects](0007-tenant-policy.md) | accepted |
 | [0008 Keep the svc cluster and host the frontend on it](0008-keep-svc-and-host-the-frontend-on-it.md) | accepted |
 | [0009 Build the frontend with SvelteKit, UnoCSS, and pnpm](0009-build-the-frontend-with-sveltekit.md) | accepted |
+| [0010 Evaluate ZITADEL against Authentik as the identity provider](0010-evaluate-zitadel-against-authentik.md) | proposed |
