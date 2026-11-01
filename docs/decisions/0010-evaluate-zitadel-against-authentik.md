@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-01
 decision-makers: l-nmch
 ---
@@ -36,7 +36,7 @@ A throwaway stack on one machine, nothing deployed: ZITADEL v4.20.0 (API, login 
 
 ## Decision outcome
 
-Proposed, for the maintainer to decide: **replace Authentik with ZITADEL only if the three gaps in "Not equivalent" are accepted**; otherwise keep Authentik and carry Hangar#295. ZITADEL removes the blocker of the API keys and goes further on rights, but it is not a 100 % replacement: two hardening features do not exist, a third (the alert on a sign-in outside France) loses its source, and three small services would be needed.
+Chosen option: **keep Authentik**, and create the identity and token of an API key with `provider-http` (a public Crossplane provider) calling `POST /api/v3/core/users/service_account/` with a narrow identity, instead of waiting for the upstream resource of Hangar#295. ZITADEL removes the blocker and goes further on rights, but it is not a 100 % replacement: two hardening features do not exist, a third (the alert on a sign-in outside France) loses its source, and three small services would be needed. The lighter footprint and the ready-made provider are the reasons to look at it again if Authentik keeps getting in the way.
 
 ### Results
 
@@ -117,20 +117,32 @@ Idle, then after 300 token requests: ZITADEL 108 then 114 MiB, login 120 MiB, Po
 
 ### Confirmation
 
-If accepted, a migration epic starts with: the claims target and the gate in a pull request each, the key composition of Hangar#230 on ZITADEL, and a measurement of memory on `core` with real data before Authentik is removed.
+The `ApiKey` composition of Hangar#230 creates a `Request` of `provider-http` and a connection secret; a test creates a key, authenticates with it, deletes it and checks that the token is gone.
+
+#### API keys with provider-http
+
+Tested on a throwaway Authentik 2026.8.5 with `provider-http` v1.0.15 on Crossplane 2.4.3:
+
+* A `Request` with `CREATE` (POST to `service_account/`), `OBSERVE` (GET of the token) and `REMOVE` (DELETE of the token) created the account and its `app_password` token with the expiry date, and the `Request` became ready and synced. Several reconciles created one account only.
+* `secretInjectionConfigs` put `.body.token` into a Secret with an owner reference, and the key was not left in plain text in the status of the `Request`. The Secret is deleted with the `Request`.
+* The identity needs exactly `add_user`, `add_token`, `view_token` and `delete_token`. With it: a user without a role got 403 on listing users, on deleting or editing `akadmin`, on groups, providers and roles; adding a user to the superuser group was refused three ways; a token created for another user belongs to the caller (nothing is created for `akadmin`); the key of a token is never returned (`key` is null, `view_key` is 403).
+* The role of Hangar#294 as written (`add_user`, `add_token`, `view_user`, `delete_user`) is too wide: `delete_user` is global and the identity **deleted `akadmin`** (204). It has to be replaced by `delete_token` and `view_token`.
+* What the narrow identity can still do: create stray internal users without group or password, list the identifiers (not the keys) of every token, and delete any token, so a compromised `control` can break the keys and the outpost token, but it cannot take over an account or delete one.
+* Deleting the `Request` deletes the token and leaves the service account, with no credential. The accounts are named after the key, so they do not collide, and an administrator removes the leftovers.
+* A custom `isRemovedCheck` that accepts any 200 stops the `REMOVE` from running: leave the default, which waits for the 404 of the token.
 
 ## Pros and cons of the options
 
-### Keep Authentik and carry Hangar#295
+### Keep Authentik and carry Hangar#295 (rejected for the API keys)
 
 * Good, because every hardening feature and every consumer works today.
-* Bad, because the API keys wait for an upstream contribution and a release, and the key manager would still be more privileged than the task needs until then.
+* Bad, because the API keys would wait for an upstream contribution and a release. `provider-http` avoids the wait and keeps `provider-authentik` identical to the Terraform provider.
 * Bad, because the memory stays as it is.
 
-### Replace Authentik with ZITADEL
+### Replace Authentik with ZITADEL (not chosen)
 
 * Good, because it removes the blocker and gives finer rights, see Consequences.
-* Bad, because of the gaps and the services above.
+* Bad, because of the gaps and the services above, and the size of the migration.
 
 ## More information
 
