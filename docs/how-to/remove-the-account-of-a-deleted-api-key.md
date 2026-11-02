@@ -1,7 +1,7 @@
 ---
 type: how-to
 audience: administrator cleaning up the accounts that old API keys left
-verified: 2026-11-03
+verified: 2026-11-02
 ---
 
 # Remove the account of a deleted API key
