@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
     - authentik.yml
     - secrets.yml
-    - secret-phorge-api-directory.yml
     - secret-crossview.yml
     - secret-crossplane-provider.yml
     - secret-smtp.yml

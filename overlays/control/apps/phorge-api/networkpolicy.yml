@@ -3,7 +3,8 @@
 # remote-node identity: a NetworkPolicy on the namespace of Alloy would drop them, and only the pods on Alloy's own node would be
 # scraped (the same as base/apps/monitoring/flux-networkpolicy.yml). Nothing else in the cluster has a reason to call the API,
 # which holds a ServiceAccount that can create and delete tenants. Egress is what the API calls: the Kubernetes API, and OpenFGA on
-# core and authentik (the keys of its tokens), both reached over HTTPS through their addresses on the network.
+# core and authentik (the keys of its tokens), both reached over HTTPS through their addresses on the network. The API only asks
+# authentik for its JWKS: the accounts of the API keys are made by Crossplane.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
