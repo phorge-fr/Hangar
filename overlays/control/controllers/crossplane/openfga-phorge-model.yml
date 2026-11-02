@@ -9,12 +9,21 @@
 # can_* relations are what the API checks, for a user (through a role) or for a key (through a
 # scope). A key never exceeds what its creator held: the API checks that when it creates the key.
 #
-# Models are immutable and versioned: changing modelDsl writes a new version, tuples are written
-# without a model ID so OpenFGA always evaluates them against the latest one.
+# A key expires in OpenFGA, not in Authentik: its tuples carry the condition not_expired with
+# expires_at in their context, and the API sends current_time with every Check. Past the date
+# the key grants nothing, at the second, with nobody deleting anything. A question without
+# current_time is an error, never a "yes".
+#
+# Models are immutable and versioned, and so is this resource: provider-openfga cannot change a model
+# in place (model_json forces a replacement, upjet forbids the destroy, and OpenFGA deletes nothing).
+# To change the model, copy this object under the next name (phorge-api-3, ...) with the new modelDsl
+# and remove the old one in the same change: Flux creates the new version, which becomes the latest,
+# and prunes the old object (its delete does nothing in OpenFGA). Tuples are written without a model
+# ID so OpenFGA always evaluates them against the latest version. Nothing references this name.
 apiVersion: model.openfga.m.crossplane.io/v1alpha1
 kind: AuthorizationModel
 metadata:
-    name: phorge-api
+    name: phorge-api-2
     namespace: phorge-system
 spec:
     forProvider:
@@ -39,13 +48,13 @@ spec:
                 define user: [user, group#member] or operator
                 define viewer: [user, group#member] or user
 
-                define key_tenant_read: [apikey]
-                define key_instances_read: [apikey]
-                define key_instances_write: [apikey]
-                define key_images_read: [apikey]
-                define key_images_write: [apikey]
-                define key_memberships_read: [apikey]
-                define key_memberships_write: [apikey]
+                define key_tenant_read: [apikey with not_expired]
+                define key_instances_read: [apikey with not_expired]
+                define key_instances_write: [apikey with not_expired]
+                define key_images_read: [apikey with not_expired]
+                define key_images_write: [apikey with not_expired]
+                define key_memberships_read: [apikey with not_expired]
+                define key_memberships_write: [apikey with not_expired]
 
                 define can_read_tenant: viewer or key_tenant_read
                 define can_read_instances: viewer or key_instances_read
@@ -54,3 +63,7 @@ spec:
                 define can_write_images: operator or key_images_write
                 define can_read_memberships: admin or key_memberships_read
                 define can_write_memberships: admin or key_memberships_write
+
+            condition not_expired(current_time: timestamp, expires_at: timestamp) {
+              current_time < expires_at
+            }
