@@ -3,7 +3,9 @@
 # memberships and API keys are Kubernetes objects, and what a caller may do is decided by OpenFGA.
 #
 # Configuration is the environment. Nothing in it is secret except the OpenFGA key, which is the Secret phorge-api-openfga
-# (secrets.yml). The Authentik client id is public (the application is a public client, blueprint-phorge-api.yml).
+# (secrets.yml). The Authentik client id is public (the application is a public client, blueprint-phorge-api.yml). The API
+# holds no credential for authentik: it checks the tokens against its JWKS, and the accounts of the API keys are made by
+# Crossplane (composition-apikey.yml).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -72,16 +74,6 @@ spec:
                       # delete tenants. The group is created by blueprint-phorge-api.yml, its members are added in authentik.
                       - name: PLATFORM_ADMIN_GROUP
                         value: phorge-platform-admins
-                      # An API key acts as its owner and carries no group, so the API asks authentik whether the owner is still a
-                      # member of the group above, with the token of the service account phorge-api-directory, which can read
-                      # that one group (blueprint-phorge-api.yml).
-                      - name: AUTHENTIK_URL
-                        value: https://auth.phorge.fr
-                      - name: AUTHENTIK_TOKEN
-                        valueFrom:
-                            secretKeyRef:
-                                name: phorge-api-authentik
-                                key: token
                       # What decides how the API behaves is written here and nowhere in its code: it refuses to start without these.
                       # A stop sent while a VM boots is lost (the power button is pressed before anything listens) and then hangs for
                       # up to an hour, so the API refuses one for this long after a creation or a start. Measured on
@@ -92,19 +84,13 @@ spec:
                       # A start or a stop that lasts longer than this is reported in the problems of the instance.
                       - name: INSTANCE_STUCK_AFTER
                         value: 10m
-                      # An API key expires, within this: 366 days. 0 would allow permanent keys.
+                      # An API key always expires, within this: 366 days. 0 would not cap it.
                       - name: API_KEY_MAX_LIFETIME
                         value: 8784h
-                      # Who creates and changes API keys: platform-admins, or users to open it to every person signed in
-                      # (a key never exceeds its owner). Anyone lists and revokes their own.
+                      # Who creates API keys: platform-admins, or users to open it to every person signed in (a key never
+                      # exceeds what its creator holds). Anyone lists, renames and revokes their own.
                       - name: API_KEY_CREATION
                         value: platform-admins
-                      # How long the members of the platform administrators group are remembered, which is also how long a person
-                      # removed from it keeps what it gave to their keys, and how long a request to authentik may last.
-                      - name: AUTHENTIK_CACHE_TTL
-                        value: 1m
-                      - name: AUTHENTIK_TIMEOUT
-                        value: 10s
                       # The container limit is 192 MiB: make the GC reclaim before it is reached.
                       - name: GOMEMLIMIT
                         value: 150MiB
