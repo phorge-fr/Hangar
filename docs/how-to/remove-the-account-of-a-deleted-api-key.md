@@ -12,7 +12,7 @@ The commands run inside the authentik server of `core` (`ak shell`, no token of 
 
 ## List the leftovers
 
-The accounts of the keys, with the number of tokens each one holds. An account with `tokens=0` is a leftover, unless its `ApiKey` still exists.
+To see them first: the accounts of the keys, with the number of tokens each one holds. An account with `tokens=0` is a leftover, unless its `ApiKey` still exists.
 
 ```bash
 kubectl --context core -n authentik exec deploy/authentik-server -- ak shell -c '
@@ -22,29 +22,22 @@ for u in User.objects.filter(username__startswith="apikey-").order_by("username"
 ' 2>&1 | grep '^RESULT'
 ```
 
-## Remove one
+## Remove every leftover
 
-1. Set the name of the key, without the `apikey-` prefix (`apikey-e2e-313` is the key `e2e-313`), and check that the key is really gone: the command must answer `NotFound`.
+One command. It deletes each service account `apikey-*` that holds no token and whose `ApiKey` no longer exists, and it prints the accounts it deleted. An account with a token, or whose `ApiKey` exists, is never touched. It stops before deleting anything if `control` cannot be read.
 
-   ```bash
-   NAME=e2e-313
-   kubectl --context control -n phorge-keys get apikeys.phorge.fr "$NAME"
-   ```
-
-2. Delete the account. It refuses an account that still has a token, and it only touches a service account whose name starts with `apikey-`.
-
-   ```bash
-   kubectl --context core -n authentik exec deploy/authentik-server -- ak shell -c "
-   from authentik.core.models import User, Token
-   u = User.objects.filter(username='apikey-$NAME', type='service_account').first()
-   if u is None:
-       print('RESULT no such service account: apikey-$NAME')
-   elif Token.objects.filter(user=u).exists():
-       print('RESULT refused, the account still has a token')
-   else:
-       u.delete()
-       print('RESULT deleted apikey-$NAME')
-   " 2>&1 | grep '^RESULT'
-   ```
+```bash
+KEEP=$(kubectl --context control -n phorge-keys get apikeys.phorge.fr -o jsonpath='{.items[*].metadata.name}') && \
+kubectl --context core -n authentik exec deploy/authentik-server -- ak shell -c "
+from authentik.core.models import User, Token
+keep = set('$KEEP'.split())
+n = 0
+for u in User.objects.filter(username__startswith='apikey-', type='service_account'):
+    if u.username[len('apikey-'):] in keep or Token.objects.filter(user=u).exists():
+        continue
+    print('RESULT deleted', u.username); u.delete(); n += 1
+print('RESULT', n, 'account(s) deleted')
+" 2>&1 | grep '^RESULT'
+```
 
 An `ApiKey` created later with the same name would be refused by Authentik while the account exists, and stays `Ready=False`. Remove the account first, or pick another name.
