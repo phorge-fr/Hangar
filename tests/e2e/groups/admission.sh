@@ -91,37 +91,41 @@ group_admission() {
   role: viewer" | reject "empty group name" 'subject.name'
 
   section "admission: ApiKey"
-  _k "  hash: $H64
-  scopes: [instances:read]" | accept "key with one scope"
-  _k "  hash: $H64
-  scopes: [tenants:read, tenants:write, instances:read, instances:write, images:read, images:write, memberships:read, memberships:write]" | accept "key with all 8 scopes"
-  _k "  hash: $H64
-  scopes: [instances:read]
-  displayName: ci
-  expiresAt: 2030-01-01T00:00:00Z" | accept "key with every field"
-  _k "  hash: $H64
-  scopes: [tenant:read]" | reject "the former scope name tenant:read" 'spec.scopes'
-  _k "  hash: abc
-  scopes: [instances:read]" | reject "short hash" 'spec.hash'
-  _k "  hash: ${H64^^}
-  scopes: [instances:read]" | reject "uppercase hash" 'spec.hash'
-  _k "  hash: ${H64}0
-  scopes: [instances:read]" | reject "65 characters hash" 'spec.hash'
-  _k "  scopes: [instances:read]" | reject "no hash" 'spec.hash'
-  _k "  hash: $H64" | reject "no scopes" 'spec.scopes'
-  _k "  hash: $H64
-  scopes: []" | reject "empty scopes" 'spec.scopes'
-  _k "  hash: $H64
-  scopes: [instances:delete]" | reject "unknown scope" 'spec.scopes'
-  _k "  hash: $H64
-  scopes: [instances:read, instances:read]" | reject "the same scope twice" 'Duplicate|duplicate'
-  _k "  hash: $H64
-  scopes: [instances:read]
-  expiresAt: tomorrow" | reject "malformed expiresAt" 'expiresAt'
-  _k "  hash: $H64
-  scopes: [instances:read]
+  local E="expiresAt: 2030-01-01T00:00:00Z"
+  _k "  $E
+  grants: [{tenant: demo, scopes: [instances:read]}]" | accept "key with one grant"
+  _k "  $E
+  grants: [{tenant: demo, scopes: [tenants:read, instances:read, instances:write, images:read, images:write, memberships:read, memberships:write]}]" | accept "key with all 7 scopes"
+  _k "  $E
+  grants: [{tenant: a, scopes: [instances:read]}, {tenant: b, scopes: [images:read]}]
+  displayName: ci" | accept "key on two tenants with every field"
+  _k "  $E
+  grants: [{tenant: demo, scopes: [tenants:write]}]" | reject "tenants:write has no relation for a key" 'scopes'
+  _k "  $E
+  grants: [{tenant: demo, scopes: [tenant:read]}]" | reject "the former scope name tenant:read" 'scopes'
+  _k "  $E" | reject "no grants" 'spec.grants'
+  _k "  $E
+  grants: []" | reject "empty grants" 'spec.grants'
+  _k "  $E
+  grants: [{tenant: demo, scopes: []}]" | reject "empty scopes" 'scopes'
+  _k "  $E
+  grants: [{tenant: demo, scopes: [instances:delete]}]" | reject "unknown scope" 'scopes'
+  _k "  $E
+  grants: [{tenant: demo, scopes: [instances:read, instances:read]}]" | reject "the same scope twice" 'Duplicate|duplicate'
+  _k "  $E
+  grants: [{tenant: demo, scopes: [images:read]}, {tenant: demo, scopes: [instances:read]}]" | reject "the same tenant twice" 'Duplicate|duplicate'
+  _k "  $E
+  grants: [{tenant: Demo, scopes: [instances:read]}]" | reject "an invalid tenant name" 'tenant'
+  _k "  grants: [{tenant: demo, scopes: [instances:read]}]" | reject "no expiry (a key must expire)" 'spec.expiresAt'
+  _k "  expiresAt: tomorrow
+  grants: [{tenant: demo, scopes: [instances:read]}]" | reject "malformed expiresAt" 'expiresAt'
+  _k "  $E
+  grants: [{tenant: demo, scopes: [instances:read]}]
   displayName: $(printf 'x%.0s' {1..101})" | reject "displayName over 100 characters" 'displayName'
-  printf 'apiVersion: phorge.fr/v1alpha1\nkind: ApiKey\nmetadata: {name: x, namespace: phorge-keys}\nspec:\n  hash: %s\n  scopes: [instances:read]\n' "$H64" | reject "no owner" 'spec.owner'
   _k "  hash: $H64
-  scopes: [instances:read]" "" | reject "an empty owner" 'spec.owner'
+  $E
+  grants: [{tenant: demo, scopes: [instances:read]}]" | reject "the former hash field, the secret is the token of the service account" 'unknown field|hash'
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: ApiKey\nmetadata: {name: x, namespace: phorge-keys}\nspec:\n  expiresAt: 2030-01-01T00:00:00Z\n  grants: [{tenant: demo, scopes: [instances:read]}]\n' | reject "no owner" 'spec.owner'
+  _k "  $E
+  grants: [{tenant: demo, scopes: [instances:read]}]" "" | reject "an empty owner" 'spec.owner'
 }

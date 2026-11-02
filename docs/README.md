@@ -19,6 +19,7 @@ None yet.
 | [Fix an empty router dashboard](how-to/fix-an-empty-router-dashboard.md) | Restore the router monitoring |
 | [Enrol MFA for an account](how-to/enrol-mfa-for-an-account.md) | Add a second MFA device |
 | [Recover access to Authentik](how-to/recover-access-to-authentik.md) | Get back in after a lockout |
+| [Remove the account of a deleted API key](how-to/remove-the-account-of-a-deleted-api-key.md) | Clean up the service account an `ApiKey` leaves in Authentik |
 | [Measure cookies and third parties](how-to/measure-cookies-and-third-parties.md) | Re-measure the sign-in page after a change |
 
 ## Reference

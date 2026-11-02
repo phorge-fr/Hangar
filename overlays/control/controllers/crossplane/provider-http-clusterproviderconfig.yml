@@ -1,0 +1,17 @@
+---
+# Same reasoning as provider-openfga-clusterproviderconfig.yml: the namespaced Request
+# (requests.http.m.crossplane.io, composed by the ApiKey composition) references a ClusterProviderConfig, not the
+# plain ProviderConfig. Same credentials source and CA as provider-http-providerconfig.yml, nothing new to manage: the
+# token is presented by the Request itself in its headers.
+apiVersion: http.m.crossplane.io/v1alpha2
+kind: ClusterProviderConfig
+metadata:
+    name: authentik
+spec:
+    credentials:
+        source: None
+    tls:
+        caCertSecretRef:
+            namespace: crossplane-system
+            name: provider-http-authentik
+            key: ca.crt

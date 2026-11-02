@@ -136,6 +136,8 @@ Everything is **asynchronous**. Creating a `Tenant` takes about a minute, an `Im
 
 ### 4.4 API keys
 
+> This section describes the first design, with a hash and a scope table in the API. The keys now being built are service accounts of Authentik whose rights are only OpenFGA tuples that expire by a condition: see [the `ApiKey` reference](../reference/phorge-api-kinds.md#apikey).
+
 - The API generates the id and the secret (32 random bytes in hex), stores only `sha256` hex in `spec.hash`, records the caller in `spec.owner`, and returns the full key **once**.
 - A key is its owner, limited to its scopes: check the scope, then `Check(user:<owner>, ...)`. Nothing is written to OpenFGA for a key, and nothing needs removing when it expires or is deleted.
 - `spec.scopes` is a set among `tenants:read|write`, `instances:read|write`, `images:read|write`, `memberships:read|write`. `tenants:write` creates, resizes and deletes tenants and needs a platform administrator; the others need what the owner has on the tenant.

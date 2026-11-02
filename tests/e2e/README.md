@@ -34,7 +34,7 @@ back from OpenFGA and run real `check` calls in the `access` group.
 | `tenant` | Incus | What a Tenant composes: namespace, project limits per plan, every `restricted.*` key, OVN network, profile, owner tuple, 28-character name, odd owner emails, and that the subnets Incus picks are distinct and outside the router's VLANs |
 | `image` | Incus, Internet | Pull, fingerprint, aliases, per-project isolation, deletion, an image that does not exist |
 | `instance` | Incus, Internet | A running VM end to end (limits, disk, cloud-init key, guest check), stopped and nested VMs, plan quota, disk over quota, missing image |
-| `access` | OpenFGA | Membership roles and subjects, duplicates, role change, deletion; ApiKey scopes to tuples, scope add/remove, expiry; optional real `check` calls |
+| `access` | OpenFGA | Membership roles and subjects, duplicates, role change, deletion; ApiKey (opt-in, `E2E_APIKEYS=1`): service account, one tuple per tenant and scope, expiry in OpenFGA, deletion; optional real `check` calls |
 | `network` | Incus, Internet | Addressing, routing, DNS, Internet access, path MTU, what is blocked (other VLANs, router), isolation between tenants, nothing exposed |
 | `update` | Incus | Plan, description and owner changes; alias; live cpu, memory, disk, ssh keys; stop/start without recreation |
 | `deletion` | Incus | Deleting a tenant with a running VM: order, timing, orphan window; an object removed behind Crossplane's back; an Image still in use |
