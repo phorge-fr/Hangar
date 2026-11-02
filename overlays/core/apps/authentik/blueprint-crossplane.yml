@@ -25,9 +25,11 @@ data:
           # through the service account endpoint: it needs the right to add a user and to add a token, and the token it
           # creates there belongs to the new account. The role holds those, and the right to read and delete tokens to
           # observe and revoke a key (global permissions: authentik cannot scope them to the tokens of the keys).
-          # It holds no right on users beyond adding one: delete_user is global and let an account like this one delete
-          # akadmin, so an account of a key stays after its token is deleted, with no credential. It cannot change a
-          # user, so it cannot put an account in a group, and it cannot read the key of a token.
+          # It holds no global right on users beyond adding one: delete_user is global and let an account like this one
+          # delete akadmin. It gets delete_user and view_user on the accounts it creates, and only on those, through the
+          # initial permissions below: when a key is deleted the Request deletes the account (and its token with it), so
+          # nothing is left in authentik, and the identity still cannot see, change or delete any other user. It cannot
+          # change a user either, so it cannot put an account in a group, and it cannot read the key of a token.
           # A blueprint only adds the permissions of a role, never removes them: to narrow a role, give the group a new one
           # and delete the old ones.
           - model: authentik_core.user
@@ -51,6 +53,18 @@ data:
                 - authentik_core.add_token
                 - authentik_core.view_token
                 - authentik_core.delete_token
+          # What the role gets on each object that one of its members creates (authentik assigns these permissions to the
+          # role, on that object, when the object is saved during the request). The accounts of the keys are the only
+          # users the provider creates.
+          - model: authentik_rbac.initialpermissions
+            identifiers:
+              name: crossplane-provider-api-keys
+            attrs:
+              name: crossplane-provider-api-keys
+              role: !KeyOf crossplane-provider-api-keys-role
+              permissions:
+                - !Find [auth.permission, [codename, delete_user], [content_type__app_label, authentik_core]]
+                - !Find [auth.permission, [codename, view_user], [content_type__app_label, authentik_core]]
           - model: authentik_core.group
             identifiers:
               name: crossplane-provider

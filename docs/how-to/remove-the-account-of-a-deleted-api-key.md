@@ -1,12 +1,12 @@
 ---
 type: how-to
-audience: administrator cleaning up after deleted API keys
-verified: 2026-11-02
+audience: administrator cleaning up the accounts that old API keys left
+verified: 2026-11-03
 ---
 
 # Remove the account of a deleted API key
 
-Deleting an `ApiKey` removes its token, its Secret and its tuples, but the service account `apikey-<name>` stays in Authentik without any credential: the identity that Crossplane uses cannot delete users (see [the reference](../reference/phorge-api-kinds.md#apikey)). It does no harm, and an administrator removes it when it is worth the clean-up.
+Deleting an `ApiKey` deletes its service account in Authentik with its token (the identity of Crossplane may delete the accounts it created, see [the reference](../reference/phorge-api-kinds.md#apikey)), so there is normally nothing to clean. The keys made before that change, and a key whose creation failed half way, left an account `apikey-<name>` without any credential in Authentik. It does no harm, and an administrator removes it when it is worth the clean-up.
 
 The commands run inside the authentik server of `core` (`ak shell`, no token of administration) and print only their result lines: the rest of the output is authentik's start-up log.
 
@@ -40,4 +40,4 @@ print('RESULT', n, 'account(s) deleted')
 " 2>&1 | grep '^RESULT'
 ```
 
-An `ApiKey` created later with the same name would be refused by Authentik while the account exists, and stays `Ready=False`. Remove the account first, or pick another name.
+An `ApiKey` created with the name of a leftover account would be refused by Authentik, and stays `Ready=False`. Remove the account first, or pick another name.
