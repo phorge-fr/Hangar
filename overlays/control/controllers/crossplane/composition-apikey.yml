@@ -1,7 +1,14 @@
-# Renders nothing but the status of an ApiKey, see xrd-apikey.yml. A key is its owner limited to its scopes: the
-# API checks the scope and asks OpenFGA about the owner at every request, so there is no tuple to write, and none
-# to remove when the key expires or is deleted. What Crossplane adds is the guard on the namespace and the status
-# the API shows (the id of the key, whether its date has passed).
+# Renders what an ApiKey is, see xrd-apikey.yml:
+#
+# - The identity: a provider-http Request that creates the service account apikey-<name> in authentik (POST on
+#   service_account/, with the limited identity of blueprint-crossplane.yml, no superuser) and puts its key in the Secret
+#   <name>-token of the namespace of the ApiKey. OBSERVE and REMOVE act on the token only, the account has no credential
+#   left once the Request is gone and its name is never reused (the API picks the name of the key). The account does
+#   not expire in authentik: the date is decided by OpenFGA.
+# - The rights: one RelationshipTuple per tenant and scope, in the phorge-api store, for the subject apikey:apikey-<name>,
+#   with the condition not_expired and the date of the key. Past it OpenFGA refuses the key by itself, at every Check.
+#
+# Deleting the ApiKey deletes all of it (the Secret goes with the Request, which owns it).
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -12,6 +19,17 @@ spec:
         kind: ApiKey
     mode: Pipeline
     pipeline:
+        - step: load-environment
+          functionRef:
+              name: function-environment-configs
+          input:
+              apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+              kind: Input
+              spec:
+                  environmentConfigs:
+                      - type: Reference
+                        ref:
+                            name: phorge
         - step: render
           functionRef:
               name: function-go-templating
@@ -21,20 +39,119 @@ spec:
               source: Inline
               inline:
                   template: |
+                      {{- /* Ready only when the managed resource is Ready AND Synced: a failing reconcile
+                               (Synced=False) must not read as Ready because its last good state was. */ -}}
+                      {{- define "ready" -}}
+                      {{- $ready := false -}}
+                      {{- $synced := true -}}
+                      {{- range (dig "resource" "status" "conditions" (list) .) -}}
+                      {{- if and (eq .type "Ready") (eq .status "True") -}}{{- $ready = true -}}{{- end -}}
+                      {{- if and (eq .type "Synced") (ne .status "True") -}}{{- $synced = false -}}{{- end -}}
+                      {{- end -}}
+                      {{- if and $ready $synced -}}True{{- else -}}False{{- end -}}
+                      {{- end -}}
+                      {{- /* What is wrong with the composed resources, for status.problems. */ -}}
+                      {{- $problems := list -}}
+                      {{- range $rname, $res := (default (dict) .observed.resources) -}}
+                      {{- range (dig "resource" "status" "conditions" (list) $res) -}}
+                      {{- if and (or (eq .type "Ready") (eq .type "Synced") (eq .type "LastAsyncOperation")) (ne .status "True") -}}
+                      {{- $problems = append $problems (printf "%s %s: %s" $rname .type (default "not ready" .message)) -}}
+                      {{- end -}}
+                      {{- end -}}
+                      {{- end -}}
                       {{- $xr := .observed.composite.resource -}}
-                      {{- if ne $xr.metadata.namespace "phorge-keys" -}}
-                      {{- fail (printf "an ApiKey belongs in the namespace phorge-keys (it is a person's, not a tenant's), not %q" $xr.metadata.namespace) -}}
+                      {{- $ns := $xr.metadata.namespace -}}
+                      {{- if ne $ns "phorge-keys" -}}
+                      {{- fail (printf "an ApiKey belongs in the namespace phorge-keys (it is a person's, not a tenant's), not %q" $ns) -}}
                       {{- end -}}
-                      {{- /* An expired key grants nothing. The API checks the date itself at every request, this is
-                               what it shows in the list. */ -}}
+                      {{- /* apikey-<name> is the user name of the account and the OpenFGA subject, which the API reads as a
+                               key name of 63 characters at most. */ -}}
+                      {{- if gt (len $xr.metadata.name) 50 -}}
+                      {{- fail (printf "the name of an ApiKey is 50 characters at most, %q has %d" $xr.metadata.name (len $xr.metadata.name)) -}}
+                      {{- end -}}
+                      {{- $env := index .context "apiextensions.crossplane.io/environment" -}}
+                      {{- $obs := default (dict) .observed.resources -}}
+                      {{- $identity := printf "apikey-%s" $xr.metadata.name -}}
+                      {{- $tokenId := printf "service-account-%s-password" $identity -}}
+                      {{- $secretName := printf "%s-token" $xr.metadata.name -}}
+                      {{- /* An expired key grants nothing: OpenFGA refuses it by itself from that date, this is what the
+                               ApiKey shows. */ -}}
                       {{- $expired := false -}}
-                      {{- if $xr.spec.expiresAt -}}
                       {{- if (now).After (toDate "2006-01-02T15:04:05Z07:00" $xr.spec.expiresAt) -}}{{- $expired = true -}}{{- end -}}
-                      {{- end -}}
+                      {{- $relations := dict "tenants:read" "key_tenant_read" "instances:read" "key_instances_read" "instances:write" "key_instances_write" "images:read" "key_images_read" "images:write" "key_images_write" "memberships:read" "key_memberships_read" "memberships:write" "key_memberships_write" -}}
+                      apiVersion: http.m.crossplane.io/v1alpha2
+                      kind: Request
+                      metadata:
+                        name: {{ $xr.metadata.name }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: identity
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "identity")) }}"
+                      spec:
+                        providerConfigRef:
+                          kind: ClusterProviderConfig
+                          name: authentik
+                        forProvider:
+                          waitTimeout: 2m
+                          headers:
+                            Content-Type:
+                              - application/json
+                            Authorization:
+                              - "Bearer {{ "{{" }} provider-http-authentik:crossplane-system:token {{ "}}" }}"
+                          payload:
+                            baseUrl: {{ $env.authentikApiUrl | quote }}
+                            body: {{ dict "name" $identity "create_group" false "expiring" false | toJson | quote }}
+                          mappings:
+                            - action: CREATE
+                              method: POST
+                              url: .payload.baseUrl + "/users/service_account/"
+                              body: .payload.body
+                            - action: OBSERVE
+                              method: GET
+                              url: {{ printf ".payload.baseUrl + \"/tokens/%s/\"" $tokenId | quote }}
+                            - action: REMOVE
+                              method: DELETE
+                              url: {{ printf ".payload.baseUrl + \"/tokens/%s/\"" $tokenId | quote }}
+                          expectedResponseCheck:
+                            type: CUSTOM
+                            logic: {{ printf ".response.statusCode == 200 and .response.body.identifier == \"%s\"" $tokenId | quote }}
+                          secretInjectionConfigs:
+                            - secretRef:
+                                name: {{ $secretName }}
+                                namespace: {{ $ns }}
+                              setOwnerReference: true
+                              keyMappings:
+                                - secretKey: token
+                                  responseJQ: .body.token
+                                  missingFieldStrategy: preserve
+                      {{- range $g := $xr.spec.grants }}
+                      {{- range $s := $g.scopes }}
+                      {{- $relation := index $relations $s }}
+                      {{- $h := printf "%s/%s" $g.tenant $relation | sha1sum | trunc 12 }}
+                      ---
+                      apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
+                      kind: RelationshipTuple
+                      metadata:
+                        name: {{ $xr.metadata.name }}-{{ $h }}
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: tuple-{{ $h }}
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs (printf "tuple-%s" $h))) }}"
+                      spec:
+                        forProvider:
+                          storeId: {{ $env.phorgeStoreId | quote }}
+                          user: {{ printf "apikey:%s" $identity | quote }}
+                          relation: {{ $relation }}
+                          object: {{ printf "tenant:%s" $g.tenant | quote }}
+                          condition:
+                            name: not_expired
+                            contextJson: {{ dict "expires_at" $xr.spec.expiresAt | toJson | quote }}
+                      {{- end }}
+                      {{- end }}
                       ---
                       apiVersion: phorge.fr/v1alpha1
                       kind: ApiKey
                       status:
                         keyId: {{ $xr.metadata.name | quote }}
+                        identity: {{ $identity | quote }}
+                        secretName: {{ $secretName | quote }}
                         expired: {{ $expired }}
-                        problems: ""
+                        problems: {{ join " | " $problems | trunc 800 | quote }}

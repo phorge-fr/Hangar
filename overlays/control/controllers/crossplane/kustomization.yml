@@ -22,6 +22,7 @@ resources:
     - provider-http.yml
     - provider-http-authentik-secret.yml
     - provider-http-providerconfig.yml
+    - provider-http-clusterproviderconfig.yml
     - function-environment-configs.yml
     - environmentconfig-phorge.yml
     - xrd-tenant.yml

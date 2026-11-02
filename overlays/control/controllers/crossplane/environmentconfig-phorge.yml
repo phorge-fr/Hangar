@@ -8,7 +8,10 @@
 # phorgeStoreId is the "phorge-api" Store (openfga-phorge-store.yml): the roles and API key scopes
 # the Phorge API checks.
 #
-# Neither is a secret. A namespaced resource cannot reference a Store by name across namespaces,
+# authentikApiUrl is the base of the authentik API that the ApiKey composition calls through provider-http
+# (traefik-local of core, certificate of the local CA, see provider-http-providerconfig.yml).
+#
+# None of them is a secret. A namespaced resource cannot reference a Store by name across namespaces,
 # hence the copy here.
 apiVersion: apiextensions.crossplane.io/v1beta1
 kind: EnvironmentConfig
@@ -17,3 +20,4 @@ metadata:
 data:
     openfgaStoreId: "01M46QWWZKD17137T1AB0V6V0Q"
     phorgeStoreId: "01M50R0P12MY8JHNKP3ATYSJC2"
+    authentikApiUrl: "https://authentik.core.phorge/api/v3/core"
