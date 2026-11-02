@@ -2,9 +2,9 @@
 #
 # - The identity: a provider-http Request that creates the service account apikey-<name> in authentik (POST on
 #   service_account/, with the limited identity of blueprint-crossplane.yml, no superuser) and puts its key in the Secret
-#   <name>-token of the namespace of the ApiKey. OBSERVE and REMOVE act on the token only, the account has no credential
-#   left once the Request is gone and its name is never reused (the API picks the name of the key). The account does
-#   not expire in authentik: the date is decided by OpenFGA.
+#   <name>-token of the namespace of the ApiKey. OBSERVE reads the token, REMOVE deletes the account (the token goes with
+#   it): the identity may delete the accounts it created and no other user (initial permissions of the blueprint), so
+#   deleting the ApiKey leaves nothing in authentik. The account does not expire there: the date is decided by OpenFGA.
 # - The rights: one RelationshipTuple per tenant and scope, in the phorge-api store, for the subject apikey:apikey-<name>,
 #   with the condition not_expired and the date of the key. Past it OpenFGA refuses the key by itself, at every Check.
 #
@@ -113,7 +113,7 @@ spec:
                               url: {{ printf ".payload.baseUrl + \"/tokens/%s/\"" $tokenId | quote }}
                             - action: REMOVE
                               method: DELETE
-                              url: {{ printf ".payload.baseUrl + \"/tokens/%s/\"" $tokenId | quote }}
+                              url: ".payload.baseUrl + \"/users/\" + ((.response.body.user // .response.body.user_pk) | tostring) + \"/\""
                           expectedResponseCheck:
                             type: CUSTOM
                             logic: {{ printf ".response.statusCode == 200 and .response.body.identifier == \"%s\"" $tokenId | quote }}
