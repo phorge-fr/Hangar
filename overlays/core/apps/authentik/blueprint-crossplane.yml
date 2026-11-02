@@ -23,13 +23,14 @@ data:
           # Nobody but akadmin is a superuser, so this account is not one. A non-superuser cannot create a token for
           # somebody else through /core/tokens/ (authentik forces the owner to the caller), which is why the keys go
           # through the service account endpoint: it needs the right to add a user and to add a token, and the token it
-          # creates there belongs to the new account. The role holds those, and the right to read and delete tokens to
-          # observe and revoke a key (global permissions: authentik cannot scope them to the tokens of the keys).
+          # creates there belongs to the new account. The role holds those, and the right to read tokens to observe a key
+          # (view_token, global: the endpoint of the tokens ignores the permissions on one token unless the caller owns it,
+          # and the token of a key belongs to the account of the key). It cannot read the key of a token, and it cannot
+          # delete a token: when a key is deleted the Request deletes the account, and the token goes with it.
           # It holds no global right on users beyond adding one: delete_user is global and let an account like this one
           # delete akadmin. It gets delete_user and view_user on the accounts it creates, and only on those, through the
-          # initial permissions below: when a key is deleted the Request deletes the account (and its token with it), so
-          # nothing is left in authentik, and the identity still cannot see, change or delete any other user. It cannot
-          # change a user either, so it cannot put an account in a group, and it cannot read the key of a token.
+          # initial permissions below: nothing is left in authentik when a key is deleted, and the identity still cannot
+          # see, change or delete any other user. It cannot change a user either, so it cannot put an account in a group.
           # A blueprint only adds the permissions of a role, never removes them: to narrow a role, give the group a new one
           # and delete the old ones.
           - model: authentik_core.user
@@ -43,16 +44,15 @@ data:
               path: goauthentik.io/service-accounts
               is_active: true
           - model: authentik_rbac.role
-            id: crossplane-provider-api-keys-role
+            id: crossplane-provider-keys-role
             identifiers:
-              name: crossplane-provider-api-keys
+              name: crossplane-provider-keys
             attrs:
-              name: crossplane-provider-api-keys
+              name: crossplane-provider-keys
               permissions:
                 - authentik_core.add_user
                 - authentik_core.add_token
                 - authentik_core.view_token
-                - authentik_core.delete_token
           # What the role gets on each object that one of its members creates (authentik assigns these permissions to the
           # role, on that object, when the object is saved during the request). The accounts of the keys are the only
           # users the provider creates.
@@ -61,7 +61,7 @@ data:
               name: crossplane-provider-api-keys
             attrs:
               name: crossplane-provider-api-keys
-              role: !KeyOf crossplane-provider-api-keys-role
+              role: !KeyOf crossplane-provider-keys-role
               permissions:
                 - !Find [auth.permission, [codename, delete_user], [content_type__app_label, authentik_core]]
                 - !Find [auth.permission, [codename, view_user], [content_type__app_label, authentik_core]]
@@ -71,10 +71,14 @@ data:
             attrs:
               name: crossplane-provider
               roles:
-                - !KeyOf crossplane-provider-api-keys-role
+                - !KeyOf crossplane-provider-keys-role
               users:
                 - !KeyOf crossplane-provider-user
-          # The earlier roles of this account held more (change user, tokens, delete user): replaced by the one above.
+          # The earlier roles of this account held more (change user, delete tokens, delete user): replaced by the one above.
+          - model: authentik_rbac.role
+            state: absent
+            identifiers:
+              name: crossplane-provider-api-keys
           - model: authentik_rbac.role
             state: absent
             identifiers:
