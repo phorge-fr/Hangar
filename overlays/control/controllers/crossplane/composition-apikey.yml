@@ -8,6 +8,9 @@
 # - The rights: one RelationshipTuple per tenant and scope, in the phorge-api store, for the subject apikey:apikey-<name>,
 #   with the condition not_expired and the date of the key. Past it OpenFGA refuses the key by itself, at every Check.
 #
+# The tuples are named k-<id>-<hash>: Terraform names a resource after the object and refuses a name that does not start with
+# a letter or an underscore, and the id of a key is hex that often starts with a digit.
+#
 # Deleting the ApiKey deletes all of it (the Secret goes with the Request, which owns it).
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
@@ -131,7 +134,7 @@ spec:
                       apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
                       kind: RelationshipTuple
                       metadata:
-                        name: {{ $xr.metadata.name }}-{{ $h }}
+                        name: k-{{ $xr.metadata.name }}-{{ $h }}
                         annotations:
                           gotemplating.fn.crossplane.io/composition-resource-name: tuple-{{ $h }}
                           gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs (printf "tuple-%s" $h))) }}"

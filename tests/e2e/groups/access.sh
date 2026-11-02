@@ -120,7 +120,8 @@ group_access() {
   # OpenFGA itself refuses the key from its date. Opt-in, it leaves an account in authentik (see the top of the file).
   if [[ ${E2E_APIKEYS:-} == 1 ]]; then
     section "access: ApiKey, a service account with expiring tuples"
-    local k1="e2e-$RUN_ID-k1" kold="e2e-$RUN_ID-kold" soon
+    # k1 starts with a digit, like about 10 ids out of 16: Terraform refuses a resource name that does not start with a letter
+    local k1="1e2e-$RUN_ID-k1" kold="e2e-$RUN_ID-kold" soon
     soon=$(date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ)
     apikey "$k1" "$soon" "$TA:instances:read,tenants:read" >/dev/null
     wait_ready apikeys.phorge.fr phorge-keys "$k1" 240 && pass "an ApiKey becomes Ready" || fail "an ApiKey becomes Ready" "$(why apikeys.phorge.fr "$k1" phorge-keys)"
@@ -128,7 +129,7 @@ group_access() {
     eq "status.identity is the service account, the OpenFGA subject" "apikey-$k1" "$(sget apikeys.phorge.fr phorge-keys "$k1" '{.status.identity}')"
     eq "it is not expired" false "$(sget apikeys.phorge.fr phorge-keys "$k1" '{.status.expired}')"
     eq "the key is in the Secret named by the status" true "$([[ -n $(K -n phorge-keys get secret "$k1-token" -o jsonpath='{.data.token}' 2>/dev/null) ]] && echo true || echo false)"
-    eq "one tuple per tenant and scope" 2 "$(K -n phorge-keys get $RT -o name 2>/dev/null | grep -c "/$k1-")"
+    eq "one tuple per tenant and scope" 2 "$(K -n phorge-keys get $RT -o name 2>/dev/null | grep -c "/k-$k1-")"
     if out=$(K -n phorge-keys patch apikeys.phorge.fr "$k1" --type merge -p '{"spec":{"owner":"someone-else@example.org"}}' 2>&1); then
       fail "the owner of a key cannot change" "the patch was accepted"
     else match "the owner of a key cannot change" 'cannot change' "$out"; fi
@@ -144,7 +145,7 @@ group_access() {
     fi
     K -n phorge-keys patch apikeys.phorge.fr "$k1" --type json -p '[{"op":"replace","path":"/spec/grants/0/scopes","value":["instances:read"]}]' >/dev/null 2>&1 \
       && pass "the scopes of a key can change" || fail "the scopes of a key can change" "the patch was refused"
-    wait_until 120 "the tuple of a removed scope is deleted" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n phorge-keys get $RT -o name | grep -c '/$k1-') == 1 ]]" \
+    wait_until 120 "the tuple of a removed scope is deleted" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n phorge-keys get $RT -o name | grep -c '/k-$k1-') == 1 ]]" \
       && pass "the tuple of a removed scope is deleted" || fail "the tuple of a removed scope is deleted"
 
     section "access: an expired key"
