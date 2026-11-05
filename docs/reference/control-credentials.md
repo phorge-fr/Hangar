@@ -19,7 +19,7 @@ Not listed: the TLS pairs that Crossplane and its providers generate to talk to 
 | `provider-openfga-creds` (`crossplane-system`) | OpenFGA | An OpenFGA preshared key: read and write every store (`iaas` and `phorge-api`). | Open: [Hangar#300](https://github.com/phorge-fr/Hangar/issues/300), waiting for an OpenFGA release |
 | `phorge-api-openfga` (`phorge-api`) | OpenFGA | Another preshared key of the same kind: read and write every store. It is separate so that it can be rotated alone. | Open: [Hangar#300](https://github.com/phorge-fr/Hangar/issues/300) |
 | `sops-age` (`flux-system`) | The SOPS files of this repository | The age key that decrypts them. One key is shared today, so it decrypts the Secrets of every cluster. | Open: [Hangar#267](https://github.com/phorge-fr/Hangar/issues/267) |
-| `cloudflare-api-token-secret` (`cert-manager`) | Cloudflare | The DNS-01 challenge of cert-manager. Its exact scope is not recorded in the repository. | Open: [Hangar#338](https://github.com/phorge-fr/Hangar/issues/338) |
+| `cloudflare-api-token-secret` (`cert-manager`) | Cloudflare | The DNS-01 challenge of cert-manager. The token is limited in Cloudflare by the maintainer. | In line |
 | `alloy-secrets` (`alloy`) | The ingress of `core` | Basic authentication of Alloy, to send the logs and metrics of `control` to `core`. | In line |
 
 ## Rights that are not a Secret
