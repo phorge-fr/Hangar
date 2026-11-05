@@ -1,6 +1,6 @@
 # What provider-kubernetes may do on THIS cluster (control) through the "local" ClusterProviderConfig
 # (InjectedIdentity, i.e. its own ServiceAccount): create and own the "t-<name>" namespaces of the
-# Tenant composition, nothing else. The "core" ProviderConfig has its own, separate credentials.
+# Tenant composition, nothing else. control holds no credential towards core.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

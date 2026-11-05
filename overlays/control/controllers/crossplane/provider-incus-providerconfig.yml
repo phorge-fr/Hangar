@@ -14,9 +14,12 @@
 # through the router instead of staying east-west, and depends on the WAN link being up. Revisit
 # with a direct comp-ew route if that ever matters.
 #
-# Trust itself comes from the client certificate (added to the cluster's trust store by hand, not
-# via Ansible/Terraform yet): any TLS client holding it is already authorized, same model as the
-# "students-provisioner" certificate already trusted on this cluster.
+# Trust and rights come from the client certificate. It is trusted as restricted by the Ansible
+# playbook configure-compute.yml (phorge-fr/Ansible#59), and Incus routes restricted certificates
+# to an authorization scriptlet: this certificate may create projects and use the objects of the
+# projects named "t-*" (the tenants), and nothing else. The rule lives inside Incus, not in
+# OpenFGA, so nothing that Crossplane can write widens it. How the certificate is made and
+# replaced: docs/how-to/create-a-restricted-incus-client-certificate.md.
 #
 # Verified live (2026-10-03): a throwaway Project reconciled Ready=True through this
 # ProviderConfig and showed up in `incus project list`, then cleaned up the same way.

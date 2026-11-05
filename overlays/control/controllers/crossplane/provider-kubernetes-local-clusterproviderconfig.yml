@@ -1,6 +1,5 @@
 # Namespaced Object resources (kubernetes.m.crossplane.io) reference a ClusterProviderConfig. This
-# one targets the cluster Crossplane itself runs on (control), the "core" ProviderConfig in
-# provider-kubernetes-core-providerconfig.yml targets Authentik's cluster.
+# one targets the cluster Crossplane itself runs on (control), the only cluster provider-kubernetes reaches.
 apiVersion: kubernetes.m.crossplane.io/v1alpha1
 kind: ClusterProviderConfig
 metadata:

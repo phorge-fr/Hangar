@@ -21,6 +21,7 @@ None yet.
 | [Recover access to Authentik](how-to/recover-access-to-authentik.md) | Get back in after a lockout |
 | [Remove the account of a deleted API key](how-to/remove-the-account-of-a-deleted-api-key.md) | Clean up the service account an `ApiKey` leaves in Authentik |
 | [Measure cookies and third parties](how-to/measure-cookies-and-third-parties.md) | Re-measure the sign-in page after a change |
+| [Create a restricted Incus client certificate](how-to/create-a-restricted-incus-client-certificate.md) | Give Crossplane an Incus certificate that cannot administer the server |
 
 ## Reference
 
@@ -32,6 +33,7 @@ None yet.
 | [GDPR personal data inventory](reference/gdpr-personal-data.md) | Cookies, third parties, personal data per system |
 | [HTTP audit log fields](reference/http-audit-fields.md) | Fields and queries of the Traefik audit log |
 | [Kubernetes audit log fields](reference/kubernetes-audit-fields.md) | Fields and queries of the API server audit log |
+| [Credentials on the control cluster](reference/control-credentials.md) | Each credential that opens another system, its rights and status |
 
 ## Explanation
 
