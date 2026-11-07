@@ -57,22 +57,23 @@ spec:
                     role_attribute_path: contains(groups[*], 'grafana-admins') && 'Admin' || contains(groups[*], 'grafana-viewers') && 'Viewer' || 'None'
                     use_pkce: true
                 server:
-                    domain: monitoring.phorge.fr
-                    root_url: https://monitoring.phorge.fr/
+                    domain: grafana.core.phorge
+                    root_url: https://grafana.core.phorge/
             enabled: true
             service:
                 type: ClusterIP
             ingress:
                 enabled: true
-                ingressClassName: traefik-public
+                ingressClassName: traefik-local
                 annotations:
-                    cert-manager.io/cluster-issuer: public-issuer
+                    cert-manager.io/cluster-issuer: local-issuer
+                    cert-manager.io/common-name: grafana.core.phorge
                 hosts:
-                    - monitoring.phorge.fr
+                    - grafana.core.phorge
                 tls:
                     - secretName: grafana-tls
                       hosts:
-                          - monitoring.phorge.fr
+                          - grafana.core.phorge
             persistence:
                 enabled: false
             sidecar:
