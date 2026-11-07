@@ -1,0 +1,29 @@
+# Public, through the edge HAProxy: console.phorge.fr is routed by SNI to the svc ingress (traefik-public), see
+# phorge-fr/Network#30. The certificate comes from cert-manager with the HTTP-01 challenge through the same path.
+#
+# Only the console is served here. The showcase hosts (phorge.fr, www.phorge.fr) have their own ingress, in their own change.
+# /healthz stays reachable because the probes of the kubelet do not go through the ingress.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+    name: console
+    namespace: console
+    annotations:
+        cert-manager.io/cluster-issuer: public-issuer
+spec:
+    ingressClassName: traefik-public
+    tls:
+        - hosts:
+              - console.phorge.fr
+          secretName: console-tls
+    rules:
+        - host: console.phorge.fr
+          http:
+              paths:
+                  - path: /
+                    pathType: Prefix
+                    backend:
+                        service:
+                            name: console
+                            port:
+                                name: http
