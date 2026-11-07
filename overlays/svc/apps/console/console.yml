@@ -1,0 +1,93 @@
+# The Phorge console (phorge-fr/phorge-console): the web console, served at console.phorge.fr. A Node server that renders the
+# pages and signs people in with Authentik; the tokens stay in its memory, never in the browser (docs/decisions/0009, 0012).
+#
+# One replica on purpose: the sessions live in the memory of the process, so a second replica would not know a person signed
+# in on the first. A restart signs everyone out; that is the price of keeping every token out of a database and of a cookie.
+#
+# Configuration is the environment, and nothing in it is secret: the console is a public client of Authentik (the shared client
+# Phorge OAuth, blueprint-phorge-api.yml in overlays/core/apps/authentik), so it has no client secret. The reference is
+# docs/reference/configuration.md in phorge-fr/phorge-console.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: console
+    namespace: console
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app.kubernetes.io/name: console
+    # Recreate: a second pod next to the first would only start a second set of sessions for a minute, and the pod is small.
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                app.kubernetes.io/name: console
+        spec:
+            # The console does not call the Kubernetes API.
+            automountServiceAccountToken: false
+            enableServiceLinks: false
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                seccompProfile:
+                    type: RuntimeDefault
+            # SIGTERM closes the server; the sessions are lost either way.
+            terminationGracePeriodSeconds: 30
+            containers:
+                - name: console
+                  # Public image of phorge-fr/phorge-console, built for arm64 and amd64 on every push to main. The tag is
+                  # floating and the digest is what runs: Renovate bumps the digest when the tag moves.
+                  image: ghcr.io/phorge-fr/phorge-console:latest@sha256:17784f8c91a4297f52f42729576a3da999c7be7ea0be3391cd0ea4cd74d777e6
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - name: http
+                        containerPort: 3000
+                  env:
+                      - name: OIDC_ISSUER
+                        value: https://auth.phorge.fr/application/o/phorge/
+                      # The client id of the shared public client Phorge OAuth, which is public information.
+                      - name: OIDC_CLIENT_ID
+                        value: 49a1375b-c52a-4a59-b3cb-8d4f5e392d85
+                      - name: API_URL
+                        value: https://api.phorge.fr
+                  readinessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 5
+                      timeoutSeconds: 2
+                  livenessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 10
+                      timeoutSeconds: 2
+                      failureThreshold: 3
+                  resources:
+                      requests:
+                          cpu: 20m
+                          memory: 64Mi
+                      limits:
+                          memory: 128Mi
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop:
+                              - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: console
+    namespace: console
+spec:
+    selector:
+        app.kubernetes.io/name: console
+    ports:
+        - name: http
+          port: 3000
+          targetPort: http

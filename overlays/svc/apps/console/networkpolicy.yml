@@ -1,0 +1,37 @@
+# Who may reach the console: Traefik, which carries the traffic from outside, and the nodes, where the kubelet probes from.
+# Alloy scrapes nothing here: the console exposes no metrics yet.
+#
+# Egress is what the console calls: the Phorge API and Authentik, both reached over HTTPS through their public addresses (the
+# same path Forgejo uses to reach Authentik), and DNS, which default-deny already allows. It does not call the Kubernetes API.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+    name: console
+    namespace: console
+spec:
+    endpointSelector:
+        matchLabels:
+            app.kubernetes.io/name: console
+    ingress:
+        - fromEndpoints:
+              - matchLabels:
+                    io.kubernetes.pod.namespace: traefik
+                    app.kubernetes.io/instance: traefik-public-traefik
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+        - fromEntities:
+              - host
+              - remote-node
+          toPorts:
+              - ports:
+                    - port: "3000"
+                      protocol: TCP
+    egress:
+        - toEntities:
+              - world
+          toPorts:
+              - ports:
+                    - port: "443"
+                      protocol: TCP
