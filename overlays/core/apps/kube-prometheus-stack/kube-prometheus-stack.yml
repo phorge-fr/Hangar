@@ -27,6 +27,19 @@ spec:
                 name: kube-prometheus-stack
             version: '92.22.0'
     interval: 1m0s
+    # The chart has no switch for this one: Grafana's own statistics dashboard, untagged and not used.
+    postRenderers:
+        - kustomize:
+              patches:
+                  - target:
+                        kind: ConfigMap
+                        name: kube-prometheus-stack-grafana-overview
+                    patch: |
+                        $patch: delete
+                        apiVersion: v1
+                        kind: ConfigMap
+                        metadata:
+                            name: kube-prometheus-stack-grafana-overview
     valuesFrom:
         - kind: Secret
           name: grafana-oauth-secret
@@ -86,6 +99,11 @@ spec:
                     enabled: true
                     label: grafana_dashboard
                     labelValue: "1"
+                    # The chart's own dashboards carry no folder annotation of their own: this puts them
+                    # all in one folder. The dashboards of this repository set their own (see
+                    # docs/reference/grafana-dashboards.md).
+                    annotations:
+                        grafana_folder: Kubernetes
                     searchNamespace: kube-prometheus-stack
                     folder: /tmp/dashboards
                     enableDeletion: true
@@ -297,6 +315,12 @@ spec:
         nodeExporter:
             enabled: false
             forceDeployDashboards: true
+            # There is no AIX or macOS node: drop their dashboards (the DaemonSet is off anyway).
+            operatingSystems:
+                aix:
+                    enabled: false
+                darwin:
+                    enabled: false
         defaultRules:
             rules:
                 kubeProxy: false
