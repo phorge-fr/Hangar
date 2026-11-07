@@ -103,7 +103,7 @@ spec:
         - fromEndpoints:
               - matchLabels:
                     io.kubernetes.pod.namespace: traefik
-                    app.kubernetes.io/instance: traefik-public-traefik
+                    app.kubernetes.io/instance: traefik-local-traefik
           toPorts:
               - ports:
                     - port: "3000"
