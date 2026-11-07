@@ -67,7 +67,9 @@ spec:
             kubernetesIngress:
                 ingressClass: traefik-local
         service:
-            type: LoadBalancer
+            # The chart moved the type of the Service under spec in 42.3.1 (it is LoadBalancer by default; kept explicit).
+            spec:
+                type: LoadBalancer
             annotations:
                 lbipam.cilium.io/ips: 10.0.0.10
         ports:
@@ -130,7 +132,9 @@ spec:
             kubernetesIngress:
                 ingressClass: traefik-public
         service:
-            type: LoadBalancer
+            # The chart moved the type of the Service under spec in 42.3.1 (it is LoadBalancer by default; kept explicit).
+            spec:
+                type: LoadBalancer
             annotations:
                 lbipam.cilium.io/ips: 10.0.0.11
         ports:
