@@ -4,7 +4,6 @@ resources:
     - authentik.yml
     - secrets.yml
     - secret-crossview.yml
-    - secret-console.yml
     - secret-crossplane-provider.yml
     - secret-smtp.yml
     - secret-cap.yml

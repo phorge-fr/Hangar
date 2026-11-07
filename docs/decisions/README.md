@@ -15,3 +15,4 @@ Records of choices that shaped the platform, in [MADR 4.0](https://adr.github.io
 | [0009 Build the frontend with SvelteKit, UnoCSS, and pnpm](0009-build-the-frontend-with-sveltekit.md) | accepted |
 | [0010 Evaluate ZITADEL against Authentik as the identity provider](0010-evaluate-zitadel-against-authentik.md) | accepted |
 | [0011 The control cluster carries no full-admin secret](0011-control-carries-no-full-admin-secret.md) | accepted |
+| [0012 The console signs in with the shared public client](0012-the-console-signs-in-with-the-shared-public-client.md) | accepted |
