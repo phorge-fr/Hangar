@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, the choice of the OIDC client is superseded by [0012](0012-the-console-signs-in-with-the-shared-public-client.md)
 date: 2026-10-31
 decision-makers: l-nmch
 ---
