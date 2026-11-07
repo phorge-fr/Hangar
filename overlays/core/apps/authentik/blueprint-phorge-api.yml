@@ -73,16 +73,22 @@ data:
                 # of the access token of this provider, so a revoked key is refused at once by its OpenFGA tuples, not here.
                 - client_credentials
               # The console is served at console.phorge.fr, on the svc cluster (docs/decisions/0008), and signs in with this
-              # client as a public one: PKCE, no secret. The first redirect URI is its callback; the second is where it comes
-              # back after signing out (authentik validates the post-logout address against these); the third is the
-              # development server. The command line uses the device code and needs none of them.
+              # client as a public one: PKCE, no secret. Its callback and the one of the development server are authorization
+              # redirect URIs. The addresses it comes back to after signing out are of the type "logout": authentik only honors
+              # post_logout_redirect_uri for those (with none, the parameter is ignored and its own "logged out" page is shown),
+              # and it requires the id_token_hint that the console sends. The command line uses the device code and needs none
+              # of them.
               redirect_uris:
                 - matching_mode: strict
                   url: https://console.phorge.fr/oidc/callback
                 - matching_mode: strict
-                  url: https://console.phorge.fr/
-                - matching_mode: strict
                   url: http://localhost:5173/oidc/callback
+                - matching_mode: strict
+                  url: https://console.phorge.fr/
+                  redirect_uri_type: logout
+                - matching_mode: strict
+                  url: http://localhost:5173/
+                  redirect_uri_type: logout
           - model: authentik_core.application
             identifiers:
               slug: phorge
