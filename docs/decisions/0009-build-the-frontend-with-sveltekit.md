@@ -1,5 +1,5 @@
 ---
-status: accepted, the choice of the OIDC client is superseded by [0012](0012-the-console-signs-in-with-the-shared-public-client.md)
+status: accepted
 date: 2026-10-31
 decision-makers: l-nmch
 ---
@@ -65,6 +65,7 @@ Measure the memory of the `svc` nodes before and after the first deployment, and
 
 ## More information
 
+* The choice of the OIDC client of the console (a confidential client of its own) was replaced by [0012](0012-the-console-signs-in-with-the-shared-public-client.md); the rest of this record stands.
 * [phorge-fr/.github#49](https://github.com/phorge-fr/.github/issues/49), [phorge-fr/.github#11](https://github.com/phorge-fr/.github/issues/11), [phorge-fr/.github#12](https://github.com/phorge-fr/.github/issues/12).
 * The edge routes of the showcase hosts are in [phorge-fr/Network#32](https://github.com/phorge-fr/Network/issues/32), the one of the console in [phorge-fr/Network#30](https://github.com/phorge-fr/Network/issues/30).
 * The current versions of SvelteKit, UnoCSS, and Node were not checked, and the memory of a SvelteKit server is not measured.

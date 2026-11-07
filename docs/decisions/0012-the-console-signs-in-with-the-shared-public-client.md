@@ -12,6 +12,8 @@ decision-makers: l-nmch
 
 Which client does the console sign in with?
 
+This replaces the choice of the client in 0009; the rest of 0009 stands.
+
 ## Decision drivers
 
 * The API accepts the tokens of the shared client today and needs no change for them.
