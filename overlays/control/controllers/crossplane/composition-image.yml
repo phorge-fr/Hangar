@@ -1,5 +1,12 @@
 # Renders the Incus Image of an Image, see xrd-image.yml. The project is the namespace's own name:
 # a tenant "demo" is the namespace "t-demo" and the Incus project "t-demo".
+#
+# The Usage keeps the tenant's namespace while the Incus Image exists. The namespace is composed by the
+# Tenant (an Object) and Kubernetes deletes its content when it terminates, ProviderConfigUsage objects
+# included: provider-incus must create its own again to reach Incus, which a terminating namespace
+# refuses, so an Incus Image still there is never deleted (phorge-fr/Hangar#185). With the Usage the
+# Tenant waits in "Deleting" until its images are deleted, then the namespace goes. It does not delete
+# them: the API deletes the children first, see docs/reference/phorge-api-kinds.md.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -93,6 +100,28 @@ spec:
                             - name: {{ . | quote }}
                             {{- end }}
                           {{- end }}
+                      ---
+                      apiVersion: protection.crossplane.io/v1beta1
+                      kind: Usage
+                      metadata:
+                        name: {{ $name }}-keeps-namespace
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: namespace-usage
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace-usage")) }}"
+                      spec:
+                        replayDeletion: true
+                        reason: "The Incus Image {{ $name }} must be deleted before the namespace of the tenant"
+                        of:
+                          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+                          kind: Object
+                          resourceRef:
+                            name: {{ $xr.metadata.namespace }}
+                            namespace: phorge-system
+                        by:
+                          apiVersion: image.incus.m.crossplane.io/v1alpha1
+                          kind: Image
+                          resourceRef:
+                            name: {{ $name }}
                       ---
                       apiVersion: phorge.fr/v1alpha1
                       kind: Image

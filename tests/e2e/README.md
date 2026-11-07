@@ -37,7 +37,7 @@ back from OpenFGA and run real `check` calls in the `access` group.
 | `access` | OpenFGA | Membership roles and subjects, duplicates, role change, deletion; ApiKey (opt-in, `E2E_APIKEYS=1`): service account, one tuple per tenant and scope, expiry in OpenFGA, deletion; optional real `check` calls |
 | `network` | Incus, Internet | Addressing, routing, DNS, Internet access, path MTU, what is blocked (other VLANs, router), isolation between tenants, nothing exposed |
 | `update` | Incus | Plan, description and owner changes; alias; live cpu, memory, disk, ssh keys; stop/start without recreation |
-| `deletion` | Incus | Deleting a tenant with a running VM: order, timing, orphan window; an object removed behind Crossplane's back; an Image still in use |
+| `deletion` | Incus | Deleting a tenant with a running VM: the namespace waits for its children, order, timing, orphan window; an object removed behind Crossplane's back; an Image still in use |
 
 `PASS`/`FAIL` lines are assertions. `INFO` lines document a behaviour the code does not guarantee
 (duplicate tuples, expiry, recreation after an out-of-band delete, the subnets picked): they never

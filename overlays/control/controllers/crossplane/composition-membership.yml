@@ -5,6 +5,9 @@
 #   (iaas.phorge.fr) is read-only: Crossplane owns every object, and anything changed by hand in Incus is
 #   reconciled back. Writing goes through the Phorge API.
 # - Phorge API store (phorge-api): the subject has the real role on tenant:<name>, which is what the API checks.
+# - A Usage per tuple keeps the tenant's namespace until the tuples are deleted: Kubernetes deletes the content of a
+#   terminating namespace, ProviderConfigUsage objects included, and provider-openfga cannot create its own again to reach
+#   OpenFGA, so the tuples would stay there for ever (phorge-fr/Hangar#185).
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -125,6 +128,50 @@ spec:
                           user: {{ $subject | quote }}
                           relation: {{ $xr.spec.role }}
                           object: {{ printf "tenant:%s" $tenantName | quote }}
+                      ---
+                      apiVersion: protection.crossplane.io/v1beta1
+                      kind: Usage
+                      metadata:
+                        name: i-{{ $hash }}-keeps-namespace
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: namespace-usage-incus
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace-usage-incus")) }}"
+                      spec:
+                        replayDeletion: true
+                        reason: "The incus tuple of a Membership must be deleted before the namespace of the tenant"
+                        of:
+                          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+                          kind: Object
+                          resourceRef:
+                            name: {{ $ns }}
+                            namespace: phorge-system
+                        by:
+                          apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
+                          kind: RelationshipTuple
+                          resourceRef:
+                            name: i-{{ $hash }}
+                      ---
+                      apiVersion: protection.crossplane.io/v1beta1
+                      kind: Usage
+                      metadata:
+                        name: a-{{ $hash }}-keeps-namespace
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: namespace-usage-api
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace-usage-api")) }}"
+                      spec:
+                        replayDeletion: true
+                        reason: "The api tuple of a Membership must be deleted before the namespace of the tenant"
+                        of:
+                          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+                          kind: Object
+                          resourceRef:
+                            name: {{ $ns }}
+                            namespace: phorge-system
+                        by:
+                          apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
+                          kind: RelationshipTuple
+                          resourceRef:
+                            name: a-{{ $hash }}
                       ---
                       apiVersion: phorge.fr/v1alpha1
                       kind: Membership
