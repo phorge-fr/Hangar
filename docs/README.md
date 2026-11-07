@@ -33,6 +33,7 @@ None yet.
 | [GDPR personal data inventory](reference/gdpr-personal-data.md) | Cookies, third parties, personal data per system |
 | [HTTP audit log fields](reference/http-audit-fields.md) | Fields and queries of the Traefik audit log |
 | [Kubernetes audit log fields](reference/kubernetes-audit-fields.md) | Fields and queries of the API server audit log |
+| [Grafana dashboards](reference/grafana-dashboards.md) | Folders, tags and where each dashboard is provisioned |
 | [Credentials on the control cluster](reference/control-credentials.md) | Each credential that opens another system, its rights and status |
 
 ## Explanation
