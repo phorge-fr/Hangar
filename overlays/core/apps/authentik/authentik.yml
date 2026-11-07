@@ -65,6 +65,13 @@ spec:
                       secretKeyRef:
                           name: authentik-crossview-oidc
                           key: client-secret
+                # The client secret of the provider Console OAuth, read by blueprint-phorge-api.yml (!Env). The same value is in
+                # the Secret of the console on the svc cluster, which is what the console presents.
+                - name: CONSOLE_OIDC_CLIENT_SECRET
+                  valueFrom:
+                      secretKeyRef:
+                          name: authentik-console-oidc
+                          key: client-secret
                 # The key of the token of the service account crossplane-provider, read by blueprint-crossplane.yml (!Env). The same
                 # value is in the Secret provider-http-authentik of the control cluster, which is what the provider presents.
                 - name: CROSSPLANE_PROVIDER_TOKEN
