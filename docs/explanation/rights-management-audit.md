@@ -6,7 +6,7 @@ verified: 2026-11-08
 
 # Audit of the management of rights
 
-This page audits how a person is identified and what they may do, from the console to Incus, against the documentation and the standards of each tool. It was written before the terminal ([phorge-fr/phorge-api#31](https://github.com/phorge-fr/phorge-api/issues/31)) and the self-service work add more to it. It ends with a proposal for how the API carries the identity of a user to Incus. The exchange was measured and the decision is proposed in [0013](../decisions/0013-the-api-exchanges-the-token-of-a-user-for-incus.md); nothing here is deployed.
+This page audits how a person is identified and what they may do, from the console to Incus, against the documentation and the standards of each tool. It was written before the terminal ([phorge-fr/phorge-api#31](https://github.com/phorge-fr/phorge-api/issues/31)) and the self-service work add more to it. It ends with a proposal for how the API carries the identity of a user to Incus. The exchange was measured and the decision is recorded in [0013](../decisions/0013-the-api-exchanges-the-token-of-a-user-for-incus.md); nothing here is deployed.
 
 ## How it works today
 

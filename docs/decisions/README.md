@@ -16,4 +16,4 @@ Records of choices that shaped the platform, in [MADR 4.0](https://adr.github.io
 | [0010 Evaluate ZITADEL against Authentik as the identity provider](0010-evaluate-zitadel-against-authentik.md) | accepted |
 | [0011 The control cluster carries no full-admin secret](0011-control-carries-no-full-admin-secret.md) | accepted |
 | [0012 The console signs in with the shared public client](0012-the-console-signs-in-with-the-shared-public-client.md) | accepted |
-| [0013 The API exchanges the token of a user for a token of Incus](0013-the-api-exchanges-the-token-of-a-user-for-incus.md) | proposed |
+| [0013 The API exchanges the token of a user for a token of Incus](0013-the-api-exchanges-the-token-of-a-user-for-incus.md) | accepted |

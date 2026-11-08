@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-08
 decision-makers: l-nmch
 ---
@@ -34,6 +34,7 @@ Chosen option: "an exchange of tokens", because it keeps one application per ser
 * The API sends the access token of the user as `subject_token` with `audience` set to the Incus client ID, and `scope=openid email`. It holds the new token in memory for the session only.
 * The group `iaas-users`, bound to the Incus application, would have refused the exchange for every self-service user, so it is removed (Hangar#410). The lock it was a second one for, `authorization.client.oidc=openfga`, is checked by the Ansible run (Ansible#71), and OpenFGA refuses what a person holds no tuple for.
 * A service that later needs a relayed identity gets its own application and lists the exchanging provider; one audience per exchange.
+* In Incus the person needs the right to exec: it is the Incus role `user` on the project, written by Crossplane for the owner and for the members who write instances (Hangar#379). The role sees the project and may exec and open the console of its instances, and creates, changes and deletes nothing. It is on the project and not one tuple per instance because provider-openfga refuses an object with a slash in it, which every instance is (`instance:<project>/<name>`: found by a live test).
 * Incus does not end a running session when `can_exec` is removed (measured, 92 seconds and still open). The relay of the API rechecks the right of the person in its own store at a fixed interval and closes the session itself, and enforces a maximum duration and an idle timeout.
 
 ### Consequences

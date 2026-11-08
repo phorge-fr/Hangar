@@ -72,6 +72,10 @@ data:
                 # accounts have; a person signs in with the flows above. A JWT that was issued stays valid for the lifetime
                 # of the access token of this provider, so a revoked key is refused at once by its OpenFGA tuples, not here.
                 - client_credentials
+                # The API exchanges the token of a person for one of the Incus application, so that Incus decides what that
+                # person may do in a terminal and the API holds no Incus credential (RFC 8693, docs/decisions/0013; Incus OAuth
+                # lists this provider as federated, see blueprint-incus.yml).
+                - urn:ietf:params:oauth:grant-type:token-exchange
               # The console is served at console.phorge.fr, on the svc cluster (docs/decisions/0008), and signs in with this
               # client as a public one: PKCE, no secret. Its callback and the one of the development server are authorization
               # redirect URIs. The addresses it comes back to after signing out are of the type "logout": authentik only honors
