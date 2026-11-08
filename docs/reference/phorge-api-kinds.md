@@ -122,8 +122,10 @@ An OVN network the user deploys in the tenant's project, NATed on the `UPLINK`. 
 |---|---|---|
 | `metadata.name` | string | 1 to 15 characters: lowercase letters, digits and hyphens, starting with a letter (the Incus network name) |
 | `spec.description` | string | Up to 200 characters |
+| `spec.ipv4` | string | The address of the network and its prefix in the form Incus takes, the gateway's: `10.77.1.1/24`, prefix 16 to 29. Optional, and it cannot change. Without it Incus chooses |
+| `status.ipv4` | string | The address that was asked for, empty when Incus chose |
 
-It is always NATed: a tenant cannot route its own subnet, and an OVN network without NAT is created in the `Errored` state by Incus on this uplink. Its addresses are Incus's choice (a `/24` outside the router's VLANs). The provider does not report the range it chose, so the kind has no address in its status; an instance reports its own `status.ipv4`. The plan limits how many networks a tenant has (`small` 1, `medium` 2, `large` 3): the next one is refused by Incus with `Reached maximum number of networks`.
+It is always NATed: a tenant cannot route its own subnet, and an OVN network without NAT is created in the `Errored` state by Incus on this uplink. Its address is the user's choice (`spec.ipv4`); without one Incus chooses a `/24`. The provider does not report the range Incus chose, so the status only says an address that was asked for; an instance reports its own `status.ipv4`. **Incus does not refuse two networks on the same range** (measured), so what keeps them apart is the API, which checks the overlaps. The plan limits how many networks a tenant has (`small` 1, `medium` 2, `large` 3): the next one is refused by Incus with `Reached maximum number of networks`.
 
 Deleting a `Network` is refused while an instance uses it, see `Instance`.
 

@@ -95,6 +95,9 @@ spec:
                           config:
                             network: UPLINK
                             ipv4.nat: "true"
+                            {{- if $spec.ipv4 }}
+                            ipv4.address: {{ $spec.ipv4 | quote }}
+                            {{- end }}
                       ---
                       apiVersion: protection.crossplane.io/v1beta1
                       kind: Usage
@@ -121,4 +124,5 @@ spec:
                       apiVersion: phorge.fr/v1alpha1
                       kind: Network
                       status:
+                        ipv4: {{ default "" $spec.ipv4 | quote }}
                         problems: {{ join " | " $problems | trunc 800 | quote }}
