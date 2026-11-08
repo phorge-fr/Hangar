@@ -44,6 +44,13 @@ data:
                 - authorization_code
                 - refresh_token
                 - urn:ietf:params:oauth:grant-type:device_code
+              # The token of a person at the Phorge API can be exchanged for a token of this provider (RFC 8693,
+              # docs/decisions/0013): that is how the API opens a terminal for that person without an Incus credential of its
+              # own. The token has this provider's issuer and audience, so Incus accepts it as it does the tokens of its own
+              # sign-in, and the rights are those of the person in the Incus store. A blueprint does not remove a federation
+              # it no longer lists: take it out by hand if this entry goes.
+              jwt_federation_providers:
+                - !Find [authentik_providers_oauth2.oauth2provider, [name, Phorge OAuth]]
               # The web UI sends the user back to https://<the host it was reached on>/oidc/callback
               # (Incus builds it from the Host header, internal/server/auth/oidc). iaas.phorge.fr is
               # reached on the standard 443: the edge HAProxy (Network repo) forwards it in TCP mode, by
