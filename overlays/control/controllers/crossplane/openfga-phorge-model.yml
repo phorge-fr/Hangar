@@ -18,8 +18,11 @@
 # in place (model_json forces a replacement, upjet forbids the destroy, and OpenFGA deletes nothing).
 # To change the model, copy this object under the next name (phorge-api-4, ...) with the new modelDsl
 # and remove the old one in the same change: Flux creates the new version, which becomes the latest,
-# and prunes the old object (its delete does nothing in OpenFGA). Tuples are written without a model
-# ID so OpenFGA always evaluates them against the latest version. Nothing references this name.
+# and prunes the old object (its delete does nothing in OpenFGA, the old model stays usable). Tuples are
+# written without a model ID. The API asks every question against a given model id (OPENFGA_MODEL_ID in
+# overlays/control/apps/phorge-api/deployment.yml), so a new model takes effect for it in a second change:
+# once the new object is Ready, read its id (kubectl -n phorge-system get authorizationmodels, the external
+# name) and deploy the API with it. Until then the API keeps answering with the old model.
 apiVersion: model.openfga.m.crossplane.io/v1alpha1
 kind: AuthorizationModel
 metadata:
