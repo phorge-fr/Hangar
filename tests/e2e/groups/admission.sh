@@ -154,6 +154,14 @@ group_admission() {
 
   section "admission: Network"
   _w net1 | accept "a network with a description"
+  _w net1 "  ipv4: 10.77.1.1/24" | accept "a network with an address"
+  _w net1 "  ipv4: 10.77.1.1/16" | accept "a /16"
+  _w net1 "  ipv4: 10.77.1.1/29" | accept "a /29"
+  _w net1 "  ipv4: 10.77.1.1/15" | reject "a prefix of 15" 'ipv4'
+  _w net1 "  ipv4: 10.77.1.1/30" | reject "a prefix of 30" 'ipv4'
+  _w net1 "  ipv4: 10.77.1.1" | reject "an address without a prefix" 'ipv4'
+  _w net1 "  ipv4: 999.1.1.1/24" | reject "an address that is not one" 'ipv4'
+  _w net1 "  ipv4: fd00::1/64" | reject "an IPv6 address" 'ipv4'
   _w net1 "  nat: false" | reject "a nat field: a network is always NATed" 'unknown field|nat'
   _w a | accept "a one character name"
   _w "$(printf 'a%.0s' {1..15})" | accept "a 15 characters name (the longest Incus allows)"

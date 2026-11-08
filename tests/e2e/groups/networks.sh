@@ -24,7 +24,10 @@ group_networks() {
   wait_until 150 "description" bash -c "ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus network show net --project $a' | grep -q 'e2e renamed'"
   has "a new description is applied in place" "e2e renamed" "$(INCUS network show net --project "$a")"
   eq "and the network stays Ready" True "$(cond networks.phorge.fr net "$a" Ready)"
-  ensure_network "$TA" second || return
+  ensure_network "$TA" second "  ipv4: 10.77.1.1/24" || return
+  eq "the address the user chose is the one Incus has" 10.77.1.1/24 "$(INCUS network get second ipv4.address --project "$a")"
+  eq "and the status says it" 10.77.1.1/24 "$(sget networks.phorge.fr "$a" second '{.status.ipv4}')"
+  eq "a network the user gave no address says none, Incus chose one" "" "$(sget networks.phorge.fr "$a" net '{.status.ipv4}')"
   eq "a network is NATed, there is no way to turn it off" true "$(INCUS network get second ipv4.nat --project "$a")"
   eq "and Incus made it in the Created state" CREATED "$(INCUS network list --project "$a" -f csv -c n,s | grep '^second,' | cut -d, -f2)"
   # the medium plan allows 2 networks: the 3rd is refused by Incus and says why
