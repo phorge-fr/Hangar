@@ -144,7 +144,10 @@ spec:
                             limits.containers: "0"
                             limits.cpu: {{ $p.cpu | quote }}
                             limits.memory: {{ printf "%dGiB" (int $p.mem) | quote }}
-                            limits.disk: {{ printf "%dGiB" (int $p.disk) | quote }}
+                            {{- /* Incus counts, for a virtual machine, the size of its root disk plus size.state (500 MiB by default) in
+                                     limits.disk: a VM with the whole plan disk as root would be refused. The limit is the plan disk plus 512 MiB for
+                                     each VM the plan holds, so that the disk the plan says can be used; the API keeps checking the plan exactly. */}}
+                            limits.disk: {{ printf "%dMiB" (add (mul (int $p.disk) 1024) (mul (int $p.vms) 512)) | quote }}
                             limits.networks: {{ $p.nets | quote }}
                             restricted.cluster.target: block
                             restricted.containers.interception: block
