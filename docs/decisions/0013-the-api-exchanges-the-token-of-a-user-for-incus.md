@@ -32,7 +32,7 @@ Chosen option: "an exchange of tokens", because it keeps one application per ser
 
 * The provider `Phorge OAuth` gets the grant `urn:ietf:params:oauth:grant-type:token-exchange`, and the provider `Incus OAuth` lists `Phorge OAuth` as a federated provider, both in the blueprints.
 * The API sends the access token of the user as `subject_token` with `audience` set to the Incus client ID, and `scope=openid email`. It holds the new token in memory for the session only.
-* The group `iaas-users` still has to contain the person, as the policy of the Incus application applies to them. How self-service users enter it is decided with the build.
+* The group `iaas-users`, bound to the Incus application, would have refused the exchange for every self-service user, so it is removed (Hangar#410). The lock it was a second one for, `authorization.client.oidc=openfga`, is checked by the Ansible run (Ansible#71), and OpenFGA refuses what a person holds no tuple for.
 * A service that later needs a relayed identity gets its own application and lists the exchanging provider; one audience per exchange.
 * Incus does not end a running session when `can_exec` is removed (measured, 92 seconds and still open). The relay of the API rechecks the right of the person in its own store at a fixed interval and closes the session itself, and enforces a maximum duration and an idle timeout.
 

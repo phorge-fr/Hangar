@@ -60,7 +60,7 @@ The OpenFGA documentation strongly recommends giving the model ID in checks, lis
 
 ### 5. One setting stands between every account and full access to Incus (medium)
 
-Incus gives full access to any person that its OIDC provider authenticates, unless an authorization method is set. Here `authorization.client.oidc: openfga` is that method. If it is lost, every account of Authentik is an administrator of Incus. The group `iaas-users` in front of the Incus application is the second lock. Both stay. A check that the setting is present belongs to the Ansible run.
+Incus gives full access to any person that its OIDC provider authenticates, unless an authorization method is set. Here `authorization.client.oidc: openfga` is that method. If it is lost, every account of Authentik is an administrator of Incus. A group in front of the Incus application (`iaas-users`, one member) used to be a second lock. It also kept self-service users out of Incus and out of the token exchange, and it is removed (Hangar#410): the Ansible run now fails when the setting is not present (Ansible#71), which puts the protection where the risk is.
 
 ### 6. Two OpenFGA stores are right (keep)
 
@@ -78,7 +78,7 @@ The nodes of Incus hold the key of their store, and `incus config show` prints i
 
 The terminal needs the API to speak to Incus as the user, without holding a certificate that could open every VM of every tenant. The standard way is an exchange of tokens (RFC 8693): the API gives Authentik the token of the user and asks for a token for another audience.
 
-Authentik 2026.8 supports it. With an `audience`, the new token takes the issuer, the signing key and the client ID of the target provider, so it is a token of the `incus` application that Incus accepts as it is. The target provider must list the exchanging provider as federated, the policies of the target application still apply to the user (so `iaas-users` stays a lock), and the email claim comes from the scope mappings of the target provider.
+Authentik 2026.8 supports it. With an `audience`, the new token takes the issuer, the signing key and the client ID of the target provider, so it is a token of the `incus` application that Incus accepts as it is. The target provider must list the exchanging provider as federated, the policies of the target application still apply to the user, and the email claim comes from the scope mappings of the target provider.
 
 What this gives:
 
@@ -90,13 +90,13 @@ Measured on the real Authentik and Incus on 2026-11-08, with a throwaway service
 
 * A token of the `phorge` application presented to Incus is refused with `401`, `issuer does not match`. The token of the console would be too.
 * The exchange works from the `Phorge OAuth` client, which is public: no secret is needed. The new token has the issuer of the `incus` application, the Incus client ID as audience, the email, one hour of validity, and no `act` claim (impersonation).
-* A person outside `iaas-users` is refused the exchange (`invalid_grant`), and one inside gets the token. The group stays a lock.
+* A person outside the group that was bound to the Incus application, `iaas-users`, was refused the exchange (`invalid_grant`), and one inside got the token. The group is removed, so any account gets the token and OpenFGA decides.
 * Incus accepts the exchanged token and names the person by their email (`auth: trusted`, method `oidc`). With no right in OpenFGA it lists no project.
 * With `can_exec` given to that person on one instance, an exec on that instance is accepted (`202`), and an exec on another instance of the same project is refused (`403`, `does not have entitlement "can_exec"`). Before the tuple, the exec on the first one is `403` too.
 * An interactive terminal works with that token: the input is run and its output comes back, and the window can be resized through the control socket. The websocket handshakes need the same `Authorization` header as the request that created the operation.
 * **Removing `can_exec` while a terminal is open does not close it.** The session was still open 92 seconds after the tuple was removed, as seen from the node. A new exec is refused at once, but the running one is not. The statement that Incus rechecks a running session every 30 seconds does not hold here, so the API has to do it.
 
-Not measured: the exchange for a real person (the claims should be the same), the cost of one exchange, and the way self-service users enter `iaas-users`.
+Not measured: the exchange for a real person (the claims should be the same), the cost of one exchange, and what a person with no tuple at all can do in Incus once the group is gone (it listed no project with the token of a person outside any tuple).
 
 Consequence for the terminal: the relay of the API, not Incus, ends a session. It rechecks the right of the person in its own store at a fixed interval and closes the session when it is gone, and it enforces a maximum duration and an idle timeout. The exchanged token is requested when a terminal opens, kept in memory for that session, never logged and never stored.
 
