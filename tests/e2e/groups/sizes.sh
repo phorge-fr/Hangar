@@ -35,12 +35,14 @@ group_sizes() {
   check "it is deleted in the foreground" gone instances.phorge.fr psmall "$a"
 
   section "sizes: a profile that does not fit the plan, a profile that does not exist"
-  # The disk of the profile m (128 GiB) is above the 100 GiB of the medium plan: Incus refuses the VM, the plan decides.
+  # A profile of the user that is above the medium plan (16 GiB of memory and 300 GiB of disk against 8 and 256): Incus refuses the VM,
+  # the plan decides. The three profiles every tenant has fit their own plan, which holds two of its size.
+  ensure_profile "$TA" huge 4 16384 300 || return
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1
 kind: Instance
 metadata: {name: toobig, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
-spec: {imageRef: {name: deb}, network: net, profile: m, running: false}
+spec: {imageRef: {name: deb}, network: net, profile: huge, running: false}
 YAML
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1
@@ -50,12 +52,15 @@ spec: {imageRef: {name: deb}, network: net, profile: does-not-exist, running: fa
 YAML
   sleep 60
   eq "an instance whose profile is above the plan is never Ready" "" "$(cond instances.phorge.fr toobig "$a" Ready | grep -x True)"
-  match "and it is the disk limit of the plan that refuses it" 'limits.disk' "$(mr_msgs "$a" toobig)"
-  note "the profile m (128 GiB) on the medium plan (100 GiB): $(mr_msgs "$a" toobig | cut -c1-240). The plans and the profiles are not aligned."
+  match "and it is a limit of the plan that refuses it" 'limits' "$(mr_msgs "$a" toobig)"
+  note "a profile above the medium plan: $(mr_msgs "$a" toobig | cut -c1-240)"
   eq "an instance whose profile does not exist is never Ready" "" "$(cond instances.phorge.fr noprof "$a" Ready | grep -x True)"
   eq "and no VM is created in Incus for either" "" "$(INCUS list --project "$a" -f csv -c n | grep -xE 'toobig|noprof')"
   K -n "$a" delete instances.phorge.fr toobig noprof --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
   check "both can be deleted" gone instances.phorge.fr toobig "$a"
+  # the refusal of the Usage lasts a few seconds after the instances are gone, and Crossplane replays the deletion by itself
+  K -n "$a" delete profiles.phorge.fr huge --wait=false >/dev/null 2>&1
+  wait_until 180 "profile gone" gone profiles.phorge.fr huge "$a" && pass "and so can the profile" || fail "and so can the profile" "still there after 180 s"
 
   section "sizes: from custom values to a profile"
   ensure_instance "$TA" sw deb "  running: false" || return

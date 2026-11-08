@@ -14,12 +14,12 @@ group_update() {
   wait_until 150 "description" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus project get $a user.x; LC_ALL=C incus project show $a' | grep -c 'E2E renamed') -ge 1 ]]"
   match "displayName becomes the project description" 'E2E renamed' "$(INCUS project show "$a")"
   K -n phorge-system patch tenants.phorge.fr "$TA" --type merge -p '{"spec":{"plan":"large"}}' >/dev/null
-  wait_until 180 "large limits" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus project get $a limits.instances') == 6 ]]"
+  wait_until 180 "large limits" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus project get $a limits.cpu') == 8 ]]"
   check_plan_limits "$a" large
   eq "the tenant stays Ready through the change" True "$(cond tenants.phorge.fr "$TA" phorge-system Ready)"
   eq "the running VM was not touched" Running "$(INCUS list vm1 --project "$a" -f csv -c s | tr 'a-z' 'A-Z' | sed 's/RUNNING/Running/')"
   K -n phorge-system patch tenants.phorge.fr "$TA" --type merge -p '{"spec":{"plan":"medium"}}' >/dev/null
-  wait_until 180 "medium limits" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus project get $a limits.instances') == 3 ]]"
+  wait_until 180 "medium limits" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus project get $a limits.cpu') == 4 ]]"
   check_plan_limits "$a" medium
 
   # The owner is a tuple, which cannot be edited: the change is either applied or refused up front.

@@ -51,8 +51,9 @@ spec:
                               plan:
                                   description: >-
                                       Quota plan, mapped to the Incus project limits by the composition:
-                                      small 1 VM / 2 vCPU / 4 GiB / 20 GiB / 1 network,
-                                      medium 3 / 4 / 8 / 100 / 2, large 6 / 8 / 16 / 250 / 3.
+                                      small 2 VMs / 2 vCPU / 4 GiB / 128 GiB / 1 network,
+                                      medium 2 / 4 / 8 / 256 / 2, large 2 / 8 / 16 / 512 / 3. Each plan holds two
+                                      instances of its own profile size (s, m, l, see composition-tenant.yml).
                                   type: string
                                   enum: [small, medium, large]
                                   default: small
