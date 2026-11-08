@@ -4,7 +4,9 @@
 #
 # The Usage keeps the tenant's namespace while the Incus network exists, as for the images: provider-incus
 # cannot reach Incus once the namespace terminates (phorge-fr/Hangar#185), so the Tenant waits in "Deleting"
-# until the networks are deleted. The Incus project cannot be deleted before them either.
+# until the networks are deleted. The Incus project cannot be deleted before them either. The Usage is named after its kind
+# (network-<name>-keeps-namespace): objects of two kinds that the user gave the same name live in one namespace, and a Usage
+# of the same name would be refused for the second one (phorge-fr/Hangar#396).
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -100,7 +102,7 @@ spec:
                       apiVersion: protection.crossplane.io/v1beta1
                       kind: Usage
                       metadata:
-                        name: {{ $name }}-keeps-namespace
+                        name: network-{{ $name }}-keeps-namespace
                         annotations:
                           gotemplating.fn.crossplane.io/composition-resource-name: namespace-usage
                           gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace-usage")) }}"
