@@ -133,6 +133,31 @@ spec:
                           resourceRef:
                             name: {{ $name }}
                       ---
+                      {{- /* The namespace of the tenant waits for the Incus Instance: Kubernetes deletes the content of a
+                               terminating namespace, ProviderConfigUsage objects included, and provider-incus cannot create
+                               its own again to reach Incus (phorge-fr/Hangar#185). */}}
+                      apiVersion: protection.crossplane.io/v1beta1
+                      kind: Usage
+                      metadata:
+                        name: {{ $name }}-keeps-namespace
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: namespace-usage
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace-usage")) }}"
+                      spec:
+                        replayDeletion: true
+                        reason: "The Incus Instance {{ $name }} must be deleted before the namespace of the tenant"
+                        of:
+                          apiVersion: kubernetes.m.crossplane.io/v1alpha1
+                          kind: Object
+                          resourceRef:
+                            name: {{ $xr.metadata.namespace }}
+                            namespace: phorge-system
+                        by:
+                          apiVersion: instance.incus.m.crossplane.io/v1alpha1
+                          kind: Instance
+                          resourceRef:
+                            name: {{ $name }}
+                      ---
                       apiVersion: phorge.fr/v1alpha1
                       kind: Instance
                       status:

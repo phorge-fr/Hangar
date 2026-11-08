@@ -3,7 +3,8 @@
 
 now() { date +%s; }
 
-# delete_timeline <tenant> [extra kubectl delete args]: deletes the Tenant and samples Kubernetes and
+# delete_timeline <tenant> [extra kubectl delete args]: deletes the Tenant (then runs $AFTER_DELETE if it is set, a function
+# that can act while the tenant is being deleted) and samples Kubernetes and
 # Incus every 4 s until everything is gone. Sets T_VM T_IMG T_NET T_PROJ T_MR T_K8S (seconds after the
 # delete), ORPHAN=1 if the Tenant object was gone while the managed resources or Incus still held
 # something, PROJ_BEFORE_VM=1 if the project vanished while the VM still existed.
@@ -12,6 +13,7 @@ delete_timeline() {
   T_VM=; T_IMG=; T_NET=; T_PROJ=; T_MR=; T_K8S=; ORPHAN=0; PROJ_BEFORE_VM=0
   t0=$(now); deadline=$((t0+900))
   K -n phorge-system delete tenants.phorge.fr "$t" --wait=false "$@" >/dev/null
+  [[ -n ${AFTER_DELETE:-} ]] && "$AFTER_DELETE" "$t"
   while (( $(now) < deadline )); do
     snap=$(ssh -o BatchMode=yes root@$INCUS_HOST "LC_ALL=C; p=$d
       incus project list -f csv -c n | grep -qx \$p && echo proj=1 || echo proj=0
@@ -45,7 +47,7 @@ no_leftovers() { # <tenant>
 }
 
 group_deletion() {
-  section "deletion: a tenant that holds an image and a running VM, deleted in the foreground"
+  section "deletion: a tenant that holds an image and a running VM, deleted in the foreground, children deleted while it waits"
   ensure_tenant "$TD" small owner-d@example.org || return
   local d="t-$TD"
   # Debian, not Alpine: alpine/3.22/cloud is not secure-boot compatible, Incus refuses to start it
@@ -56,8 +58,20 @@ group_deletion() {
   eq "the VM is running before the delete" Running "$(sget instances.phorge.fr "$d" run1 '{.status.state}')"
   eq "the project holds the VM" 1 "$(INCUS list --project "$d" -f csv -c n | grep -c .)"
 
-  delete_timeline "$TD" --cascade=foreground
-  timeline_note "foreground delete"
+  # What the tenant holds must be deleted before its namespace goes (phorge-fr/Hangar#185): a terminating namespace takes the
+  # ProviderConfigUsage of the Image and of the Instance, and the provider can no longer reach Incus to delete them. The platform
+  # keeps the namespace while they exist (a Usage on it), so a tenant deleted with its children still inside waits, Deleting,
+  # and goes once the children are gone. The Phorge API deletes the children first; this does not, to see the wait.
+  tenant_waits() { # <tenant>: while the Tenant is being deleted and still holds the VM and the image
+    sleep 30
+    eq "the namespace of a tenant that still holds a VM and an image is kept" Active "$(K get ns "t-$1" -o jsonpath='{.status.phase}' 2>/dev/null)"
+    eq "the Tenant waits, Deleting, instead of being stuck" 1 "$(K -n phorge-system get tenants.phorge.fr "$1" -o name 2>/dev/null | grep -c .)"
+    eq "the Image and the Instance are still there, untouched by the tenant deletion" 2 "$(K -n "t-$1" get images.phorge.fr,instances.phorge.fr -o name 2>/dev/null | grep -c .)"
+    K -n "t-$1" delete instances.phorge.fr run1 --cascade=foreground --wait=false >/dev/null 2>&1
+    K -n "t-$1" delete images.phorge.fr alp --cascade=foreground --wait=false >/dev/null 2>&1
+  }
+  AFTER_DELETE=tenant_waits delete_timeline "$TD" --cascade=foreground
+  timeline_note "foreground delete, the children deleted 30 s after the tenant"
   eq "the Incus project was never gone while the VM still existed" 0 "$PROJ_BEFORE_VM"
   eq "everything converged within 15 minutes" yes "$([[ -n $T_PROJ && -n $T_K8S && -n $T_MR ]] && echo yes || echo no)"
   eq "with a foreground delete the Tenant object stays until its resources and Incus are gone (usable as a completion signal)" 0 "$ORPHAN"

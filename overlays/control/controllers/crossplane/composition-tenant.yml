@@ -14,6 +14,13 @@
 #   means blocked, and Incus rejects the literal value "block" for them (they take lists).
 # - It is never force-destroyed: Incus refusing to delete a project that still holds instances,
 #   images, networks or profiles is the safety, and the retry converges once they are gone.
+#   That holds for the network and the profile, which this composition owns. It does not hold for
+#   the Images, Instances and Memberships in the namespace: Kubernetes deletes the content of a
+#   terminating namespace, ProviderConfigUsage objects included, and the providers cannot create
+#   their own again to reach Incus or OpenFGA, so what is still there is never deleted. Each of those
+#   compositions therefore composes a Usage that keeps the namespace Object (see composition-image.yml):
+#   the Tenant stays Deleting until they are gone (the API deletes them first), then the namespace goes.
+#   phorge-fr/Hangar#185.
 # - Egress to the other Phorge networks is not an Incus matter: the router drops phorge-to-phorge
 #   forwards (Network repo, drop-phorge-to-phorge), tenant traffic leaves through comp-ns.
 # - Its profile is named "phorge", not "default": a new project's default profile is empty, so an

@@ -1,7 +1,7 @@
 ---
 type: reference
 audience: developer or operator of the Phorge API kinds
-verified: 2026-11-02
+verified: 2026-11-08
 ---
 
 # Phorge API kinds (`phorge.fr/v1alpha1`)
@@ -191,7 +191,7 @@ Traffic from a tenant leaves through the `comp-ns` VLAN. The router drops traffi
 - `status.problems` on every kind says what is wrong with the composed resources (the Incus or OpenFGA error), empty when everything is up. `Ready` now needs the composed resources to be `Ready` **and** `Synced`.
 
 - Deleting an `Instance` or an `Image` removes the Incus object.
-- Deleting a `Tenant` deletes its namespace, which cascades to every `Image`, `Instance` and `Membership` in it, then the network, the profile, the tuple, and finally the project. Incus refuses to delete a non-empty project, so the project is retried until its contents are gone. The projects are never force-destroyed.
+- Deleting a `Tenant` while it still holds an `Image`, an `Instance` or a `Membership` makes it wait, `Deleting`, until they are gone: a `Usage` composed by each of them keeps the tenant's namespace. Kubernetes deletes the content of a terminating namespace, including what the providers need to reach Incus and OpenFGA, so an object still in a namespace that terminates could never be deleted and would hold the tenant for ever. Delete the children first (the API does: instances, memberships, images, then the tenant), then the namespace goes, then the network, the profile, the tuple, and finally the project. Incus refuses to delete a non-empty project, so the project is retried until its contents are gone. The projects are never force-destroyed.
 - Deleting a `Tenant` destroys the VMs it contains. An API should ask for confirmation.
 
 ## Authorization
