@@ -32,9 +32,12 @@
 #   networks it manages. It cannot know the router's VLANs, so a subnet inside 10.1-10.5 or 10.10-10.12 stays
 #   possible; the e2e suite (tests/e2e, group tenant) asserts that tenant networks are distinct and outside those
 #   ranges.
-# - The owner is "viewer" of the project in the Incus store (the Incus UI is read-only: Crossplane owns every
-#   object and reconciles back anything changed by hand) and "admin" of the tenant in the Phorge API store,
-#   the role the API checks. A Membership for the owner is refused (see composition-membership.yml).
+# - The owner is "user" of the project in the Incus store and "admin" of the tenant in the Phorge API store, the
+#   role the API checks. The Incus role "user" is to see the project, and to open a terminal or the console of its
+#   instances; it cannot create, change or delete anything there, so the Incus UI stays read-only for changes
+#   (Crossplane owns every object and reconciles back anything changed by hand). The terminal of the API is the
+#   exec of Incus with the token of the person (docs/decisions/0013). A Membership for the owner is refused (see
+#   composition-membership.yml).
 # - Every composed resource sets its own ready annotation: function-go-templating leaves readiness
 #   unspecified otherwise and the XR then stays Ready=False even though everything is up.
 apiVersion: apiextensions.crossplane.io/v1
@@ -202,7 +205,7 @@ spec:
                         forProvider:
                           storeId: {{ $env.openfgaStoreId | quote }}
                           user: {{ printf "user:%s" $xr.spec.owner | quote }}
-                          relation: viewer
+                          relation: user
                           object: {{ printf "project:t-%s" $name | quote }}
                       ---
                       apiVersion: tuple.openfga.m.crossplane.io/v1alpha1

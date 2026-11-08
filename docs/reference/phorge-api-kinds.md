@@ -183,8 +183,10 @@ A `Membership` writes two OpenFGA tuples:
 
 | Store | Tuple | Why |
 |---|---|---|
-| `iaas` (the one Incus authorizes against) | the subject is `viewer` of the Incus project, **whatever the role** | The Incus UI (`iaas.phorge.fr`) is read-only. Crossplane owns every Incus object and reconciles back anything changed by hand |
+| `iaas` (the one Incus authorizes against) | the subject is `user` of the Incus project for the roles `admin`, `operator` and `user`, and `viewer` for the role `viewer` | The Incus role `user` sees the project and may open a terminal or the console of its instances (the terminal of the API, [decision 0013](../decisions/0013-the-api-exchanges-the-token-of-a-user-for-incus.md)); it creates, changes and deletes nothing, so the Incus UI (`iaas.phorge.fr`) stays read-only for changes. Crossplane owns every Incus object and reconciles back anything changed by hand. The right is on the project: provider-openfga cannot write an object that contains a slash, which every instance (`instance:<project>/<name>`) is |
 | `phorge-api` | the subject has the real role on `tenant:<name>` | This is what the Phorge API checks before it writes |
+
+The relation of a tuple cannot change in place: the provider refuses to destroy a `RelationshipTuple` that a new relation would replace (`lifecycle.prevent_destroy`), and the tuple stays `Synced=False`. To move existing tuples to a new relation, delete the composed `RelationshipTuple` of each (`t-<tenant>-owner`, `i-<hash>`) once: the composition makes it again with the relation it now says.
 
 | Role | Meaning for the API |
 |---|---|
@@ -249,7 +251,7 @@ Traffic from a tenant leaves through the `comp-ns` VLAN. The router drops traffi
 
 Users authenticate with Authentik (OIDC). Incus identifies them by the `email` claim, so the email is the key of every tuple, and the Authentik enrollment flow must make it mandatory. Tuples are written by Crossplane in two OpenFGA stores:
 
-- `iaas` (`overlays/control/resources/openfga/store.yml`): the one Incus enforces. Users and groups are only `viewer` there: the Incus UI is read-only for everybody, the tenant owner included. Crossplane reconciles an Incus object back as soon as it is changed by hand, and a VM deleted in Incus is recreated blank.
+- `iaas` (`overlays/control/resources/openfga/store.yml`): the one Incus enforces. Users and groups are `user` there (`viewer` for the role `viewer`): they see the project and may open a terminal, and the Incus UI is read-only for changes for everybody, the tenant owner included. Crossplane reconciles an Incus object back as soon as it is changed by hand, and a VM deleted in Incus is recreated blank.
 - `phorge-api`: the roles the Phorge API checks (`can_read_*`, `can_write_*`). Writing goes through the API. An API key writes nothing there: it acts as its owner.
 
 No users or groups are stored in Crossplane: Authentik owns identities.
