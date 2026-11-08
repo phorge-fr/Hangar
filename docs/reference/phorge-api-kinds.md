@@ -76,7 +76,7 @@ Plans, enforced by Incus as project limits:
 | `medium` | 4 | 4 | 8 GiB | 256 GiB | 2 |
 | `large` | 6 | 8 | 16 GiB | 512 GiB | 3 |
 
-The CPU, the memory and the disk of each plan hold two instances of its own profile size: `small` two `s`, `medium` two `m`, `large` two `l`. The count of instances is the plan's own (2, 4 and 6), for smaller instances than the profile.
+The CPU, the memory and the disk of each plan hold two instances of its own profile size: `small` two `s`, `medium` two `m`, `large` two `l`. The count of instances is the plan's own (2, 4 and 6), for smaller instances than the profile. The Incus project limit of the disk is the plan disk plus 512 MiB for each VM of the plan (`small` 132096 MiB, `medium` 264192 MiB, `large` 527360 MiB): Incus counts the state of a VM (500 MiB by default) on top of its root disk, so without that margin a VM with the whole plan disk as root, or two `s` on a `small` plan, would be refused. The API checks the plan exactly; Incus stays the second line.
 
 Composes: a Kubernetes namespace, an Incus project, the three profiles `s`, `m` and `l`, and the owner's tuples. Nothing else: **a tenant comes without a network**, the user deploys theirs (see `Network`).
 
