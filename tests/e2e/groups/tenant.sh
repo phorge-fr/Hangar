@@ -4,7 +4,8 @@
 declare -A PLAN_VMS=([small]=2 [medium]=4 [large]=6)
 declare -A PLAN_CPU=([small]=2 [medium]=4 [large]=8)
 declare -A PLAN_MEM=([small]=4GiB [medium]=8GiB [large]=16GiB)
-declare -A PLAN_DISK=([small]=128GiB [medium]=256GiB [large]=512GiB)
+# the project limit is the plan disk plus 512 MiB for each VM of the plan: Incus counts the state of a VM (500 MiB) on top of its root disk
+declare -A PLAN_DISK=([small]=132096MiB [medium]=264192MiB [large]=527360MiB)
 declare -A PLAN_NETS=([small]=1 [medium]=2 [large]=3)
 
 check_plan_limits() { # <project> <plan>
