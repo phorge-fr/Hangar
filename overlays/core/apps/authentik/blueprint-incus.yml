@@ -18,8 +18,8 @@ data:
         # brand in blueprint-brand.yml), its web UI with the authorization code flow, and both send
         # a PKCE challenge, which authentik honours without a switch.
         # Incus authorizes OIDC users through OpenFGA (authorization.client.oidc, Ansible), so the rights of a
-        # user come from tuples, not from authentik. The application is bound to the group iaas-users: anybody
-        # else is refused at the authorization step, before Incus sees a token.
+        # user come from tuples, not from authentik, and OpenFGA refuses what it holds no tuple for. The application is
+        # open to every account: a person who is in no tuple gets a token and no right.
         entries:
           - model: authentik_providers_oauth2.oauth2provider
             id: incus-oauth-provider
@@ -60,22 +60,10 @@ data:
               name: Incus
               slug: incus
               provider: !Find [authentik_providers_oauth2.oauth2provider, [name, Incus OAuth]]
-          # The members are added in authentik: the blueprint would reset a list at each apply.
+          # The group iaas-users used to be bound to the application. It kept self-service users out of Incus and out of
+          # the token exchange of the terminal, and what decides their rights is OpenFGA, so it is removed (its binding goes
+          # with it). A blueprint does not delete what it no longer lists; once applied everywhere, this entry can go.
           - model: authentik_core.group
-            id: iaas-users-group
+            state: absent
             identifiers:
               name: iaas-users
-            attrs:
-              name: iaas-users
-          - model: authentik_policies.policybinding
-            identifiers:
-              target: !KeyOf incus-application
-              group: !KeyOf iaas-users-group
-              order: 0
-            attrs:
-              target: !KeyOf incus-application
-              group: !KeyOf iaas-users-group
-              order: 0
-              enabled: true
-              negate: false
-              timeout: 30
