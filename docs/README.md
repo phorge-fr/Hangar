@@ -47,6 +47,7 @@ None yet.
 | [The Kubernetes audit log](explanation/kubernetes-audit-log.md) | What is audited, how much, and what is not |
 | [Monitoring scrape pitfalls](explanation/monitoring-scrape-pitfalls.md) | Why a scrape or a series can be missing |
 | [GDPR: decisions still to take](explanation/gdpr-open-decisions.md) | Open choices on retention and visitor information |
+| [Audit of the management of rights](explanation/rights-management-audit.md) | Who is identified how, what each store decides, and how a terminal carries the user's identity |
 
 ## Decisions
 
