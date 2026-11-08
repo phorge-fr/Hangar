@@ -101,6 +101,9 @@ spec:
                       # How many images a tenant may hold (an image is a pull of a few hundred megabytes into the shared pool). 0 is no limit.
                       - name: MAX_IMAGES_PER_TENANT
                         value: "20"
+                      # How many profiles the users of a tenant may make (the three every tenant has do not count). 0 is no limit.
+                      - name: MAX_PROFILES_PER_TENANT
+                        value: "20"
                       # Who creates a tenant: platform-admins, or users to open it to every person signed in, for themselves. Keep
                       # platform-admins until the quotas are deployed and the plans and the profiles are aligned (phorge-fr/phorge-api#69).
                       - name: TENANT_CREATION
