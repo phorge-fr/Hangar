@@ -3,8 +3,9 @@
 # tenant (Instance.spec.network), which is what makes them reachable. The network is NATed on the
 # UPLINK and there is no field to turn that off: a tenant cannot route its own subnet (the project blocks
 # restricted.networks.subnets), and an OVN network without NAT on this uplink is created in the "Errored" state by
-# Incus while Crossplane reads Ready (verified live 2026-11-08). Its addresses are left to Incus (the provider does not report the range it chose, so the Network
-# has no address in its status), and the tenant's plan limits how many there can be.
+# Incus while Crossplane reads Ready (verified live 2026-11-08). Its address is the user's choice (spec.ipv4), or Incus's
+# when none is given: the provider does not report the range Incus chose, so the status only says an address that was asked for.
+# The tenant's plan limits how many networks there can be.
 #
 # Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
 apiVersion: apiextensions.crossplane.io/v2
@@ -35,9 +36,22 @@ spec:
                               description:
                                   type: string
                                   maxLength: 200
+                              ipv4:
+                                  description: >-
+                                      The address of the network and its prefix, in the form Incus takes: the address of the
+                                      gateway, "10.77.1.1/24". Without it Incus chooses one, which nothing reports back.
+                                      Incus does not refuse two networks on the same range: the API does.
+                                  type: string
+                                  pattern: '^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])[.]){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])/(1[6-9]|2[0-9])$'
+                                  x-kubernetes-validations:
+                                      - rule: "self == oldSelf"
+                                        message: "ipv4 cannot change: delete the network and make another"
                       status:
                           type: object
                           properties:
                               problems:
                                   type: string
                                   description: What is wrong with the composed resources, empty when everything is up.
+                              ipv4:
+                                  type: string
+                                  description: The address that was asked for (spec.ipv4), empty when Incus chose.
