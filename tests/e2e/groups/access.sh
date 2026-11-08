@@ -1,7 +1,8 @@
 # Membership: the OpenFGA tuples it writes. ApiKey: a service account of authentik and its expiring tuples (opt-in, see below).
 #
-# - A Membership writes two tuples: "viewer" on the project in the Incus store (iaas), because the Incus
-#   UI is read-only, and the real role on tenant:<name> in the Phorge API store (phorge-api).
+# - A Membership writes two tuples: "user" (or "viewer" for the role viewer) on the project in the Incus store (iaas),
+#   which lets the person open a terminal and change nothing, and the real role on tenant:<name> in the Phorge API
+#   store (phorge-api).
 # - The tuples are checked through the RelationshipTuple managed resources (Ready, and their external name,
 #   <store>/<user>/<relation>/<object>). With FGA_URL and FGA_TOKEN set (OpenFGA reachable from here) they are
 #   also read back from OpenFGA itself and real `check` calls are made.
@@ -66,7 +67,7 @@ group_access() {
   local fga_on=0; [[ -n ${FGA_URL:-} && -n ${FGA_TOKEN:-} ]] && fga_on=1
 
   section "access: the owner"
-  eq "owner: viewer of the project in the Incus store (read-only)" "$s/user:owner-a@example.org/viewer/$obj" "$(tuple_name phorge-system "t-$TA-owner")"
+  eq "owner: user of the project in the Incus store (terminal, no change)" "$s/user:owner-a@example.org/user/$obj" "$(tuple_name phorge-system "t-$TA-owner")"
   eq "owner: admin of the tenant in the Phorge API store" "$ps/user:owner-a@example.org/admin/$tobj" "$(tuple_name phorge-system "t-$TA-owner-api")"
   out=$(mship "$a" me User owner-a@example.org operator); sleep 30
   eq "a Membership for the owner is not Ready" "" "$(cond memberships.phorge.fr me "$a" Ready | grep -x True)"
@@ -79,13 +80,14 @@ group_access() {
     h=$(mhash User "u-$r@example.org")
     if wait_ready memberships.phorge.fr "$a" "m-$r" 90; then
       pass "Membership $r becomes Ready"
-      eq "its Incus tuple is viewer, whatever the role" "$s/user:u-$r@example.org/viewer/$obj" "$(tuple_name "$a" "i-$h")"
+      local inc=user; [[ $r == viewer ]] && inc=viewer
+      eq "its Incus tuple is user, or viewer for the viewer role" "$s/user:u-$r@example.org/$inc/$obj" "$(tuple_name "$a" "i-$h")"
       eq "its API tuple is the real role ($r)" "$ps/user:u-$r@example.org/$r/$tobj" "$(tuple_name "$a" "a-$h")"
     else fail "Membership $r becomes Ready" "$(why memberships.phorge.fr "m-$r" "$a")"; fi
   done
   mship "$a" m-group Group devs operator >/dev/null; h=$(mhash Group devs)
   if wait_ready memberships.phorge.fr "$a" m-group 90; then
-    eq "a Group subject becomes group:<name>#member (Incus tuple)" "$s/group:devs#member/viewer/$obj" "$(tuple_name "$a" "i-$h")"
+    eq "a Group subject becomes group:<name>#member (Incus tuple)" "$s/group:devs#member/user/$obj" "$(tuple_name "$a" "i-$h")"
     eq "and in the API store, with its role" "$ps/group:devs#member/operator/$tobj" "$(tuple_name "$a" "a-$h")"
   else fail "Membership for a group becomes Ready" "$(why memberships.phorge.fr m-group "$a")"; fi
   mship "$a" m-plus User 'First.Last+tag@Example.org' user >/dev/null; h=$(mhash User 'First.Last+tag@Example.org')
@@ -113,7 +115,7 @@ group_access() {
   eq "the other memberships keep theirs" 2 "$(count_tuples "$a" "[ia]-$(mhash User u-admin@example.org)")"
   if (( fga_on )); then
     fga_has "$ps" user:u-operator@example.org operator "$tobj" && fail "in OpenFGA, the deleted Membership's API tuple is gone" || pass "in OpenFGA, the deleted Membership's API tuple is gone"
-    fga_has "$s" user:u-operator@example.org viewer "$obj" && fail "in OpenFGA, the deleted Membership's Incus tuple is gone" || pass "in OpenFGA, the deleted Membership's Incus tuple is gone"
+    fga_has "$s" user:u-operator@example.org user "$obj" && fail "in OpenFGA, the deleted Membership's Incus tuple is gone" || pass "in OpenFGA, the deleted Membership's Incus tuple is gone"
   fi
 
   # A key is a service account of authentik and one tuple per tenant and scope, each with the condition not_expired:
@@ -173,6 +175,13 @@ group_access() {
     eq "a viewer-or-above member can view" true "$(fga_check "$s" user:u-admin@example.org can_view "$obj")"
     eq "and cannot create instances in Incus either, whatever the role" false "$(fga_check "$s" user:u-admin@example.org can_create_instances "$obj")"
     eq "a stranger cannot view" false "$(fga_check "$s" user:stranger@example.org can_view "$obj")"
+    # the terminal: Incus lets exec the people who are "user" of the project, on its instances (Hangar#379, decision 0013)
+    local iobj="instance:t-$TA/anything"
+    eq "the owner may open a terminal on an instance of the project" true "$(fga_check "$s" user:owner-a@example.org can_exec "$iobj")"
+    eq "a member who writes instances may too" true "$(fga_check "$s" user:u-operator@example.org can_exec "$iobj")"
+    eq "a viewer may not" false "$(fga_check "$s" user:u-viewer@example.org can_exec "$iobj")"
+    eq "a stranger may not" false "$(fga_check "$s" user:stranger@example.org can_exec "$iobj")"
+    eq "and a terminal right is not a right to change: the owner cannot edit an instance" false "$(fga_check "$s" user:owner-a@example.org can_edit "$iobj")"
     eq "owner can write instances through the API" true "$(fga_check "$ps" user:owner-a@example.org can_write_instances "$tobj")"
     eq "owner can write memberships through the API" true "$(fga_check "$ps" user:owner-a@example.org can_write_memberships "$tobj")"
     eq "an API 'viewer' can read instances" true "$(fga_check "$ps" user:u-viewer@example.org can_read_instances "$tobj")"

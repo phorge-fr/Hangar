@@ -17,8 +17,8 @@ check_plan_limits() { # <project> <plan>
   eq "$p limits.networks ($plan)" "${PLAN_NETS[$plan]}" "$(INCUS project get "$p" limits.networks)"
 }
 
-# the owner is viewer of the project in the Incus store (read-only) and admin of the tenant in the API store
-owner_tuple() { echo "$(K get environmentconfig phorge -o jsonpath='{.data.openfgaStoreId}')/user:$1/viewer/project:t-$2"; }
+# the owner is user of the project in the Incus store (sees it, opens a terminal, changes nothing) and admin of the tenant in the API store
+owner_tuple() { echo "$(K get environmentconfig phorge -o jsonpath='{.data.openfgaStoreId}')/user:$1/user/project:t-$2"; }
 owner_api_tuple() { echo "$(K get environmentconfig phorge -o jsonpath='{.data.phorgeStoreId}')/user:$1/admin/tenant:$2"; }
 
 group_tenant() {
@@ -68,7 +68,7 @@ group_tenant() {
 
   section "tenant: owner and composed resources"
   eq "the owner tuple is Ready" True "$(cond relationshiptuple.tuple.openfga.m.crossplane.io "t-$TA-owner" phorge-system Ready)"
-  eq "the owner is viewer of the project in the Incus store: Incus is read-only" "$(owner_tuple owner-a@example.org "$TA")" \
+  eq "the owner is user of the project in the Incus store: it opens a terminal and changes nothing" "$(owner_tuple owner-a@example.org "$TA")" \
      "$(sget relationshiptuple.tuple.openfga.m.crossplane.io phorge-system "t-$TA-owner" '{.metadata.annotations.crossplane\.io/external-name}')"
   eq "and admin of the tenant in the Phorge API store, which the API checks" "$(owner_api_tuple owner-a@example.org "$TA")" \
      "$(sget relationshiptuple.tuple.openfga.m.crossplane.io phorge-system "t-$TA-owner-api" '{.metadata.annotations.crossplane\.io/external-name}')"
