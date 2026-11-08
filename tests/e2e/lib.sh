@@ -21,6 +21,7 @@ TN="e2e-$RUN_ID-n"   # small: networks of a third tenant, to compare subnets
 shopt -s lastpipe   # so `printf ... | accept` counts in this shell, not in a subshell
 PASS=0; FAIL=0; SKIP=0; FAILED=()
 TRACK_TENANTS=(); TRACK_NS=(); TRACK_XR=()   # TRACK_XR: "kind namespace name"
+TIMES=()   # "group seconds", in the order they ran
 if [[ -t 1 ]]; then R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[34m'; Z=$'\e[0m'; else R=; G=; Y=; B=; Z=; fi
 
 K() { kubectl --context "$E2E_CONTEXT" "$@"; }
@@ -236,6 +237,7 @@ preflight() {
 }
 
 summary() {
+  local t; if (( ${#TIMES[@]} )); then printf '\n%s== time%s\n' "$B" "$Z"; for t in "${TIMES[@]}"; do printf '  %-12s %4d s\n' "${t% *}" "${t#* }"; done; fi
   printf '\n%s== %d passed, %d failed, %d skipped%s\n' "$B" "$PASS" "$FAIL" "$SKIP" "$Z"
   local f; for f in "${FAILED[@]}"; do printf '  %s- %s%s\n' "$R" "$f" "$Z"; done
   (( FAIL == 0 ))
