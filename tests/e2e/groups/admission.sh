@@ -143,12 +143,12 @@ group_admission() {
   _k "  $E
   grants: [{tenant: demo, scopes: [instances:read]}]" | accept "key with one grant"
   _k "  $E
-  grants: [{tenant: demo, scopes: [tenants:read, instances:read, instances:write, images:read, images:write, memberships:read, memberships:write]}]" | accept "key with all 7 scopes"
+  grants: [{tenant: demo, scopes: [tenants:read, tenants:write, instances:read, instances:write, images:read, images:write, networks:read, networks:write, memberships:read, memberships:write]}]" | accept "key with all 10 scopes"
   _k "  $E
   grants: [{tenant: a, scopes: [instances:read]}, {tenant: b, scopes: [images:read]}]
   displayName: ci" | accept "key on two tenants with every field"
   _k "  $E
-  grants: [{tenant: demo, scopes: [tenants:write]}]" | reject "tenants:write has no relation for a key" 'scopes'
+  grants: [{tenant: demo, scopes: [tenants:create]}]" | reject "tenants:create: no key creates a tenant" 'scopes'
   _k "  $E
   grants: [{tenant: demo, scopes: [tenant:read]}]" | reject "the former scope name tenant:read" 'scopes'
   _k "  $E" | reject "no grants" 'spec.grants'

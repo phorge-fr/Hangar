@@ -49,6 +49,9 @@ spec:
                 define viewer: [user, group#member] or user
 
                 define key_tenant_read: [apikey with not_expired]
+                define key_tenants_write: [apikey with not_expired]
+                define key_networks_read: [apikey with not_expired]
+                define key_networks_write: [apikey with not_expired]
                 define key_instances_read: [apikey with not_expired]
                 define key_instances_write: [apikey with not_expired]
                 define key_images_read: [apikey with not_expired]
@@ -56,19 +59,18 @@ spec:
                 define key_memberships_read: [apikey with not_expired]
                 define key_memberships_write: [apikey with not_expired]
 
-                # Renaming a tenant and deleting it is for its admins, the owner among them (phorge-fr/phorge-api#75). A key has no
-                # scope for it, and the plan is a platform administrator's, which the API reads from the token, not from here.
-                define can_write_tenant: admin
+                # Renaming a tenant and deleting it is for its admins, the owner among them (phorge-fr/phorge-api#75), or a key given
+                # tenants:write on it. The plan is a platform administrator's, which the API reads from the token, not from here.
+                define can_write_tenant: admin or key_tenants_write
 
                 define can_read_tenant: viewer or key_tenant_read
                 define can_read_instances: viewer or key_instances_read
                 define can_write_instances: user or key_instances_write
                 define can_read_images: viewer or key_images_read
                 define can_write_images: operator or key_images_write
-                # The networks are for the roles until a scope of a key covers them (phorge-fr/phorge-api#74): reading is for every
-                # role, writing for the operator and the admin, as for the images.
-                define can_read_networks: viewer
-                define can_write_networks: operator
+                # Reading the networks is for every role, writing for the operator and the admin, as for the images.
+                define can_read_networks: viewer or key_networks_read
+                define can_write_networks: operator or key_networks_write
 
                 define can_read_memberships: admin or key_memberships_read
                 define can_write_memberships: admin or key_memberships_write
