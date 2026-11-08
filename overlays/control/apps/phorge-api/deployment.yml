@@ -91,6 +91,23 @@ spec:
                       # exceeds what its creator holds). Anyone lists, renames and revokes their own.
                       - name: API_KEY_CREATION
                         value: platform-admins
+                      # How many requests that create, change or delete one caller (a person or a key) may send a minute, in bursts of
+                      # RATE_LIMIT_BURST: past it the answer is 429 with Retry-After. 0 would limit nothing. It is kept in the memory of
+                      # one replica of the API.
+                      - name: RATE_LIMIT_WRITES_PER_MINUTE
+                        value: "60"
+                      - name: RATE_LIMIT_BURST
+                        value: "10"
+                      # How many images a tenant may hold (an image is a pull of a few hundred megabytes into the shared pool). 0 is no limit.
+                      - name: MAX_IMAGES_PER_TENANT
+                        value: "20"
+                      # Who creates a tenant: platform-admins, or users to open it to every person signed in, for themselves. Keep
+                      # platform-admins until the quotas are deployed and the plans and the profiles are aligned (phorge-fr/phorge-api#69).
+                      - name: TENANT_CREATION
+                        value: platform-admins
+                      # How many tenants a person who is not a platform administrator may own, when TENANT_CREATION is users.
+                      - name: MAX_TENANTS_PER_USER
+                        value: "3"
                       # The container limit is 192 MiB: make the GC reclaim before it is reached.
                       - name: GOMEMLIMIT
                         value: 150MiB
