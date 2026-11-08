@@ -5,8 +5,10 @@ cluster and the **real** Incus cluster (it creates VMs, pulls images, writes Ope
 removes what it created. It is run by hand, not in CI.
 
 ```
-./run.sh                 # everything, about an hour (image pulls and VM boots dominate)
-./run.sh fast            # admission + guards: server-side dry runs, a few minutes, no Incus change
+./run.sh                 # the smoke tier: admission, guards, tenant
+./run.sh standard        # smoke + networks, profiles: stopped VMs and one image pull
+./run.sh full            # everything, about an hour (image pulls and VM boots dominate)
+./run.sh fast            # admission + guards: server-side dry runs, no Incus change
 ./run.sh tenant image    # chosen groups; fixtures are created on demand
 ./run.sh --list          # group names
 ./run.sh --sweep         # first delete what an interrupted run left behind
@@ -17,6 +19,17 @@ Needs: `kubectl` context `control` (override with `E2E_CONTEXT`), `ssh root@10.1
 node (`INCUS_HOST`), and the Crossplane compositions of `overlays/control/controllers/crossplane`
 deployed. Optional: `FGA_URL` and `FGA_TOKEN` (an OpenFGA reachable from here) to read the tuples
 back from OpenFGA and run real `check` calls in the `access` group.
+
+## Which tier to run
+
+| Tier | Groups | Needs | Run it for |
+|---|---|---|---|
+| `fast` | `admission`, `guards` | the XRDs and the compositions | a change to an XRD rule or a guard |
+| `smoke` (the default) | `fast` + `tenant` | no image, no VM | any change to a composition |
+| `standard` | `smoke` + `networks`, `profiles` | one image pull (cached after the first), stopped VMs, no VM boot | a change to the Network, Profile or Instance kind, or to the plans |
+| `full` | all | VM boots, the Internet | before a release, or when a change touches what runs inside a VM |
+
+Every group tests the definitions that are **on the cluster**, so a run for a pull request needs its XRDs and compositions applied first (the live-testing how-to: Flux suspended, resumed and the cluster back to `main` afterwards). A run against `main` after a merge needs nothing. The time of every group is printed at the end of a run. The figures of the tiers are to be filled from the first runs; the full run of `tenant`, `image`, `instance`, `access`, `network`, `update` and `deletion` took about an hour, which is why it is no longer the default (phorge-fr/Hangar#387, and what takes the time inside the groups is phorge-fr/Hangar#388).
 
 ## Safety
 
