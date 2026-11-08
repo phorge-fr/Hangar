@@ -56,7 +56,7 @@ YAML
   eq "the profile s of the tenant is untouched" 2GiB "$(INCUS profile get s limits.memory --project "$a")"
 
   section "profiles: a profile above the plan is a definition, the instance is what the plan refuses"
-  ensure_profile "$TA" huge 4 8192 128 || return
+  ensure_profile "$TA" huge 4 16384 300 || return
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1
 kind: Instance

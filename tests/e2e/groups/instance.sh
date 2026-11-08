@@ -53,22 +53,11 @@ group_instance() {
   wait_until 60 "state" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n $a get instances.phorge.fr vm2 -o jsonpath='{.status.state}') == Stopped ]]"
   eq "status.state reports Stopped" Stopped "$(sget instances.phorge.fr "$a" vm2 '{.status.state}')"
   eq "nesting: true sets security.nesting" true "$(INCUS config get vm2 security.nesting --project "$a")"
-  ensure_instance "$TA" vm3 deb "  running: false" || return
-  # medium allows 3 VMs: the 4th must be refused by Incus, and say why
-  cat <<YAML | K apply -f - >/dev/null
-apiVersion: phorge.fr/v1alpha1
-kind: Instance
-metadata: {name: vm4, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
-spec: {imageRef: {name: deb}, network: net, cpu: 1, memoryMiB: 1024, diskGiB: 10, running: false}
-YAML
-  wait_until 120 "vm4 synced=False" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n $a get instances.phorge.fr vm4 -o jsonpath='{.status.conditions[?(@.type==\"Synced\")].status}') == False ]]"
-  match "the 4th VM on a medium plan is refused with Incus's message" 'Reached maximum number of instances' "$(mr_msgs "$a" vm4)"
-  eq "and it did not get created in Incus" 3 "$(INCUS list --project "$a" -f csv -c n | grep -c .)"
-  K -n "$a" delete instances.phorge.fr vm4 --wait=true --timeout=120s >/dev/null 2>&1
-
-  # free a slot first: with 3 VMs the instance-count limit would refuse bigdisk before the disk limit is reached
-  K -n "$a" delete instances.phorge.fr vm3 --wait=true --timeout=200s >/dev/null 2>&1
-  wait_until 120 "vm3 gone" bash -c "! ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus list --project $a -f csv -c n' | grep -qx vm3"
+  # The count of instances a plan allows (2, 4 and 6) is checked on the project in the tenant group and by the API's own tests: on a
+  # medium plan the CPU gives out first for VMs of this size, so the count is not reached here.
+  # free the nested VM first: its disk and CPU would be counted next to the 500 GiB that must be refused for the disk
+  K -n "$a" delete instances.phorge.fr vm2 --wait=true --timeout=200s >/dev/null 2>&1
+  wait_until 120 "vm2 gone" bash -c "! ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus list --project $a -f csv -c n' | grep -qx vm2"
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1
 kind: Instance
@@ -79,7 +68,7 @@ YAML
   eq "a disk above the plan's total is never Ready" "" "$(cond instances.phorge.fr bigdisk "$a" Ready | grep -x True)"
   match "and it is the disk limit that refuses it, not the instance count" 'limits.disk|disk' "$(mr_msgs "$a" bigdisk)"
   nomatch "(not 'Reached maximum number of instances')" 'maximum number of instances' "$(mr_msgs "$a" bigdisk)"
-  note "500 GiB on a 100 GiB plan: $(mr_msgs "$a" bigdisk | cut -c1-300)"
+  note "500 GiB on a 256 GiB plan: $(mr_msgs "$a" bigdisk | cut -c1-300)"
   K -n "$a" delete instances.phorge.fr bigdisk --wait=true --timeout=120s >/dev/null 2>&1
 
   section "instance: an image that is not there"

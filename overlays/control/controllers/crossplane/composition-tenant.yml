@@ -92,7 +92,7 @@ spec:
                       {{- fail (printf "a Tenant belongs in phorge-system, not %q" $xr.metadata.namespace) -}}
                       {{- end -}}
                       {{- $name := $xr.metadata.name -}}
-                      {{- $plans := dict "small" (dict "vms" 1 "cpu" 2 "mem" 4 "disk" 20 "nets" 1) "medium" (dict "vms" 3 "cpu" 4 "mem" 8 "disk" 100 "nets" 2) "large" (dict "vms" 6 "cpu" 8 "mem" 16 "disk" 250 "nets" 3) -}}
+                      {{- $plans := dict "small" (dict "vms" 2 "cpu" 2 "mem" 4 "disk" 128 "nets" 1) "medium" (dict "vms" 4 "cpu" 4 "mem" 8 "disk" 256 "nets" 2) "large" (dict "vms" 6 "cpu" 8 "mem" 16 "disk" 512 "nets" 3) -}}
                       {{- $p := index $plans $xr.spec.plan -}}
                       {{- /* The sizes a tenant starts with, as Incus profiles of its project. A tenant is only its project and
                                these three profiles: the network and everything else is the user's to deploy. */ -}}

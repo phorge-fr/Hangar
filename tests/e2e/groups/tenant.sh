@@ -1,10 +1,10 @@
 # A Tenant against the real clusters: what it composes in Kubernetes, Incus and OpenFGA.
 
 # plan -> instances, cpu, memory, disk, networks (the table of composition-tenant.yml / docs)
-declare -A PLAN_VMS=([small]=1 [medium]=3 [large]=6)
+declare -A PLAN_VMS=([small]=2 [medium]=4 [large]=6)
 declare -A PLAN_CPU=([small]=2 [medium]=4 [large]=8)
 declare -A PLAN_MEM=([small]=4GiB [medium]=8GiB [large]=16GiB)
-declare -A PLAN_DISK=([small]=20GiB [medium]=100GiB [large]=250GiB)
+declare -A PLAN_DISK=([small]=128GiB [medium]=256GiB [large]=512GiB)
 declare -A PLAN_NETS=([small]=1 [medium]=2 [large]=3)
 
 check_plan_limits() { # <project> <plan>
