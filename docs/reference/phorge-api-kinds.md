@@ -28,6 +28,7 @@ flowchart TB
     subgraph ns["namespace t-demo"]
         image["Image"]
         network["Network"]
+        uprofile["Profile"]
         instance["Instance"]
         member["Membership"]
     end
@@ -37,9 +38,11 @@ flowchart TB
     tenant -->|composes| owner["tuple: owner is admin"]
     image -->|composes| iimg["Incus image"]
     network -->|composes| inet["Incus OVN network"]
+    uprofile -->|composes| iprofile["Incus profile"]
     instance -->|imageRef| image
     instance -->|network| network
     instance -->|profile| profiles
+    instance -->|profile| uprofile
     instance -->|composes| ivm["Incus VM"]
     member -->|composes| tuple["OpenFGA tuple"]
 ```
@@ -47,9 +50,9 @@ flowchart TB
 | Kind | Scope | Lives in |
 |---|---|---|
 | `Tenant` | Namespaced | `phorge-system` only |
-| `Image`, `Network`, `Instance`, `Membership` | Namespaced | the tenant's namespace `t-<name>` only |
+| `Image`, `Network`, `Profile`, `Instance`, `Membership` | Namespaced | the tenant's namespace `t-<name>` only |
 
-A tenant `demo` is the namespace `t-demo` and the Incus project `t-demo`. Creating an `Image`, `Network`, `Instance` or `Membership` anywhere else, or a `Tenant` outside `phorge-system`, fails with `Synced=False` and a message that names the namespace. This guard exists because the namespace is used as the Incus project name: an `Instance` in `default` would otherwise target the real `default` project.
+A tenant `demo` is the namespace `t-demo` and the Incus project `t-demo`. Creating an `Image`, `Network`, `Profile`, `Instance` or `Membership` anywhere else, or a `Tenant` outside `phorge-system`, fails with `Synced=False` and a message that names the namespace. This guard exists because the namespace is used as the Incus project name: an `Instance` in `default` would otherwise target the real `default` project.
 
 Every kind reports the standard Crossplane conditions (`Synced`, `Ready`). `Ready=True` means every composed resource is up.
 
@@ -122,6 +125,20 @@ It is always NATed: a tenant cannot route its own subnet, and an OVN network wit
 
 Deleting a `Network` is refused while an instance uses it, see `Instance`.
 
+## Profile
+
+A size the user makes in the tenant's project, next to the three every tenant is created with (`s`, `m` and `l`): CPU, memory and a root disk, in Incus. An instance names it in `spec.profile`.
+
+| Field | Type | Rule |
+|---|---|---|
+| `metadata.name` | string | 1 to 32 characters: lowercase letters, digits and hyphens, starting with a letter and not ending with a hyphen. `s`, `m`, `l` and `default` are taken |
+| `spec.cpu` | integer, required | 1 to 16 |
+| `spec.memoryMiB` | integer, required | 256 to 65536 |
+| `spec.diskGiB` | integer, required | 1 to 500 |
+| `spec.description` | string | Up to 200 characters. Without one it says what the profile comes to |
+
+A profile can be changed in place. Deleting one is refused while an instance has it (`in-use by` and the instance's name) and goes by itself once the last instance is gone, without a second delete. Deleting a tenant waits for its profiles, as for its networks and images. A profile above the plan is a definition: it is the instance that Incus refuses, with the plan's limit.
+
 ## Instance
 
 A virtual machine in the tenant's project.
@@ -130,7 +147,7 @@ A virtual machine in the tenant's project.
 |---|---|---|
 | `spec.imageRef.name` | string, required | An `Image` of the same tenant |
 | `spec.network` | string, required | A `Network` of the same tenant: the instance's `eth0` is attached to it |
-| `spec.profile` | string | A profile of the tenant (`s`, `m`, `l`), which carries the CPU, the memory and the root disk |
+| `spec.profile` | string | A profile of the tenant (`s`, `m`, `l`, or a `Profile` the user made), which carries the CPU, the memory and the root disk |
 | `spec.cpu` | integer | 1 to 16, with `memoryMiB` and `diskGiB`, when there is no profile |
 | `spec.memoryMiB` | integer | 256 to 65536, with `cpu` and `diskGiB` |
 | `spec.diskGiB` | integer | 1 to 500, with `cpu` and `memoryMiB` |
@@ -168,7 +185,7 @@ A `Membership` writes two OpenFGA tuples:
 | Role | Meaning for the API |
 |---|---|
 | `admin` | Everything on the tenant, including memberships, renaming it and deleting it |
-| `operator` | Manage instances, images and networks (and read the rest) |
+| `operator` | Manage instances, images, networks and profiles (and read the rest) |
 | `user` | Create and use instances |
 | `viewer` | Read-only. Networks are read with any role, written with `operator` and `admin`; no key scope covers them yet |
 
@@ -191,7 +208,7 @@ A service account of Authentik that holds a key, for a person's scripts and tool
 | `status.secretName` | string | The Secret that receives the key, `<name>-token`, in `phorge-keys` |
 | `status.expired` | boolean | True once `expiresAt` has passed |
 
-**A key is only what OpenFGA holds for it.** The composition writes one tuple per tenant and scope in the `phorge-api` store (`key_<resource>_<action>` on `tenant:<name>`), each with the condition `not_expired` and `expires_at` in its context, and the API sends the current time with every question. From `expiresAt` OpenFGA refuses the key by itself, at the second and without anything being deleted. A key has no groups, so it is never a platform administrator: it cannot create a tenant for someone else nor choose a plan. The scopes are `tenants:read|write`, `instances:read|write`, `images:read|write`, `networks:read|write` and `memberships:read|write`; `tenants:write` renames the tenant it is given on and deletes it.
+**A key is only what OpenFGA holds for it.** The composition writes one tuple per tenant and scope in the `phorge-api` store (`key_<resource>_<action>` on `tenant:<name>`), each with the condition `not_expired` and `expires_at` in its context, and the API sends the current time with every question. From `expiresAt` OpenFGA refuses the key by itself, at the second and without anything being deleted. A key has no groups, so it is never a platform administrator: it cannot create a tenant for someone else nor choose a plan. The scopes are `tenants:read|write`, `instances:read|write`, `images:read|write`, `networks:read|write`, `profiles:read|write` and `memberships:read|write`; `tenants:write` renames the tenant it is given on and deletes it.
 
 **The identity does not expire.** The service account and its token are created in Authentik by a `provider-http` `Request`, with an identity that can only add users and manage tokens (`blueprint-crossplane.yml`). The key is generated by Authentik and lands in the Secret `status.secretName`; the Request owns that Secret. The API shows the key once and deletes the Secret, after which provider-http recreates it empty, so a Secret without a `token` means the key was already handed over.
 

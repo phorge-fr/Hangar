@@ -53,7 +53,8 @@ group_deletion() {
   # Debian, not Alpine: alpine/3.22/cloud is not secure-boot compatible, Incus refuses to start it
   # ("incompatible with secureboot") and the Instance kind has no way to turn secureboot off.
   ensure_image "$TD" alp "$IMG_DEBIAN" || return
-  ensure_instance "$TD" run1 alp || return
+  ensure_profile "$TD" mine 1 1024 10 || return
+  ensure_instance "$TD" run1 alp "  profile: mine" || return
   wait_until 120 "VM running" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n $d get instances.phorge.fr run1 -o jsonpath='{.status.state}') == Running ]]"
   eq "the VM is running before the delete" Running "$(sget instances.phorge.fr "$d" run1 '{.status.state}')"
   eq "the project holds the VM" 1 "$(INCUS list --project "$d" -f csv -c n | grep -c .)"
@@ -66,8 +67,9 @@ group_deletion() {
     sleep 30
     eq "the namespace of a tenant that still holds a VM and an image is kept" Active "$(K get ns "t-$1" -o jsonpath='{.status.phase}' 2>/dev/null)"
     eq "the Tenant waits, Deleting, instead of being stuck" 1 "$(K -n phorge-system get tenants.phorge.fr "$1" -o name 2>/dev/null | grep -c .)"
-    eq "the Image, the Instance and the Network are still there, untouched by the tenant deletion" 3 "$(K -n "t-$1" get images.phorge.fr,instances.phorge.fr,networks.phorge.fr -o name 2>/dev/null | grep -c .)"
+    eq "the Image, the Instance, the Network and the Profile are still there, untouched by the tenant deletion" 4 "$(K -n "t-$1" get images.phorge.fr,instances.phorge.fr,networks.phorge.fr,profiles.phorge.fr -o name 2>/dev/null | grep -c .)"
     K -n "t-$1" delete instances.phorge.fr run1 --cascade=foreground --wait=false >/dev/null 2>&1
+    K -n "t-$1" delete profiles.phorge.fr mine --wait=false >/dev/null 2>&1
     K -n "t-$1" delete networks.phorge.fr net --wait=false >/dev/null 2>&1
     K -n "t-$1" delete images.phorge.fr alp --cascade=foreground --wait=false >/dev/null 2>&1
   }

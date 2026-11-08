@@ -52,6 +52,8 @@ spec:
                 define key_tenants_write: [apikey with not_expired]
                 define key_networks_read: [apikey with not_expired]
                 define key_networks_write: [apikey with not_expired]
+                define key_profiles_read: [apikey with not_expired]
+                define key_profiles_write: [apikey with not_expired]
                 define key_instances_read: [apikey with not_expired]
                 define key_instances_write: [apikey with not_expired]
                 define key_images_read: [apikey with not_expired]
@@ -71,6 +73,10 @@ spec:
                 # Reading the networks is for every role, writing for the operator and the admin, as for the images.
                 define can_read_networks: viewer or key_networks_read
                 define can_write_networks: operator or key_networks_write
+
+                # The profiles a user makes are read like the instances that use them and written like the networks.
+                define can_read_profiles: viewer or key_profiles_read
+                define can_write_profiles: operator or key_profiles_write
 
                 define can_read_memberships: admin or key_memberships_read
                 define can_write_memberships: admin or key_memberships_write

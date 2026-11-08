@@ -14,11 +14,12 @@ group_guards() {
   _guard Image "  source: {name: $IMG_ALPINE}" default "e2e-$RUN_ID-g"
   _guard Instance "  {imageRef: {name: nope}, network: net, profile: s}" default "e2e-$RUN_ID-g"
   _guard Network "  description: guard" default "e2e-$RUN_ID-g"
+  _guard Profile "  {cpu: 1, memoryMiB: 1024, diskGiB: 10}" default "e2e-$RUN_ID-g"
   _guard Membership "  {subject: {kind: User, name: g@example.org}, role: admin}" default "e2e-$RUN_ID-g"
   _guard ApiKey "  {owner: g@example.org, expiresAt: '2030-01-01T00:00:00Z', grants: [{tenant: demo, scopes: [instances:read]}]}" default "e2e-$RUN_ID-g"
   local kind rx
-  declare -A WANT=([tenants]='belongs in phorge-system' [images]='belongs in a tenant namespace' [instances]='belongs in a tenant namespace' [networks]='belongs in a tenant namespace' [memberships]='belongs in a tenant namespace' [apikeys]='belongs in the namespace phorge-keys')
-  for kind in tenants images instances networks memberships apikeys; do
+  declare -A WANT=([tenants]='belongs in phorge-system' [images]='belongs in a tenant namespace' [instances]='belongs in a tenant namespace' [networks]='belongs in a tenant namespace' [profiles]='belongs in a tenant namespace' [memberships]='belongs in a tenant namespace' [apikeys]='belongs in the namespace phorge-keys')
+  for kind in tenants images instances networks profiles memberships apikeys; do
     wait_until 90 "$kind synced condition" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n default get $kind.phorge.fr e2e-$RUN_ID-g -o jsonpath='{.status.conditions[?(@.type==\"Synced\")].status}') == False ]]"
     match "$kind in default is refused with an explicit message" "${WANT[$kind]}" "$(cond_msg $kind.phorge.fr "e2e-$RUN_ID-g" default Synced)"
     eq "$kind in default is never Ready" "" "$(cond $kind.phorge.fr "e2e-$RUN_ID-g" default Ready | grep -x True)"
@@ -36,9 +37,10 @@ group_guards() {
   _guard Image "  source: {name: $IMG_ALPINE}" "$ns" ghost
   _guard Instance "  {imageRef: {name: nope}, network: net, profile: s}" "$ns" ghost
   _guard Network "  description: guard" "$ns" ghost
+  _guard Profile "  {cpu: 1, memoryMiB: 1024, diskGiB: 10}" "$ns" ghost
   _guard Membership "  {subject: {kind: User, name: g@example.org}, role: viewer}" "$ns" ghost
   sleep 45
-  for kind in images instances networks memberships; do
+  for kind in images instances networks profiles memberships; do
     eq "$kind in a namespace without Tenant is never Ready" "" "$(cond $kind.phorge.fr ghost "$ns" Ready | grep -x True)"
     match "$kind: refused with a message that names the missing Tenant" 'has no Tenant' "$(cond_msg $kind.phorge.fr ghost "$ns" Synced)"
   done
