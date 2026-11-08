@@ -1,0 +1,57 @@
+# A Profile is a size a user makes in their tenant's Incus project, next to the three every tenant is created with
+# (s, m and l, see composition-tenant.yml): CPU, memory and a root disk. An Instance names it in spec.profile.
+#
+# Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name. The names of the profiles a tenant is
+# created with, and "default" (the project's own empty profile), are taken: a Profile of that name would make the Incus profile
+# of the tenant and the one of the user the same object.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+    name: profiles.phorge.fr
+spec:
+    scope: Namespaced
+    group: phorge.fr
+    names:
+        kind: Profile
+        plural: profiles
+    versions:
+        - name: v1alpha1
+          served: true
+          referenceable: true
+          schema:
+              openAPIV3Schema:
+                  type: object
+                  x-kubernetes-validations:
+                      - rule: "self.metadata.name.matches('^[a-z][a-z0-9-]{0,30}[a-z0-9]$|^[a-z]$')"
+                        message: "name must be 1 to 32 characters: lowercase letters, digits and hyphens, starting with a letter and not ending with a hyphen"
+                      - rule: "!(self.metadata.name in ['s', 'm', 'l', 'default'])"
+                        message: "s, m, l and default are the profiles every tenant has"
+                  properties:
+                      spec:
+                          type: object
+                          properties:
+                              description:
+                                  type: string
+                                  maxLength: 200
+                              cpu:
+                                  type: integer
+                                  minimum: 1
+                                  maximum: 16
+                              memoryMiB:
+                                  type: integer
+                                  minimum: 256
+                                  maximum: 65536
+                              diskGiB:
+                                  type: integer
+                                  minimum: 1
+                                  maximum: 500
+                          required:
+                              - cpu
+                              - memoryMiB
+                              - diskGiB
+                      status:
+                          type: object
+                          properties:
+                              problems:
+                                  type: string
+                                  description: What is wrong with the composed resources, empty when everything is up.

@@ -4,7 +4,7 @@
 cd "$(dirname "$0")" || exit 1
 source ./lib.sh
 
-GROUPS_ALL=(admission guards tenant image instance sizes access networks network update deletion)
+GROUPS_ALL=(admission guards tenant image instance sizes profiles access networks network update deletion)
 for g in "${GROUPS_ALL[@]}"; do source "./groups/$g.sh"; done
 
 SELECTED=()

@@ -146,6 +146,31 @@ spec:
                           kind: Instance
                           resourceRef:
                             name: {{ $name }}
+                      {{- /* A profile the user made cannot be deleted while this Instance uses it. The three profiles every tenant is
+                               created with are Incus's own objects, there is no Profile to keep. */}}
+                      {{- if and $spec.profile (not (has $spec.profile (list "s" "m" "l"))) }}
+                      ---
+                      apiVersion: protection.crossplane.io/v1beta1
+                      kind: Usage
+                      metadata:
+                        name: {{ $name }}-uses-profile
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: profile-usage
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "profile-usage")) }}"
+                      spec:
+                        replayDeletion: true
+                        reason: "Instance {{ $name }} has this profile"
+                        of:
+                          apiVersion: phorge.fr/v1alpha1
+                          kind: Profile
+                          resourceRef:
+                            name: {{ $spec.profile }}
+                        by:
+                          apiVersion: instance.incus.m.crossplane.io/v1alpha1
+                          kind: Instance
+                          resourceRef:
+                            name: {{ $name }}
+                      {{- end }}
                       ---
                       apiVersion: protection.crossplane.io/v1beta1
                       kind: Usage

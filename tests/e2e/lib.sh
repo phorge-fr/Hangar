@@ -140,6 +140,21 @@ EOF
   else fail "network $n in $t reaches Ready" "$(why networks.phorge.fr "$n" "t-$t")"; return 1; fi
 }
 
+# ensure_profile <tenant> <name> <cpu> <memoryMiB> <diskGiB>: makes a profile of the tenant once, waits for Ready.
+ensure_profile() {
+  local t=$1 n=$2 cpu=$3 mem=$4 disk=$5
+  K -n "t-$t" get profiles.phorge.fr "$n" >/dev/null 2>&1 && return 0
+  local out; out=$(cat <<EOF | K apply -f - 2>&1
+apiVersion: phorge.fr/v1alpha1
+kind: Profile
+metadata: {name: $n, namespace: t-$t, labels: {$LABEL: "$RUN_ID"}}
+spec: {cpu: $cpu, memoryMiB: $mem, diskGiB: $disk}
+EOF
+) || { fail "profile $n in $t is created" "$out"; return 1; }
+  if wait_ready profiles.phorge.fr "t-$t" "$n" 240; then pass "profile $n in $t reaches Ready"
+  else fail "profile $n in $t reaches Ready" "$(why profiles.phorge.fr "$n" "t-$t")"; return 1; fi
+}
+
 # ensure_instance <tenant> <name> <image xr> [extra spec lines]: creates the VM, waits for Ready. Unless the extra lines say
 # otherwise, it is attached to the network "net" of the tenant (deployed here if need be) and has a custom size: 1 vCPU,
 # 1024 MiB, 10 GiB, each of them only when the extra lines do not give it (a size is a profile or the three values).
@@ -187,14 +202,14 @@ cleanup() {
   local t k x
   for x in "${TRACK_XR[@]}"; do K delete ${x%% *}.phorge.fr -n "$(cut -d' ' -f2 <<<"$x")" "$(cut -d' ' -f3 <<<"$x")" --wait=false >/dev/null 2>&1; done
   for t in "${TRACK_TENANTS[@]}"; do
-    for k in instances memberships images networks; do
+    for k in instances memberships profiles images networks; do
       K -n "t-$t" delete "$k.phorge.fr" -l "$LABEL=$RUN_ID" --wait=false >/dev/null 2>&1
     done
   done
   # The keys are a person's, not a tenant's: they are in their own namespace.
   K -n phorge-keys delete apikeys.phorge.fr -l "$LABEL=$RUN_ID" --wait=false >/dev/null 2>&1
   for t in "${TRACK_TENANTS[@]}"; do
-    wait_until 300 "children of $t" bash -c "K() { kubectl --context $E2E_CONTEXT \"\$@\"; }; [[ -z \$(K -n t-$t get instances.phorge.fr,images.phorge.fr,networks.phorge.fr,memberships.phorge.fr -o name 2>/dev/null) ]]"
+    wait_until 300 "children of $t" bash -c "K() { kubectl --context $E2E_CONTEXT \"\$@\"; }; [[ -z \$(K -n t-$t get instances.phorge.fr,images.phorge.fr,networks.phorge.fr,profiles.phorge.fr,memberships.phorge.fr -o name 2>/dev/null) ]]"
     K -n phorge-system delete tenants.phorge.fr "$t" --wait=false >/dev/null 2>&1
   done
   for t in "${TRACK_TENANTS[@]}"; do wait_until 600 "tenant $t gone" gone tenants.phorge.fr "$t" phorge-system || echo "cleanup: tenant $t is still being deleted"; done

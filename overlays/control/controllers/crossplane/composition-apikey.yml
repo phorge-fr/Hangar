@@ -81,7 +81,7 @@ spec:
                                ApiKey shows. */ -}}
                       {{- $expired := false -}}
                       {{- if (now).After (toDate "2006-01-02T15:04:05Z07:00" $xr.spec.expiresAt) -}}{{- $expired = true -}}{{- end -}}
-                      {{- $relations := dict "tenants:read" "key_tenant_read" "tenants:write" "key_tenants_write" "networks:read" "key_networks_read" "networks:write" "key_networks_write" "instances:read" "key_instances_read" "instances:write" "key_instances_write" "images:read" "key_images_read" "images:write" "key_images_write" "memberships:read" "key_memberships_read" "memberships:write" "key_memberships_write" -}}
+                      {{- $relations := dict "tenants:read" "key_tenant_read" "tenants:write" "key_tenants_write" "networks:read" "key_networks_read" "networks:write" "key_networks_write" "profiles:read" "key_profiles_read" "profiles:write" "key_profiles_write" "instances:read" "key_instances_read" "instances:write" "key_instances_write" "images:read" "key_images_read" "images:write" "key_images_write" "memberships:read" "key_memberships_read" "memberships:write" "key_memberships_write" -}}
                       apiVersion: http.m.crossplane.io/v1alpha2
                       kind: Request
                       metadata:

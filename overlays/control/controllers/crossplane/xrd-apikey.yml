@@ -67,6 +67,8 @@ spec:
                                                       - images:write
                                                       - networks:read
                                                       - networks:write
+                                                      - profiles:read
+                                                      - profiles:write
                                                       - memberships:read
                                                       - memberships:write
                                       required:

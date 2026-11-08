@@ -11,6 +11,9 @@ _c() { _n "  cpu: ${1:-1}
   memoryMiB: ${2:-1024}
   diskGiB: ${3:-10}${4:+
 $4}"; }
+_p() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Profile\nmetadata: {name: %s, namespace: default}\nspec:\n%s\n' "$1" "${2:-  cpu: 1
+  memoryMiB: 1024
+  diskGiB: 10}"; }
 _w() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Network\nmetadata: {name: %s, namespace: default}\nspec:\n%s\n' "$1" "${2:-  description: x}"; }
 _m() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Membership\nmetadata: {name: x, namespace: default}\nspec:\n%s\n' "$1"; }
 _k() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: ApiKey\nmetadata: {name: x, namespace: phorge-keys}\nspec:\n%s\n  owner: %s\n' "$1" "${2-a@b.fr}"; }
@@ -106,6 +109,49 @@ group_admission() {
   _n "  profile: s
   sshPublicKeys: [$(printf "'$k1', %.0s" {1..20})'$k1']" | reject "21 ssh keys" 'sshPublicKeys'
 
+  section "admission: Profile"
+  _p web | accept "a profile with its three values"
+  _p web "  description: for the web servers
+  cpu: 1
+  memoryMiB: 1024
+  diskGiB: 10" | accept "a profile with a description"
+  _p a | accept "a one character name"
+  _p "$(printf 'a%.0s' {1..32})" | accept "a 32 characters name"
+  _p "$(printf 'a%.0s' {1..33})" | reject "a 33 characters name" 'must be 1 to 32'
+  _p 1web | reject "a name that starts with a digit" 'must be 1 to 32'
+  _p Web | reject "a name in uppercase" 'must be 1 to 32|RFC 1123'
+  _p web- | reject "a name that ends with a hyphen" 'must be 1 to 32|RFC 1123'
+  _p my_web | reject "a name with an underscore" 'must be 1 to 32|RFC 1123'
+  local n; for n in s m l default; do _p "$n" | reject "the name $n, which every tenant has" 'every tenant has'; done
+  _p web "  memoryMiB: 1024
+  diskGiB: 10" | reject "no cpu" 'cpu'
+  _p web "  cpu: 1
+  diskGiB: 10" | reject "no memory" 'memoryMiB'
+  _p web "  cpu: 1
+  memoryMiB: 1024" | reject "no disk" 'diskGiB'
+  _p web "  cpu: 0
+  memoryMiB: 1024
+  diskGiB: 10" | reject "cpu 0" 'spec.cpu'
+  _p web "  cpu: 17
+  memoryMiB: 1024
+  diskGiB: 10" | reject "cpu 17" 'spec.cpu'
+  _p web "  cpu: 16
+  memoryMiB: 65536
+  diskGiB: 500" | accept "the biggest profile an instance may be"
+  _p web "  cpu: 1
+  memoryMiB: 255
+  diskGiB: 10" | reject "memory 255 MiB" 'memoryMiB'
+  _p web "  cpu: 1
+  memoryMiB: 65537
+  diskGiB: 10" | reject "memory 65537 MiB" 'memoryMiB'
+  _p web "  cpu: 1
+  memoryMiB: 1024
+  diskGiB: 501" | reject "disk 501" 'diskGiB'
+  _p web "  description: $(printf 'x%.0s' {1..201})
+  cpu: 1
+  memoryMiB: 1024
+  diskGiB: 10" | reject "a description over 200 characters" 'description'
+
   section "admission: Network"
   _w net1 | accept "a network with a description"
   _w net1 "  nat: false" | reject "a nat field: a network is always NATed" 'unknown field|nat'
@@ -143,7 +189,7 @@ group_admission() {
   _k "  $E
   grants: [{tenant: demo, scopes: [instances:read]}]" | accept "key with one grant"
   _k "  $E
-  grants: [{tenant: demo, scopes: [tenants:read, tenants:write, instances:read, instances:write, images:read, images:write, networks:read, networks:write, memberships:read, memberships:write]}]" | accept "key with all 10 scopes"
+  grants: [{tenant: demo, scopes: [tenants:read, tenants:write, instances:read, instances:write, images:read, images:write, networks:read, networks:write, profiles:read, profiles:write, memberships:read, memberships:write]}]" | accept "key with all 12 scopes"
   _k "  $E
   grants: [{tenant: a, scopes: [instances:read]}, {tenant: b, scopes: [images:read]}]
   displayName: ci" | accept "key on two tenants with every field"

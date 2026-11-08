@@ -31,6 +31,8 @@ resources:
     - composition-image.yml
     - xrd-network.yml
     - composition-network.yml
+    - xrd-profile.yml
+    - composition-profile.yml
     - xrd-instance.yml
     - composition-instance.yml
     - xrd-membership.yml
