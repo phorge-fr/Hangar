@@ -132,7 +132,7 @@ spec:
                       apiVersion: protection.crossplane.io/v1beta1
                       kind: Usage
                       metadata:
-                        name: i-{{ $hash }}-keeps-namespace
+                        name: membership-i-{{ $hash }}-keeps-namespace
                         annotations:
                           gotemplating.fn.crossplane.io/composition-resource-name: namespace-usage-incus
                           gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace-usage-incus")) }}"
@@ -154,7 +154,7 @@ spec:
                       apiVersion: protection.crossplane.io/v1beta1
                       kind: Usage
                       metadata:
-                        name: a-{{ $hash }}-keeps-namespace
+                        name: membership-a-{{ $hash }}-keeps-namespace
                         annotations:
                           gotemplating.fn.crossplane.io/composition-resource-name: namespace-usage-api
                           gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace-usage-api")) }}"

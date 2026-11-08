@@ -14,7 +14,7 @@ group_profiles() {
   eq "on the remote pool" remote "$(INCUS profile device get web root pool --project "$a")"
   match "its description says what it comes to when none is given" '1 vCPU, 1024 MiB RAM, 12 GiB disk' "$(INCUS profile show web --project "$a")"
   eq "it has no network device: that is the instance's" "" "$(INCUS profile device list web --project "$a" | grep -vx root)"
-  eq "the Incus profile is Ready next to its Usage" "True True" "$(cond profile.profile.incus.m.crossplane.io web "$a" Ready) $(cond usages.protection.crossplane.io web-keeps-namespace "$a" Ready)"
+  eq "the Incus profile is Ready next to its Usage" "True True" "$(cond profile.profile.incus.m.crossplane.io web "$a" Ready) $(cond usages.protection.crossplane.io profile-web-keeps-namespace "$a" Ready)"
   eq "the profiles of the tenant are untouched" "1 2 4" "$(INCUS profile get s limits.cpu --project "$a") $(INCUS profile get m limits.cpu --project "$a") $(INCUS profile get l limits.cpu --project "$a")"
 
   section "profiles: changed in place"

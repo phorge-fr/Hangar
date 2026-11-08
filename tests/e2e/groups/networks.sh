@@ -11,7 +11,7 @@ group_networks() {
   eq "on the UPLINK" UPLINK "$(INCUS network get net network --project "$a")"
   eq "NATed by default" true "$(INCUS network get net ipv4.nat --project "$a")"
   has "the description reaches Incus" "e2e network" "$(INCUS network show net --project "$a")"
-  eq "the Network resource is Ready next to its Usage" "True True" "$(cond network.network.incus.m.crossplane.io net "$a" Ready) $(cond usages.protection.crossplane.io net-keeps-namespace "$a" Ready)"
+  eq "the Network resource is Ready next to its Usage" "True True" "$(cond network.network.incus.m.crossplane.io net "$a" Ready) $(cond usages.protection.crossplane.io network-net-keeps-namespace "$a" Ready)"
   local cidr; cidr=$(tenant_net "$TA" net)
   match "ipv4.address is a /24 chosen by Incus" '^[0-9]+\.[0-9]+\.[0-9]+\.1/24$' "$cidr"
   if in_phorge_range "$cidr"; then fail "the subnet $cidr is outside the router's VLANs and the LAN/containers ranges"; else pass "the subnet $cidr is outside the router's VLANs and the LAN/containers ranges"; fi
@@ -43,6 +43,15 @@ YAML
   K -n "$a" delete networks.phorge.fr second --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
   check "a network is deleted in the foreground" gone networks.phorge.fr second "$a"
   eq "and it is gone from Incus once the Network is gone (the foreground delete waits for it)" "" "$(INCUS network list --project "$a" -f csv -c n | grep -x second)"
+
+  section "networks: a network and an image of the same name live together"
+  # Every kind keeps the namespace with a Usage of its own: named after the name alone, the Usage of a network and the one of an
+  # image of the same name would be the same object, and the second would be refused (phorge-fr/Hangar#396).
+  ensure_network "$TA" deb || return
+  eq "the network named like the image is Ready, as the image is" "True True" "$(cond networks.phorge.fr deb "$a" Ready) $(cond images.phorge.fr deb "$a" Ready)"
+  eq "each has its own Usage on the namespace" "network-deb-keeps-namespace image-deb-keeps-namespace" "$(K -n "$a" get usages.protection.crossplane.io network-deb-keeps-namespace image-deb-keeps-namespace -o name 2>/dev/null | sed 's#.*/##' | tr '\n' ' ' | sed 's/ $//')"
+  K -n "$a" delete networks.phorge.fr deb --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
+  check "and the network is deleted without the image" gone networks.phorge.fr deb "$a"
 
   section "networks: subnets chosen by Incus, across tenants"
   ensure_tenant "$TB" small owner-b@example.org || return

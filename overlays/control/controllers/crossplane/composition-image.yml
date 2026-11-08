@@ -104,7 +104,7 @@ spec:
                       apiVersion: protection.crossplane.io/v1beta1
                       kind: Usage
                       metadata:
-                        name: {{ $name }}-keeps-namespace
+                        name: image-{{ $name }}-keeps-namespace
                         annotations:
                           gotemplating.fn.crossplane.io/composition-resource-name: namespace-usage
                           gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "namespace-usage")) }}"
