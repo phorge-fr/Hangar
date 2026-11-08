@@ -6,7 +6,7 @@ verified: 2026-11-08
 
 # Audit of the management of rights
 
-This page audits how a person is identified and what they may do, from the console to Incus, against the documentation and the standards of each tool. It was written before the terminal ([phorge-fr/phorge-api#31](https://github.com/phorge-fr/phorge-api/issues/31)) and the self-service work add more to it. It ends with a proposal for how the API carries the identity of a user to Incus. Nothing here is applied yet.
+This page audits how a person is identified and what they may do, from the console to Incus, against the documentation and the standards of each tool. It was written before the terminal ([phorge-fr/phorge-api#31](https://github.com/phorge-fr/phorge-api/issues/31)) and the self-service work add more to it. It ends with a proposal for how the API carries the identity of a user to Incus. The exchange was measured and the decision is proposed in [0013](../decisions/0013-the-api-exchanges-the-token-of-a-user-for-incus.md); nothing here is deployed.
 
 ## How it works today
 
@@ -86,12 +86,19 @@ What this gives:
 * The rule for later services is the same: a service that receives a relayed identity gets its own application, listed as a target. Authentik takes one audience per exchange.
 * Nothing changes for the CLI and the Incus interface.
 
-What has to be measured before it is chosen, on the real Authentik and Incus (Ansible#70):
+Measured on the real Authentik and Incus on 2026-11-08, with a throwaway service account that had an email, and with the exchange enabled by a temporary change of two blueprints (undone afterwards):
 
-* The exchange works from the `Phorge OAuth` client, which is public: the documentation requires confidential clients to authenticate and is silent on public ones.
-* The exchanged token carries the email that Incus reads, and Incus accepts it for the person and for nobody else.
-* The lifetime of the token and the cost of an exchange per terminal, to decide what the API may cache. The token is never logged or stored.
-* A person outside `iaas-users` is refused, and the way to add self-service users to that group (a blueprint lists no members) is decided.
+* A token of the `phorge` application presented to Incus is refused with `401`, `issuer does not match`. The token of the console would be too.
+* The exchange works from the `Phorge OAuth` client, which is public: no secret is needed. The new token has the issuer of the `incus` application, the Incus client ID as audience, the email, one hour of validity, and no `act` claim (impersonation).
+* A person outside `iaas-users` is refused the exchange (`invalid_grant`), and one inside gets the token. The group stays a lock.
+* Incus accepts the exchanged token and names the person by their email (`auth: trusted`, method `oidc`). With no right in OpenFGA it lists no project.
+* With `can_exec` given to that person on one instance, an exec on that instance is accepted (`202`), and an exec on another instance of the same project is refused (`403`, `does not have entitlement "can_exec"`). Before the tuple, the exec on the first one is `403` too.
+* An interactive terminal works with that token: the input is run and its output comes back, and the window can be resized through the control socket. The websocket handshakes need the same `Authorization` header as the request that created the operation.
+* **Removing `can_exec` while a terminal is open does not close it.** The session was still open 92 seconds after the tuple was removed, as seen from the node. A new exec is refused at once, but the running one is not. The statement that Incus rechecks a running session every 30 seconds does not hold here, so the API has to do it.
+
+Not measured: the exchange for a real person (the claims should be the same), the cost of one exchange, and the way self-service users enter `iaas-users`.
+
+Consequence for the terminal: the relay of the API, not Incus, ends a session. It rechecks the right of the person in its own store at a fixed interval and closes the session when it is gone, and it enforces a maximum duration and an idle timeout. The exchanged token is requested when a terminal opens, kept in memory for that session, never logged and never stored.
 
 ## Options set aside
 
@@ -104,7 +111,7 @@ What has to be measured before it is chosen, on the real Authentik and Incus (An
 
 ## What to do, in order
 
-1. Measure the token exchange (Ansible#70) and write the decision record from the result.
+1. Accept or refuse the decision record 0013, then build the exchange and the relay (phorge-fr/phorge-api#31) with the checks above.
 2. Forbid the change of the email in Authentik, and add the check of the Incus authorization setting to the Ansible run.
 3. Pin the OpenFGA model ID in the API.
 4. Plan the move from email to `sub`, as its own piece of work.
