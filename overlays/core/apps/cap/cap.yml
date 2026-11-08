@@ -1,5 +1,7 @@
-# Cap (https://capjs.js.org): the proof-of-work captcha of the Authentik sign-in. Everything it stores (site keys, secrets,
-# tokens) is in Valkey. The dashboard is not exposed: it is reached with a port-forward, only /assets (the widget) is public.
+# Cap (https://capjs.js.org): the proof-of-work captcha of the Authentik sign-in. Site keys, secrets, tokens and settings
+# are in Valkey, the events (one row per challenge, solve and refusal) in a DuckDB file on the data volume. The dashboard
+# is not exposed: it is reached with a port-forward, only /assets (the widget) is public. Nothing is configured by hand
+# in the dashboard: the site key is created and its secret rotated through the API (docs/how-to/upgrade-cap-to-v4.md).
 kind: Namespace
 apiVersion: v1
 metadata:
@@ -29,6 +31,19 @@ spec:
         - name: valkey
           port: 6379
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: cap-data
+    namespace: cap
+spec:
+    accessModes:
+        - ReadWriteOnce
+    storageClassName: longhorn
+    resources:
+        requests:
+            storage: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -36,6 +51,12 @@ metadata:
     namespace: cap
 spec:
     replicas: 1
+    # The data volume is ReadWriteOnce: the old pod stops before the new one starts
+    strategy:
+        type: RollingUpdate
+        rollingUpdate:
+            maxUnavailable: 1
+            maxSurge: 0
     selector:
         matchLabels:
             app: cap
@@ -44,22 +65,27 @@ spec:
             labels:
                 app: cap
         spec:
+            securityContext:
+                fsGroup: 1000
             containers:
                 - name: cap
-                  image: tiago2/cap:3.1.17
+                  image: tiago2/cap:4.0.1
                   env:
                       - name: ADMIN_KEY
                         valueFrom:
                             secretKeyRef:
                                 name: cap
                                 key: admin-key
-                      - name: REDIS_URL
+                      - name: VALKEY_URL
                         value: redis://cap-valkey:6379
+                      # The next four are deprecated in v4: Cap copies each one into its settings in Valkey at the first start
+                      # that finds the setting empty, then ignores it (and logs a warning). They keep a rebuilt Valkey from
+                      # falling back to "any origin" and to a widget loaded from a CDN. Changing one later needs the API.
                       # The widget and its WASM are served by Cap itself (pinned), so the sign-in page loads nothing from a CDN
                       - name: ENABLE_ASSETS_SERVER
                         value: "true"
                       - name: WIDGET_VERSION
-                        value: 0.1.58
+                        value: 0.1.60
                       - name: WASM_VERSION
                         value: 0.0.8
                       # Only the sign-in page may ask for a challenge
@@ -97,13 +123,14 @@ spec:
                       capabilities:
                           drop:
                               - ALL
-                  # The IP databases and the assets are downloaded here
+                  # The events (DuckDB) and the IP databases are stored here
                   volumeMounts:
                       - name: data
                         mountPath: /usr/src/app/data
             volumes:
                 - name: data
-                  emptyDir: {}
+                  persistentVolumeClaim:
+                      claimName: cap-data
 ---
 apiVersion: apps/v1
 kind: StatefulSet

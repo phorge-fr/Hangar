@@ -22,7 +22,7 @@ from authentik.flows.models import FlowStageBinding
 print(FlowStageBinding.objects.filter(target__slug='phorge-authentication-flow', stage__name='phorge-authentication-captcha').delete())"
 ```
 
-If the Cap site key is gone (the Valkey volume was lost), create a new one: log in to the Cap API through `kubectl -n cap port-forward svc/cap 3100:3000` with `POST /auth/login {"admin_key": ...}` (the key is in the `cap` secret), `POST /server/keys` with `corsOrigins: ["https://auth.phorge.fr"]`, then replace the site key in `cap/cap.yml` (two ingress paths), in `blueprint-brand.yml` (the `public_key` URL and the `api_url`) and the secret in `authentik/secret-cap.yml`.
+If the Cap site key is gone (the Valkey volume was lost), create a new one: log in to the Cap API through `kubectl -n cap port-forward svc/cap 3100:3000` with `POST /auth/login {"admin_key": ...}` (the key is in the `cap` secret), `POST /server/keys` with `corsOrigins: ["https://auth.phorge.fr"]` (the reply carries the secret once; for an existing key, `POST /server/keys/<site key>/rotate-secret` returns a new one, see [Upgrade Cap to v4](upgrade-cap-to-v4.md)), then replace the site key in `cap/cap.yml` (two ingress paths), in `blueprint-brand.yml` (the `public_key` URL and the `api_url`) and the secret in `authentik/secret-cap.yml`.
 
 **An address is refused by the reputation policy.** Clear its score:
 
@@ -40,4 +40,5 @@ If authentik itself does not answer, `kubectl -n authentik rollout restart deplo
 
 ## Related
 
+- [Upgrade Cap to v4](upgrade-cap-to-v4.md)
 - [Authentik sign-in hardening](../explanation/authentik-sign-in-hardening.md)

@@ -1,4 +1,4 @@
-# Cap needs the internet at startup and every hour: it downloads the widget and the WASM it serves (ENABLE_ASSETS_SERVER).
+# Cap needs the internet at startup and every hour: it downloads the widget and the WASM it serves (the "Widget files" setting).
 # Alloy runs in the host network: its probes come from the host or remote-node identity.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
