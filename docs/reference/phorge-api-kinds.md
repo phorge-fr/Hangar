@@ -73,10 +73,10 @@ Plans, enforced by Incus as project limits:
 | Plan | VMs | vCPU | Memory | Disk | Networks |
 |---|---|---|---|---|---|
 | `small` | 2 | 2 | 4 GiB | 128 GiB | 1 |
-| `medium` | 2 | 4 | 8 GiB | 256 GiB | 2 |
-| `large` | 2 | 8 | 16 GiB | 512 GiB | 3 |
+| `medium` | 4 | 4 | 8 GiB | 256 GiB | 2 |
+| `large` | 6 | 8 | 16 GiB | 512 GiB | 3 |
 
-Each plan holds two instances of its own profile size: `small` two `s`, `medium` two `m`, `large` two `l`.
+The CPU, the memory and the disk of each plan hold two instances of its own profile size: `small` two `s`, `medium` two `m`, `large` two `l`. The count of instances is the plan's own (2, 4 and 6), for smaller instances than the profile.
 
 Composes: a Kubernetes namespace, an Incus project, the three profiles `s`, `m` and `l`, and the owner's tuples. Nothing else: **a tenant comes without a network**, the user deploys theirs (see `Network`).
 
@@ -86,7 +86,7 @@ Composes: a Kubernetes namespace, an Incus project, the three profiles `s`, `m` 
 | `m` | 2 | 4 GiB | 128 GiB |
 | `l` | 4 | 8 GiB | 256 GiB |
 
-The root disk is on the `remote` pool and part of the profile, so an instance from a profile needs nothing else but its network. The profiles are the tenant's own, created with it. The project also has its own empty `default` profile, which Incus makes. The plan limits above apply to the sum of the instances: a plan holds two instances of its own profile size, and a profile bigger than what is left (a `l` on a `small` plan, or a third instance) is refused by Incus with the limit it passes (`Reached maximum aggregate value ... limits.disk`).
+The root disk is on the `remote` pool and part of the profile, so an instance from a profile needs nothing else but its network. The profiles are the tenant's own, created with it. The project also has its own empty `default` profile, which Incus makes. The plan limits above apply to the sum of the instances: the resources of a plan hold two instances of its own profile size, and a profile bigger than what is left (a `l` on a `small` plan, or a third `s` on it) is refused by Incus with the limit it passes (`Reached maximum aggregate value ... limits.disk`).
 
 ```yaml
 apiVersion: phorge.fr/v1alpha1
