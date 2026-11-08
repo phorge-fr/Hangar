@@ -167,7 +167,7 @@ A `Membership` writes two OpenFGA tuples:
 
 | Role | Meaning for the API |
 |---|---|
-| `admin` | Everything on the tenant, including memberships |
+| `admin` | Everything on the tenant, including memberships, renaming it and deleting it |
 | `operator` | Manage instances, images and networks (and read the rest) |
 | `user` | Create and use instances |
 | `viewer` | Read-only. Networks are read with any role, written with `operator` and `admin`; no key scope covers them yet |

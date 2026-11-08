@@ -56,6 +56,10 @@ spec:
                 define key_memberships_read: [apikey with not_expired]
                 define key_memberships_write: [apikey with not_expired]
 
+                # Renaming a tenant and deleting it is for its admins, the owner among them (phorge-fr/phorge-api#75). A key has no
+                # scope for it, and the plan is a platform administrator's, which the API reads from the token, not from here.
+                define can_write_tenant: admin
+
                 define can_read_tenant: viewer or key_tenant_read
                 define can_read_instances: viewer or key_instances_read
                 define can_write_instances: user or key_instances_write
