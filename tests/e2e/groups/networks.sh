@@ -50,6 +50,7 @@ YAML
   section "networks: a network and an image of the same name live together"
   # Every kind keeps the namespace with a Usage of its own: named after the name alone, the Usage of a network and the one of an
   # image of the same name would be the same object, and the second would be refused (phorge-fr/Hangar#396).
+  ensure_image "$TA" deb "$IMG_DEBIAN" e2e-deb || return
   ensure_network "$TA" deb || return
   eq "the network named like the image is Ready, as the image is" "True True" "$(cond networks.phorge.fr deb "$a" Ready) $(cond images.phorge.fr deb "$a" Ready)"
   eq "each has its own Usage on the namespace" "network-deb-keeps-namespace image-deb-keeps-namespace" "$(K -n "$a" get usages.protection.crossplane.io network-deb-keeps-namespace image-deb-keeps-namespace -o name 2>/dev/null | sed 's#.*/##' | tr '\n' ' ' | sed 's/ $//')"
