@@ -46,7 +46,7 @@ spec:
                 - name: phorge-api
                   # The release v0.5.0 of phorge-fr/phorge-api. Tag and digest together: the digest is what runs, the tag lets
                   # Renovate see a new release and bump both in one pull request.
-                  image: ghcr.io/phorge-fr/phorge-api:0.9.0@sha256:b8c438125a6e7ceb9420fa58ef28d81c3e31962577f251d136cce7848f7b3c40
+                  image: ghcr.io/phorge-fr/phorge-api:0.10.0@sha256:9b3f532a47a7ab8a6e7544b07305af2a062ec42c2743164aa44ea3abd01c2147
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: http
@@ -99,6 +99,33 @@ spec:
                       # How many tenants a person may own: every person signed in creates their own, with the small plan. 0 is no limit.
                       - name: MAX_TENANTS_PER_USER
                         value: "3"
+                      # The terminal of an instance (docs/decisions/0013 in this repository): the API trades the token of a person at
+                      # Authentik for a token of the Incus application and opens an exec in Incus with it, so the API holds no Incus
+                      # credential and Incus decides, from its store. INCUS_URL is where Incus answers, INCUS_CLIENT_ID the client ID of
+                      # the Incus application (the audience of the exchanged token, public information), OIDC_TOKEN_URL the token
+                      # endpoint of Authentik and OIDC_CLIENT_ID the public client that makes the exchange.
+                      - name: INCUS_URL
+                        value: https://iaas.phorge.fr
+                      - name: INCUS_CLIENT_ID
+                        value: 446e0b05-3aa6-4cfd-8ebc-084e0d7b1eef
+                      - name: OIDC_TOKEN_URL
+                        value: https://auth.phorge.fr/application/o/token/
+                      - name: OIDC_CLIENT_ID
+                        value: 49a1375b-c52a-4a59-b3cb-8d4f5e392d85
+                      # The limits of a terminal, a long-lived connection: how many a person and a tenant may have open, how long one may
+                      # go without a byte, how long it may last, and how often the right of its person is checked again (Incus does not
+                      # end a session whose right was removed, the API does). The API keeps about 1 MiB of buffer per open terminal in its
+                      # 192 MiB: the numbers stay small until measured.
+                      - name: TERMINAL_MAX_PER_USER
+                        value: "5"
+                      - name: TERMINAL_MAX_PER_TENANT
+                        value: "10"
+                      - name: TERMINAL_IDLE_TIMEOUT
+                        value: 15m
+                      - name: TERMINAL_MAX_DURATION
+                        value: 1h
+                      - name: TERMINAL_RECHECK_INTERVAL
+                        value: 30s
                       # The container limit is 192 MiB: make the GC reclaim before it is reached.
                       - name: GOMEMLIMIT
                         value: 150MiB
