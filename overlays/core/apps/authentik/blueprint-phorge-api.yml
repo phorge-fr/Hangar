@@ -108,10 +108,10 @@ data:
             state: absent
             identifiers:
               name: Console OAuth
-          # The people who create, resize and delete tenants. The API reads the "groups" claim of the token (the names
-          # of the groups the user belongs to, see the 'profile' scope) and compares it with PLATFORM_ADMIN_GROUP, so
-          # this name is the one the API is configured with. The blueprint creates the group but never lists its
-          # members, which would be reset at each apply: add the people to it in authentik.
+          # The platform administrators. The API does not read this group any more (a person creates and deletes their own
+          # tenants, a special case is done by an administrator on Kubernetes and Incus); other blueprints and policies of
+          # Authentik use it. The blueprint creates the group but never lists its members, which would be reset at each
+          # apply: add the people to it in authentik.
           - model: authentik_core.group
             identifiers:
               name: phorge-platform-admins

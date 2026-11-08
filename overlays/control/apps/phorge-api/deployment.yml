@@ -46,7 +46,7 @@ spec:
                 - name: phorge-api
                   # The release v0.5.0 of phorge-fr/phorge-api. Tag and digest together: the digest is what runs, the tag lets
                   # Renovate see a new release and bump both in one pull request.
-                  image: ghcr.io/phorge-fr/phorge-api:0.8.1@sha256:9a93ce0e5ba4f5e7fbd7b61f608d857544cd61a65fe5b64fef9c30af45e43b42
+                  image: ghcr.io/phorge-fr/phorge-api:0.9.0@sha256:b8c438125a6e7ceb9420fa58ef28d81c3e31962577f251d136cce7848f7b3c40
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: http
@@ -70,10 +70,6 @@ spec:
                       # openfga.core.phorge is signed by the internal CA, which a pod does not trust by default.
                       - name: CA_FILE
                         value: /etc/phorge-api/ca/ca.crt
-                      # Whoever is a member of this Authentik group (the "groups" claim of the token) may create, resize and
-                      # delete tenants. The group is created by blueprint-phorge-api.yml, its members are added in authentik.
-                      - name: PLATFORM_ADMIN_GROUP
-                        value: phorge-platform-admins
                       # What decides how the API behaves is written here and nowhere in its code: it refuses to start without these.
                       # A stop sent while a VM boots is lost (the power button is pressed before anything listens) and then hangs for
                       # up to an hour, so the API refuses one for this long after a creation or a start. Measured on
@@ -87,10 +83,6 @@ spec:
                       # An API key always expires, within this: 366 days. 0 would not cap it.
                       - name: API_KEY_MAX_LIFETIME
                         value: 8784h
-                      # Who creates API keys: platform-admins, or users to open it to every person signed in (a key never
-                      # exceeds what its creator holds). Anyone lists, renames and revokes their own.
-                      - name: API_KEY_CREATION
-                        value: platform-admins
                       # How many requests that create, change or delete one caller (a person or a key) may send a minute, in bursts of
                       # RATE_LIMIT_BURST: past it the answer is 429 with Retry-After. 0 would limit nothing. It is kept in the memory of
                       # one replica of the API.
@@ -104,11 +96,7 @@ spec:
                       # How many profiles the users of a tenant may make (the three every tenant has do not count). 0 is no limit.
                       - name: MAX_PROFILES_PER_TENANT
                         value: "20"
-                      # Who creates a tenant: platform-admins, or users to open it to every person signed in, for themselves. Keep
-                      # platform-admins until the quotas are deployed and the plans and the profiles are aligned (phorge-fr/phorge-api#69).
-                      - name: TENANT_CREATION
-                        value: platform-admins
-                      # How many tenants a person who is not a platform administrator may own, when TENANT_CREATION is users.
+                      # How many tenants a person may own: every person signed in creates their own, with the small plan. 0 is no limit.
                       - name: MAX_TENANTS_PER_USER
                         value: "3"
                       # The container limit is 192 MiB: make the GC reclaim before it is reached.
