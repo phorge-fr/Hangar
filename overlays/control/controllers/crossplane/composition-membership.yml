@@ -1,9 +1,13 @@
 # Renders the two OpenFGA tuples of a Membership, see xrd-membership.yml. The tenant is the namespace
 # the Membership lives in, which is also the Incus project name.
 #
-# - Incus store (iaas): the subject is always "viewer" of the project, whatever the role. The Incus UI
-#   (iaas.phorge.fr) is read-only: Crossplane owns every object, and anything changed by hand in Incus is
-#   reconciled back. Writing goes through the Phorge API.
+# - Incus store (iaas): the subject is "viewer" of the project when the role is viewer, and "user" of the project
+#   for the three roles that write instances (admin, operator, user). The Incus role "user" sees the project and
+#   may open a terminal or the console of its instances, which is what the terminal of the API needs; it cannot
+#   create, change or delete anything in Incus, so the Incus UI (iaas.phorge.fr) stays read-only for changes:
+#   Crossplane owns every object, and anything changed by hand in Incus is reconciled back. Writing goes
+#   through the Phorge API. (The right is on the project, not per instance: provider-openfga cannot write an
+#   object that contains a slash, and every Incus instance is "instance:<project>/<name>".)
 # - Phorge API store (phorge-api): the subject has the real role on tenant:<name>, which is what the API checks.
 # - A Usage per tuple keeps the tenant's namespace until the tuples are deleted: Kubernetes deletes the content of a
 #   terminating namespace, ProviderConfigUsage objects included, and provider-openfga cannot create its own again to reach
@@ -112,7 +116,7 @@ spec:
                         forProvider:
                           storeId: {{ $env.openfgaStoreId | quote }}
                           user: {{ $subject | quote }}
-                          relation: viewer
+                          relation: {{ ternary "viewer" "user" (eq $xr.spec.role "viewer") }}
                           object: {{ printf "project:%s" $ns | quote }}
                       ---
                       apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
