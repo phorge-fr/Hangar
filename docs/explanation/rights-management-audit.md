@@ -48,7 +48,7 @@ The tuples of OpenFGA, the claim that Incus reads (`oidc.claim: email`) and the 
 
 The platform lowers the risk today: accounts are made by an administrator, nobody enrols alone, and the blueprint says so. It would become real if a person could change their email (they would lose their rights, or a reused address would inherit them), and the self-service work raises the number of accounts.
 
-Two steps, in this order: forbid the change of the email by the user in Authentik and never reuse an address, then plan the move of the tuples to `sub`. The second is large (every tuple, the Incus claim, the console that shows emails) and is not urgent.
+Users cannot change their email in Authentik today (`default_user_change_email` is false, read on 2026-11-08), which is what keeps this safe. KYC, metering and billing will need them to change it, and that must not be opened before people are identified by `sub` (or another immutable identifier) in the tuples, the API and Incus. The move is large (every tuple, the Incus claim, the invitations by email, the console) and is tracked in [Hangar#423](https://github.com/phorge-fr/Hangar/issues/423), to be decided with the KYC and billing design. Until then the setting stays closed.
 
 ### 3. The Phorge client does three jobs (medium, known)
 
@@ -111,7 +111,7 @@ Consequence for the terminal: the relay of the API, not Incus, ends a session. I
 
 ## What to do, in order
 
-1. Accept or refuse the decision record 0013, then build the exchange and the relay (phorge-fr/phorge-api#31) with the checks above.
-2. Forbid the change of the email in Authentik, and add the check of the Incus authorization setting to the Ansible run.
+1. Done: the decision record 0013 is accepted, and the exchange and the relay are built and measured on the platform (phorge-fr/phorge-api#31).
+2. Add the check of the Incus authorization setting to the Ansible run (done, Ansible#71).
 3. Pin the OpenFGA model ID in the API.
-4. Plan the move from email to `sub`, as its own piece of work.
+4. Move from email to `sub` before users may change their email, as its own piece of work (Hangar#423).
