@@ -30,7 +30,8 @@ group_instance() {
   eq "security.nesting off by default" false "$(INCUS config get vm1 security.nesting --project "$a")"
   eq "root disk size" 12GiB "$(INCUS config device get vm1 root size --project "$a")"
   eq "root disk pool" remote "$(INCUS config device get vm1 root pool --project "$a")"
-  eq "it uses the tenant profile" phorge "$(INCUS list vm1 --project "$a" -f csv -c P)"
+  eq "a custom instance uses the project's empty default profile" default "$(INCUS list vm1 --project "$a" -f csv -c P)"
+  eq "its only network device is eth0 on the network it asked for" "eth0 net" "$(INCUS config device list vm1 --project "$a" | grep -v '^root$' | tr '\n' ' ' | sed 's/ $//') $(INCUS config device get vm1 eth0 network --project "$a")" 
   has "the key goes into the cloud-init user data" "$key" "$(INCUS config get vm1 cloud-init.user-data --project "$a")"
   match "which is a #cloud-config document" '^#cloud-config' "$(INCUS config get vm1 cloud-init.user-data --project "$a")"
   eq "the VM is placed on one of the compute nodes" 1 "$(INCUS list --project "$a" -f csv -c n,L | grep -cE '^vm1,comp-opti-0[123]')"
@@ -58,7 +59,7 @@ group_instance() {
 apiVersion: phorge.fr/v1alpha1
 kind: Instance
 metadata: {name: vm4, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
-spec: {imageRef: {name: deb}, running: false}
+spec: {imageRef: {name: deb}, network: net, cpu: 1, memoryMiB: 1024, diskGiB: 10, running: false}
 YAML
   wait_until 120 "vm4 synced=False" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n $a get instances.phorge.fr vm4 -o jsonpath='{.status.conditions[?(@.type==\"Synced\")].status}') == False ]]"
   match "the 4th VM on a medium plan is refused with Incus's message" 'Reached maximum number of instances' "$(mr_msgs "$a" vm4)"
@@ -72,7 +73,7 @@ YAML
 apiVersion: phorge.fr/v1alpha1
 kind: Instance
 metadata: {name: bigdisk, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
-spec: {imageRef: {name: deb}, running: false, diskGiB: 500}
+spec: {imageRef: {name: deb}, network: net, cpu: 1, memoryMiB: 1024, diskGiB: 500, running: false}
 YAML
   sleep 45
   eq "a disk above the plan's total is never Ready" "" "$(cond instances.phorge.fr bigdisk "$a" Ready | grep -x True)"
@@ -86,7 +87,7 @@ YAML
 apiVersion: phorge.fr/v1alpha1
 kind: Instance
 metadata: {name: noimg, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
-spec: {imageRef: {name: does-not-exist}, running: false}
+spec: {imageRef: {name: does-not-exist}, network: net, profile: s, running: false}
 YAML
   sleep 45
   eq "an Instance whose Image does not exist is never Ready" "" "$(cond instances.phorge.fr noimg "$a" Ready | grep -x True)"

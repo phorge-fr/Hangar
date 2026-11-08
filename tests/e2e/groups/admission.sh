@@ -5,7 +5,13 @@ _t() { # name, then spec lines (already indented)
   printf 'apiVersion: phorge.fr/v1alpha1\nkind: Tenant\nmetadata: {name: %s, namespace: phorge-system}\nspec:\n%s\n' "$1" "$2"
 }
 _i() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Image\nmetadata: {name: x, namespace: default}\nspec:\n%s\n' "$1"; }
-_n() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n%s\n' "${1:-}"; }
+_n() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  network: net\n%s\n' "${1:-}"; }
+# _c <cpu> <memoryMiB> <diskGiB> [more spec lines]: an instance with a custom size
+_c() { _n "  cpu: ${1:-1}
+  memoryMiB: ${2:-1024}
+  diskGiB: ${3:-10}${4:+
+$4}"; }
+_w() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Network\nmetadata: {name: %s, namespace: default}\nspec:\n%s\n' "$1" "${2:-  description: x}"; }
 _m() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: Membership\nmetadata: {name: x, namespace: default}\nspec:\n%s\n' "$1"; }
 _k() { printf 'apiVersion: phorge.fr/v1alpha1\nkind: ApiKey\nmetadata: {name: x, namespace: phorge-keys}\nspec:\n%s\n  owner: %s\n' "$1" "${2-a@b.fr}"; }
 H64=$(printf 'a%.0s' {1..64})
@@ -44,31 +50,73 @@ group_admission() {
   _i "  source: {name: debian/13/cloud, type: container}" | reject "container image" 'source.type'
 
   section "admission: Instance"
-  _n | accept "instance with an imageRef only"
-  _n | defaulted "cpu defaults to 1" '.spec.cpu' 1
-  _n | defaulted "memory defaults to 1024 MiB" '.spec.memoryMiB' 1024
-  _n | defaulted "disk defaults to 10 GiB" '.spec.diskGiB' 10
-  _n | defaulted "running defaults to true" '.spec.running' true
-  _n | defaulted "nesting defaults to false" '.spec.nesting' false
-  _n | defaulted "sshPublicKeys default to empty" '.spec.sshPublicKeys | length' 0
-  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec: {}\n' | reject "no imageRef" 'imageRef'
-  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: ""}\n' | reject "empty imageRef name" 'imageRef'
-  _n "  cpu: 0" | reject "cpu 0" 'spec.cpu'
-  _n "  cpu: 17" | reject "cpu 17" 'spec.cpu'
-  _n "  cpu: 16" | accept "cpu 16"
-  _n "  memoryMiB: 255" | reject "memory 255 MiB" 'memoryMiB'
-  _n "  memoryMiB: 65537" | reject "memory 65537 MiB" 'memoryMiB'
-  _n "  memoryMiB: 65536" | accept "memory 65536 MiB"
-  _n "  diskGiB: 0" | reject "disk 0" 'diskGiB'
-  _n "  diskGiB: 501" | reject "disk 501" 'diskGiB'
-  _n "  diskGiB: 500" | accept "disk 500"
+  _n "  profile: m" | accept "instance with a profile"
+  _c | accept "instance with a custom size"
+  _c | defaulted "running defaults to true" '.spec.running' true
+  _c | defaulted "nesting defaults to false" '.spec.nesting' false
+  _c | defaulted "secureBoot defaults to true" '.spec.secureBoot' true
+  _c | defaulted "sshPublicKeys default to empty" '.spec.sshPublicKeys | length' 0
+  _n "  profile: m" | defaulted "a profile leaves cpu unset (the profile decides)" '.spec.cpu // "unset"' unset
+  _n "  profile: m" | defaulted "a profile leaves memoryMiB unset" '.spec.memoryMiB // "unset"' unset
+  _n "  profile: m" | defaulted "a profile leaves diskGiB unset" '.spec.diskGiB // "unset"' unset
+  _n | reject "no size at all" 'cpu, memoryMiB and diskGiB are all required'
+  _n "  cpu: 2" | reject "a cpu alone" 'cpu, memoryMiB and diskGiB are all required'
+  _n "  cpu: 2
+  memoryMiB: 2048" | reject "no disk" 'cpu, memoryMiB and diskGiB are all required'
+  _n "  memoryMiB: 2048
+  diskGiB: 20" | reject "no cpu" 'cpu, memoryMiB and diskGiB are all required'
+  _n "  profile: m
+  cpu: 2" | reject "a profile and a cpu" 'not both'
+  _n "  profile: m
+  memoryMiB: 2048" | reject "a profile and a memory" 'not both'
+  _n "  profile: m
+  diskGiB: 20" | reject "a profile and a disk" 'not both'
+  _n "  profile: ''" | reject "an empty profile name" 'profile'
+  _n "  profile: -m" | reject "a profile name that starts with a hyphen" 'profile'
+  _n "  profile: $(printf 'a%.0s' {1..64})" | reject "a profile name of 64 characters" 'profile'
+  _n "  profile: $(printf 'a%.0s' {1..63})" | accept "a profile name of 63 characters"
+  _n "  profile: s" | accept "profile s"
+  _n "  profile: l" | accept "profile l"
+  _n "  profile: team.small_1" | accept "a profile name with a dot, an underscore and a digit"
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  profile: m\n' | reject "no network" 'spec.network'
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  network: ""\n  profile: m\n' | reject "an empty network" 'network'
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  network: Net\n  profile: m\n' | reject "a network name in uppercase" 'network'
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec: {profile: m, network: net}\n' | reject "no imageRef" 'imageRef'
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: ""}\n  network: net\n  profile: m\n' | reject "empty imageRef name" 'imageRef'
+  _c 0 | reject "cpu 0" 'spec.cpu'
+  _c 17 | reject "cpu 17" 'spec.cpu'
+  _c 16 | accept "cpu 16"
+  _c 1 255 | reject "memory 255 MiB" 'memoryMiB'
+  _c 1 65537 | reject "memory 65537 MiB" 'memoryMiB'
+  _c 1 65536 | accept "memory 65536 MiB"
+  _c 1 1024 0 | reject "disk 0" 'diskGiB'
+  _c 1 1024 501 | reject "disk 501" 'diskGiB'
+  _c 1 1024 500 | accept "disk 500"
   local k1='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE2eUpdatedKeyOnly' k2='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7 laptop@home'
-  _n "  sshPublicKeys: ['$k1', '$k2']" | accept "several ssh keys, one with a comment"
-  _n "  sshPublicKeys: [a, b]" | reject "ssh keys that are not keys" 'each key must be'
-  _n "  sshPublicKeys: [\"$k1\\nruncmd: [reboot]\"]" | reject "an ssh key with a line break (cloud-init injection)" 'each key must be'
-  _n "  sshPublicKeys: ['$k1 note: x']" | reject "an ssh key whose comment has a colon" 'each key must be'
-  _n "  sshPublicKeys: ['$k1 two words']" | reject "an ssh key with a two word comment" 'each key must be'
-  _n "  sshPublicKeys: [$(printf "'$k1', %.0s" {1..20})'$k1']" | reject "21 ssh keys" 'sshPublicKeys'
+  _n "  profile: s
+  sshPublicKeys: ['$k1', '$k2']" | accept "several ssh keys, one with a comment"
+  _n "  profile: s
+  sshPublicKeys: [a, b]" | reject "ssh keys that are not keys" 'each key must be'
+  _n "  profile: s
+  sshPublicKeys: [\"$k1\\nruncmd: [reboot]\"]" | reject "an ssh key with a line break (cloud-init injection)" 'each key must be'
+  _n "  profile: s
+  sshPublicKeys: ['$k1 note: x']" | reject "an ssh key whose comment has a colon" 'each key must be'
+  _n "  profile: s
+  sshPublicKeys: ['$k1 two words']" | reject "an ssh key with a two word comment" 'each key must be'
+  _n "  profile: s
+  sshPublicKeys: [$(printf "'$k1', %.0s" {1..20})'$k1']" | reject "21 ssh keys" 'sshPublicKeys'
+
+  section "admission: Network"
+  _w net1 | accept "a network with a description"
+  _w net1 "  nat: false" | reject "a nat field: a network is always NATed" 'unknown field|nat'
+  _w a | accept "a one character name"
+  _w "$(printf 'a%.0s' {1..15})" | accept "a 15 characters name (the longest Incus allows)"
+  _w "$(printf 'a%.0s' {1..16})" | reject "a 16 characters name" 'must be 1 to 15'
+  _w 1net | reject "a name that starts with a digit" 'must be 1 to 15'
+  _w Net | reject "a name in uppercase" 'must be 1 to 15|RFC 1123'
+  _w my_net | reject "a name with an underscore" 'must be 1 to 15|RFC 1123'
+  _w net1 "  description: $(printf 'x%.0s' {1..201})" | reject "a description over 200 characters" 'description'
+  _w net1 "  subnet: 10.0.0.0/24" | reject "a field the kind does not have (the addresses are Incus's)" 'unknown field|subnet'
 
   section "admission: Membership"
   _m "  subject: {kind: User, name: a@b.fr}
@@ -95,12 +143,12 @@ group_admission() {
   _k "  $E
   grants: [{tenant: demo, scopes: [instances:read]}]" | accept "key with one grant"
   _k "  $E
-  grants: [{tenant: demo, scopes: [tenants:read, instances:read, instances:write, images:read, images:write, memberships:read, memberships:write]}]" | accept "key with all 7 scopes"
+  grants: [{tenant: demo, scopes: [tenants:read, tenants:write, instances:read, instances:write, images:read, images:write, networks:read, networks:write, memberships:read, memberships:write]}]" | accept "key with all 10 scopes"
   _k "  $E
   grants: [{tenant: a, scopes: [instances:read]}, {tenant: b, scopes: [images:read]}]
   displayName: ci" | accept "key on two tenants with every field"
   _k "  $E
-  grants: [{tenant: demo, scopes: [tenants:write]}]" | reject "tenants:write has no relation for a key" 'scopes'
+  grants: [{tenant: demo, scopes: [tenants:create]}]" | reject "tenants:create: no key creates a tenant" 'scopes'
   _k "  $E
   grants: [{tenant: demo, scopes: [tenant:read]}]" | reject "the former scope name tenant:read" 'scopes'
   _k "  $E" | reject "no grants" 'spec.grants'

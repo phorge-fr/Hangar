@@ -60,10 +60,13 @@ spec:
                                                   type: string
                                                   enum:
                                                       - tenants:read
+                                                      - tenants:write
                                                       - instances:read
                                                       - instances:write
                                                       - images:read
                                                       - images:write
+                                                      - networks:read
+                                                      - networks:write
                                                       - memberships:read
                                                       - memberships:write
                                       required:

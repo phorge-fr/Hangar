@@ -1,6 +1,11 @@
-# Renders the Incus Instance of an Instance, see xrd-instance.yml. It lists the tenant's "phorge"
-# profile explicitly (created by the Tenant composition): the project's own default profile is empty.
-# The root disk is overridden on the instance to apply spec.diskGiB.
+# Renders the Incus Instance of an Instance, see xrd-instance.yml.
+#
+# - Its size is a profile of the tenant (spec.profile: s, m, l, or one the user made), which carries the
+#   CPU, the memory and the root disk, or custom values (spec.cpu, memoryMiB, diskGiB) that are set on the
+#   instance itself, with the project's own empty "default" profile. The XRD refuses both and neither.
+# - Its only network device is eth0 on a Network of the tenant (spec.network): a tenant has no network of its
+#   own, so the instance is unreachable until the user has deployed one. A Usage keeps that Network while the
+#   instance exists.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -88,22 +93,31 @@ spec:
                           imageRef:
                             name: {{ $spec.imageRef.name }}
                           profiles:
-                            - phorge
+                            - {{ default "default" $spec.profile }}
                           config:
                             security.nesting: {{ $spec.nesting | quote }}
                             security.secureboot: {{ $spec.secureBoot | quote }}
+                            {{- if not $spec.profile }}
                             limits.cpu: {{ $spec.cpu | quote }}
                             limits.memory: {{ printf "%dMiB" (int $spec.memoryMiB) | quote }}
+                            {{- end }}
                             {{- if $spec.sshPublicKeys }}
                             cloud-init.user-data: {{ $ud | quote }}
                             {{- end }}
                           device:
+                            {{- if not $spec.profile }}
                             - name: root
                               type: disk
                               properties:
                                 path: /
                                 pool: remote
                                 size: {{ printf "%dGiB" (int $spec.diskGiB) | quote }}
+                            {{- end }}
+                            - name: eth0
+                              type: nic
+                              properties:
+                                network: {{ $spec.network }}
+                                name: eth0
                       ---
                       {{- /* The Image cannot be deleted while this Instance exists: Incus lets an image go even
                                when a VM was created from it, and the VM could then not be recreated. The Usage is
@@ -127,6 +141,27 @@ spec:
                           kind: Image
                           resourceRef:
                             name: {{ $spec.imageRef.name }}
+                        by:
+                          apiVersion: instance.incus.m.crossplane.io/v1alpha1
+                          kind: Instance
+                          resourceRef:
+                            name: {{ $name }}
+                      ---
+                      apiVersion: protection.crossplane.io/v1beta1
+                      kind: Usage
+                      metadata:
+                        name: {{ $name }}-uses-network
+                        annotations:
+                          gotemplating.fn.crossplane.io/composition-resource-name: network-usage
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "network-usage")) }}"
+                      spec:
+                        replayDeletion: true
+                        reason: "Instance {{ $name }} is attached to this network"
+                        of:
+                          apiVersion: phorge.fr/v1alpha1
+                          kind: Network
+                          resourceRef:
+                            name: {{ $spec.network }}
                         by:
                           apiVersion: instance.incus.m.crossplane.io/v1alpha1
                           kind: Instance

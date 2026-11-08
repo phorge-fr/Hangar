@@ -66,8 +66,9 @@ group_deletion() {
     sleep 30
     eq "the namespace of a tenant that still holds a VM and an image is kept" Active "$(K get ns "t-$1" -o jsonpath='{.status.phase}' 2>/dev/null)"
     eq "the Tenant waits, Deleting, instead of being stuck" 1 "$(K -n phorge-system get tenants.phorge.fr "$1" -o name 2>/dev/null | grep -c .)"
-    eq "the Image and the Instance are still there, untouched by the tenant deletion" 2 "$(K -n "t-$1" get images.phorge.fr,instances.phorge.fr -o name 2>/dev/null | grep -c .)"
+    eq "the Image, the Instance and the Network are still there, untouched by the tenant deletion" 3 "$(K -n "t-$1" get images.phorge.fr,instances.phorge.fr,networks.phorge.fr -o name 2>/dev/null | grep -c .)"
     K -n "t-$1" delete instances.phorge.fr run1 --cascade=foreground --wait=false >/dev/null 2>&1
+    K -n "t-$1" delete networks.phorge.fr net --wait=false >/dev/null 2>&1
     K -n "t-$1" delete images.phorge.fr alp --cascade=foreground --wait=false >/dev/null 2>&1
   }
   AFTER_DELETE=tenant_waits delete_timeline "$TD" --cascade=foreground
@@ -106,8 +107,13 @@ group_deletion() {
   match "deleting an Image used by a VM is refused by the Usage" 'in-use by' "$out"
   eq "the Image is still there" deb "$(sget images.phorge.fr "$a" deb '{.metadata.name}')"
   eq "and the VM keeps running" "RUNNING" "$(INCUS list vm1 --project "$a" -f csv -c s)"
+  out=$(K -n "$a" delete networks.phorge.fr net --wait=false 2>&1)
+  match "deleting a Network used by a VM is refused by the Usage, and says which VM" 'in-use by.*Instance/vm1|in-use by' "$out"
+  eq "the Network is still there" net "$(sget networks.phorge.fr "$a" net '{.metadata.name}')"
   K -n "$a" delete instances.phorge.fr vm1 --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
   check "the Instance is deleted in the foreground without blocking on its own Usage" gone instances.phorge.fr vm1 "$a"
+  if wait_until 180 "network gone" gone networks.phorge.fr net "$a"; then pass "the refused deletion of the Network is replayed: it is gone once the VM is gone"
+  else fail "the refused deletion of the Network is replayed once the VM is gone" "still there after 180 s: $(K -n "$a" get usages.protection.crossplane.io -o name | tr '\n' ' ')"; fi
   # replayDeletion: the refused deletion of the Image is remembered and replayed once nothing uses it, so the
   # Image goes by itself a few seconds after the VM (a second explicit delete is not needed).
   local t0=$SECONDS

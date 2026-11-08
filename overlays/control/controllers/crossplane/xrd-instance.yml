@@ -1,7 +1,9 @@
 # An Instance is a virtual machine in a tenant's Incus project (containers are blocked). It runs from an
 # Image of the same tenant (spec.imageRef), never from a bare image name, see xrd-image.yml.
-# The cpu, memory and disk bounds are per instance, the tenant's plan (Tenant.spec.plan) limits are
-# enforced on top of them by the Incus project limits.
+# Its size is a profile of the tenant (spec.profile) or custom cpu, memory and disk, and it is attached to
+# a Network of the tenant (spec.network), see xrd-network.yml. The cpu, memory and disk bounds are per
+# instance, the tenant's plan (Tenant.spec.plan) limits are enforced on top of them by the Incus project
+# limits.
 #
 # Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
 apiVersion: apiextensions.crossplane.io/v2
@@ -45,19 +47,28 @@ spec:
                                       alpine/3.22/cloud): set it to false for those.
                                   type: boolean
                                   default: true
+                              profile:
+                                  description: >-
+                                      Size of the instance: a profile of the tenant (s, m, l, or one the user made), which
+                                      carries the CPU, the memory and the root disk. Give it or give cpu, memoryMiB and
+                                      diskGiB, not both.
+                                  type: string
+                                  pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$'
+                              network:
+                                  description: Network of the same tenant that the instance is attached to (eth0).
+                                  type: string
+                                  pattern: '^[a-z][a-z0-9-]{0,14}$'
                               cpu:
+                                  description: Custom size, with memoryMiB and diskGiB, when there is no profile.
                                   type: integer
-                                  default: 1
                                   minimum: 1
                                   maximum: 16
                               memoryMiB:
                                   type: integer
-                                  default: 1024
                                   minimum: 256
                                   maximum: 65536
                               diskGiB:
                                   type: integer
-                                  default: 10
                                   minimum: 1
                                   maximum: 500
                               running:
@@ -76,8 +87,14 @@ spec:
                                           - rule: "self.matches('^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh[.]com|sk-ecdsa-sha2-nistp256@openssh[.]com) [A-Za-z0-9+/]{16,}={0,3}( [A-Za-z0-9@._+=/-]{1,100})?$')"
                                             message: "each key must be '<type> <base64 key>' with at most a one word comment of letters, digits and @._+=/-"
                                   default: []
+                          x-kubernetes-validations:
+                              - rule: "!has(self.profile) || !(has(self.cpu) || has(self.memoryMiB) || has(self.diskGiB))"
+                                message: "give a profile or cpu, memoryMiB and diskGiB, not both"
+                              - rule: "has(self.profile) || (has(self.cpu) && has(self.memoryMiB) && has(self.diskGiB))"
+                                message: "without a profile, cpu, memoryMiB and diskGiB are all required"
                           required:
                               - imageRef
+                              - network
                       status:
                           type: object
                           properties:

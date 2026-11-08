@@ -47,20 +47,24 @@ group_tenant() {
   for k in "${!WANT[@]}"; do eq "$p $k" "${WANT[$k]}" "$(INCUS project get "$p" "$k")"; done
   eq "restricted.networks.subnets is left unset (blocked)" "" "$(INCUS project get "$p" restricted.networks.subnets)"
 
-  section "tenant: network and profile"
-  eq "network 'default' is an OVN network" "default,ovn" "$(INCUS network list --project "$p" -f csv -c n,t | grep '^default,')"
-  local cidr; cidr=$(tenant_net "$TA")
-  match "ipv4.address is a /24 chosen by Incus" '^[0-9]+\.[0-9]+\.[0-9]+\.1/24$' "$cidr"
-  if in_phorge_range "$cidr"; then fail "the subnet $cidr is outside the router's VLANs and the LAN/containers ranges"; else pass "the subnet $cidr is outside the router's VLANs and the LAN/containers ranges"; fi
-  eq "no other Incus network uses the same subnet" 1 "$(INCUS network list --all-projects -f csv -c e,n,4 | grep -c ",${cidr}\$\|,${cidr%/*}/")"
-  eq "ipv4.nat is on" true "$(INCUS network get default ipv4.nat --project "$p")"
-  eq "the network sits on the UPLINK" UPLINK "$(INCUS network get default network --project "$p")"
-  local ext; ext=$(INCUS network get default volatile.network.ipv4.address --project "$p")
-  match "its OVN router took an external address in 10.11.0.10-250" '^10\.11\.0\.([1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|250)$' "$ext"
-  eq "profile 'phorge' exists" phorge "$(INCUS profile list --project "$p" -f csv -c n | grep -x phorge)"
-  eq "profile root disk is on the 'remote' pool" remote "$(INCUS profile device get phorge root pool --project "$p")"
-  eq "profile root disk is mounted on /" / "$(INCUS profile device get phorge root path --project "$p")"
-  eq "profile eth0 is on network 'default'" default "$(INCUS profile device get phorge eth0 network --project "$p")"
+  section "tenant: a project and three sizes, and no network"
+  # A tenant is its project and the profiles s, m and l. The network is the user's to deploy (group networks).
+  eq "the project holds no network" "" "$(INCUS network list --project "$p" -f csv -c n)"
+  eq "the project has the profiles s, m, l and its own empty default" "default l m s" "$(INCUS profile list --project "$p" -f csv -c n | sort | tr '\n' ' ' | sed 's/ $//')"
+  eq "there is no 'phorge' profile any more" "" "$(INCUS profile list --project "$p" -f csv -c n | grep -x phorge)"
+  local sz cpu mem disk
+  for sz in "s 1 2GiB 64GiB" "m 2 4GiB 128GiB" "l 4 8GiB 256GiB"; do
+    set -- $sz; cpu=$2; mem=$3; disk=$4
+    eq "profile $1: limits.cpu" "$cpu" "$(INCUS profile get "$1" limits.cpu --project "$p")"
+    eq "profile $1: limits.memory" "$mem" "$(INCUS profile get "$1" limits.memory --project "$p")"
+    eq "profile $1: root disk size" "$disk" "$(INCUS profile device get "$1" root size --project "$p")"
+    eq "profile $1: root disk is on the 'remote' pool" remote "$(INCUS profile device get "$1" root pool --project "$p")"
+    eq "profile $1: root disk is mounted on /" / "$(INCUS profile device get "$1" root path --project "$p")"
+    eq "profile $1: it carries no network device" "" "$(INCUS profile device list "$1" --project "$p" | grep -vx root)"
+    eq "profile $1 is Ready in Crossplane" True "$(cond profile.profile.incus.m.crossplane.io "t-$TA-$1" phorge-system Ready)"
+  done
+  eq "the empty default profile has no device" "" "$(INCUS profile device list default --project "$p")"
+  eq "no Network resource was composed for the tenant" 0 "$(K get networks.network.incus.m.crossplane.io -A -o name 2>/dev/null | grep -c "t-$TA")"
 
   section "tenant: owner and composed resources"
   eq "the owner tuple is Ready" True "$(cond relationshiptuple.tuple.openfga.m.crossplane.io "t-$TA-owner" phorge-system Ready)"
@@ -68,35 +72,21 @@ group_tenant() {
      "$(sget relationshiptuple.tuple.openfga.m.crossplane.io phorge-system "t-$TA-owner" '{.metadata.annotations.crossplane\.io/external-name}')"
   eq "and admin of the tenant in the Phorge API store, which the API checks" "$(owner_api_tuple owner-a@example.org "$TA")" \
      "$(sget relationshiptuple.tuple.openfga.m.crossplane.io phorge-system "t-$TA-owner-api" '{.metadata.annotations.crossplane\.io/external-name}')"
-  local mr n=0; for mr in object.kubernetes.m.crossplane.io/t-$TA project.project.incus.m.crossplane.io/t-$TA network.network.incus.m.crossplane.io/t-$TA-default profile.profile.incus.m.crossplane.io/t-$TA-phorge; do
+  local mr n=0; for mr in object.kubernetes.m.crossplane.io/t-$TA project.project.incus.m.crossplane.io/t-$TA profile.profile.incus.m.crossplane.io/t-$TA-s profile.profile.incus.m.crossplane.io/t-$TA-m profile.profile.incus.m.crossplane.io/t-$TA-l; do
     K -n phorge-system get "$mr" >/dev/null 2>&1 && n=$((n+1)); done
-  eq "the 4 other composed resources exist next to the tuples" 4 "$n"
+  eq "the 5 other composed resources exist next to the tuples (namespace, project, three profiles)" 5 "$n"
+  eq "and nothing else is composed: 7 managed resources in all" 7 "$(K get managed -A -o json | jq "[.items[] | select(.metadata.name | test(\"^t-$TA(-|\$)\"))] | length")"
 
   section "tenant: updates the XRD refuses"
   match "an unknown plan is refused on update" 'spec.plan' "$(K -n phorge-system patch tenants.phorge.fr "$TA" --type merge -p '{"spec":{"plan":"xl"}}' 2>&1)"
 
   section "tenant: the other plan and the edge cases"
   ensure_tenant "$TB" small owner-b@example.org && check_plan_limits "t-$TB" small
-  nomatch "tenant B has a different subnet from A" "^$(net_prefix "$TA")\." "$(tenant_net "$TB")"
-  nomatch "tenant B sees none of A's networks (separate projects)" "$(net_prefix "$TA")" "$(INCUS network list --project "t-$TB" -f csv -c n,4)"
+  eq "tenant B has its own profiles, as A has" "default l m s" "$(INCUS profile list --project "t-$TB" -f csv -c n | sort | tr '\n' ' ' | sed 's/ $//')"
+  eq "and no network" "" "$(INCUS network list --project "t-$TB" -f csv -c n)"
   ensure_tenant "$TE" small 'E2E+Tag.x@Example.org' && {
     eq "28-character tenant name: project exists" "t-$TE" "$(INCUS project list -f csv -c n | grep -x "t-$TE")"
     eq "owner email with uppercase and '+' goes into the tuple unchanged" "$(owner_tuple 'E2E+Tag.x@Example.org' "$TE")" \
        "$(sget relationshiptuple.tuple.openfga.m.crossplane.io phorge-system "t-$TE-owner" '{.metadata.annotations.crossplane\.io/external-name}')"
   }
-
-  section "tenant: subnets chosen by Incus, across tenants"
-  TRACK_TENANTS+=("$TX")
-  tenant_yaml "$TX" x@example.org small | K apply -f - >/dev/null
-  wait_ready tenants.phorge.fr phorge-system "$TX" 240 || fail "tenant X reaches Ready" "$(why tenants.phorge.fr "$TX" phorge-system)"
-  local t seen="" dup=0 bad=0 c
-  for t in "$TA" "$TB" "$TE" "$TX"; do
-    c=$(tenant_net "$t"); [[ -z $c ]] && continue
-    note "network of ${t#e2e-$RUN_ID-}: $c"
-    [[ " $seen " == *" ${c%.*} "* ]] && dup=1; seen="$seen ${c%.*}"
-    in_phorge_range "$c" && bad=1
-  done
-  eq "the networks of the e2e tenants are pairwise distinct" 0 "$dup"
-  eq "none of them is in a router VLAN or the LAN/containers ranges" 0 "$bad"
-  K -n phorge-system delete tenants.phorge.fr "$TX" --wait=false >/dev/null
 }

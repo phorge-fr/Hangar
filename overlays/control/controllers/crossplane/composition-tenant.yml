@@ -1,4 +1,4 @@
-# Renders the five resources of a Tenant, see xrd-tenant.yml.
+# Renders the resources of a Tenant (namespace, project, three profiles, two tuples), see xrd-tenant.yml.
 #
 # - The Project is deny-by-default: restricted=true and every restricted.* key set explicitly, so a
 #   default changing in a later Incus release cannot silently open something. Allowed on purpose:
@@ -23,14 +23,15 @@
 #   phorge-fr/Hangar#185.
 # - Egress to the other Phorge networks is not an Incus matter: the router drops phorge-to-phorge
 #   forwards (Network repo, drop-phorge-to-phorge), tenant traffic leaves through comp-ns.
-# - Its profile is named "phorge", not "default": a new project's default profile is empty, so an
-#   instance would fail with "No root device could be found", and adopting "default" by name would
-#   make Crossplane try to delete a profile Incus won't let go. Instances list it explicitly.
-# - features.networks=true gives the project its own networks, so the tenant gets a "default" OVN
-#   network of its own on the UPLINK (NATed) instead of sharing one. ipv4.address is left to Incus
-#   ("auto") and Incus is relied on to avoid the subnets of the other networks it manages. It cannot
-#   know the router's VLANs, so a subnet inside 10.1-10.5 or 10.10-10.12 stays possible; the e2e suite
-#   (tests/e2e, group tenant) asserts that tenant networks are distinct and outside those ranges.
+# - A tenant is only its project, the three size profiles s, m and l, and the owner's tuples. There is no network
+#   and no other profile: the user deploys their networks (the Network kind, see xrd-network.yml) and attaches
+#   their instances to them. The profiles carry the CPU, the memory and the root disk of a size, so an
+#   instance from a profile needs nothing else but its network. They are the tenant's own, created with it.
+# - features.networks=true gives the project its own networks (a network of the user is an OVN network on the
+#   UPLINK, NATed). ipv4.address is left to Incus ("auto") and Incus is relied on to avoid the subnets of the other
+#   networks it manages. It cannot know the router's VLANs, so a subnet inside 10.1-10.5 or 10.10-10.12 stays
+#   possible; the e2e suite (tests/e2e, group tenant) asserts that tenant networks are distinct and outside those
+#   ranges.
 # - The owner is "viewer" of the project in the Incus store (the Incus UI is read-only: Crossplane owns every
 #   object and reconciles back anything changed by hand) and "admin" of the tenant in the Phorge API store,
 #   the role the API checks. A Membership for the owner is refused (see composition-membership.yml).
@@ -93,6 +94,9 @@ spec:
                       {{- $name := $xr.metadata.name -}}
                       {{- $plans := dict "small" (dict "vms" 1 "cpu" 2 "mem" 4 "disk" 20 "nets" 1) "medium" (dict "vms" 3 "cpu" 4 "mem" 8 "disk" 100 "nets" 2) "large" (dict "vms" 6 "cpu" 8 "mem" 16 "disk" 250 "nets" 3) -}}
                       {{- $p := index $plans $xr.spec.plan -}}
+                      {{- /* The sizes a tenant starts with, as Incus profiles of its project. A tenant is only its project and
+                               these three profiles: the network and everything else is the user's to deploy. */ -}}
+                      {{- $sizes := dict "s" (dict "cpu" 1 "mem" 2 "disk" 64) "m" (dict "cpu" 2 "mem" 4 "disk" 128) "l" (dict "cpu" 4 "mem" 8 "disk" 256) -}}
                       {{- $obs := default (dict) .observed.resources -}}
                       {{- $env := index .context "apiextensions.crossplane.io/environment" -}}
                       apiVersion: kubernetes.m.crossplane.io/v1alpha1
@@ -160,49 +164,32 @@ spec:
                             restricted.networks.uplinks: UPLINK
                             restricted.snapshots: allow
                             restricted.backups: allow
-                      ---
-                      apiVersion: network.incus.m.crossplane.io/v1alpha1
-                      kind: Network
-                      metadata:
-                        name: t-{{ $name }}-default
-                        annotations:
-                          gotemplating.fn.crossplane.io/composition-resource-name: network
-                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "network")) }}"
-                      spec:
-                        forProvider:
-                          name: default
-                          type: ovn
-                          projectRef:
-                            name: t-{{ $name }}
-                          description: Default network of the tenant
-                          config:
-                            network: UPLINK
-                            ipv4.nat: "true"
+                      {{- range $size, $r := $sizes }}
                       ---
                       apiVersion: profile.incus.m.crossplane.io/v1alpha1
                       kind: Profile
                       metadata:
-                        name: t-{{ $name }}-phorge
+                        name: t-{{ $name }}-{{ $size }}
                         annotations:
-                          crossplane.io/external-name: phorge
-                          gotemplating.fn.crossplane.io/composition-resource-name: profile
-                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "profile")) }}"
+                          crossplane.io/external-name: {{ $size }}
+                          gotemplating.fn.crossplane.io/composition-resource-name: profile-{{ $size }}
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs (printf "profile-%s" $size))) }}"
                       spec:
                         forProvider:
                           projectRef:
                             name: t-{{ $name }}
-                          description: Root disk and network of the tenant's instances
+                          description: {{ printf "%s: %d vCPU, %d GiB RAM, %d GiB disk" $size (int $r.cpu) (int $r.mem) (int $r.disk) | quote }}
+                          config:
+                            limits.cpu: {{ $r.cpu | quote }}
+                            limits.memory: {{ printf "%dGiB" (int $r.mem) | quote }}
                           device:
                             - name: root
                               type: disk
                               properties:
                                 path: /
                                 pool: remote
-                            - name: eth0
-                              type: nic
-                              properties:
-                                network: default
-                                name: eth0
+                                size: {{ printf "%dGiB" (int $r.disk) | quote }}
+                      {{- end }}
                       ---
                       apiVersion: tuple.openfga.m.crossplane.io/v1alpha1
                       kind: RelationshipTuple

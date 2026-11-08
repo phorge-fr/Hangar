@@ -1,0 +1,43 @@
+# A Network is an OVN network a user deploys in their tenant's Incus project, managed by Crossplane.
+# A tenant comes without one (see composition-tenant.yml): instances are attached to a network of the
+# tenant (Instance.spec.network), which is what makes them reachable. The network is NATed on the
+# UPLINK and there is no field to turn that off: a tenant cannot route its own subnet (the project blocks
+# restricted.networks.subnets), and an OVN network without NAT on this uplink is created in the "Errored" state by
+# Incus while Crossplane reads Ready (verified live 2026-11-08). Its addresses are left to Incus (the provider does not report the range it chose, so the Network
+# has no address in its status), and the tenant's plan limits how many there can be.
+#
+# Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+    name: networks.phorge.fr
+spec:
+    scope: Namespaced
+    group: phorge.fr
+    names:
+        kind: Network
+        plural: networks
+    versions:
+        - name: v1alpha1
+          served: true
+          referenceable: true
+          schema:
+              openAPIV3Schema:
+                  type: object
+                  # The name is the name of the Incus network, which is 15 characters at most.
+                  x-kubernetes-validations:
+                      - rule: "self.metadata.name.matches('^[a-z][a-z0-9-]{0,14}$')"
+                        message: "name must be 1 to 15 characters: lowercase letters, digits and hyphens, starting with a letter"
+                  properties:
+                      spec:
+                          type: object
+                          properties:
+                              description:
+                                  type: string
+                                  maxLength: 200
+                      status:
+                          type: object
+                          properties:
+                              problems:
+                                  type: string
+                                  description: What is wrong with the composed resources, empty when everything is up.
