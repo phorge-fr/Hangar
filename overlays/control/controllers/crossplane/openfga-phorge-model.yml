@@ -23,7 +23,7 @@
 apiVersion: model.openfga.m.crossplane.io/v1alpha1
 kind: AuthorizationModel
 metadata:
-    name: phorge-api-2
+    name: phorge-api-3
     namespace: phorge-system
 spec:
     forProvider:
@@ -61,6 +61,11 @@ spec:
                 define can_write_instances: user or key_instances_write
                 define can_read_images: viewer or key_images_read
                 define can_write_images: operator or key_images_write
+                # The networks are for the roles until a scope of a key covers them (phorge-fr/phorge-api#74): reading is for every
+                # role, writing for the operator and the admin, as for the images.
+                define can_read_networks: viewer
+                define can_write_networks: operator
+
                 define can_read_memberships: admin or key_memberships_read
                 define can_write_memberships: admin or key_memberships_write
 

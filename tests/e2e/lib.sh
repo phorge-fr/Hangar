@@ -11,11 +11,12 @@ IMG_DEBIAN=${IMG_DEBIAN:-debian/13/cloud}
 IMG_ALPINE=${IMG_ALPINE:-alpine/3.22/cloud}
 
 # One tenant per role.
-TA="e2e-$RUN_ID-a"   # medium: instances, images, access, network
+TA="e2e-$RUN_ID-a"   # medium: instances, images, access, networks
 TB="e2e-$RUN_ID-b"   # small: quota and cross-tenant isolation
 TE="e2e-$RUN_ID-abcdefghijklmnopqr"  # 28 characters, the longest name allowed
 TD="e2e-$RUN_ID-d"   # deleted while it holds a running VM
-TX="e2e-$RUN_ID-x"   # a fifth network, to compare subnets
+TX="e2e-$RUN_ID-x"   # deleted in the background while it is empty
+TN="e2e-$RUN_ID-n"   # small: networks of a third tenant, to compare subnets
 
 shopt -s lastpipe   # so `printf ... | accept` counts in this shell, not in a subshell
 PASS=0; FAIL=0; SKIP=0; FAILED=()
@@ -121,10 +122,39 @@ EOF
   else fail "image $src in $t reaches Ready" "$(why images.phorge.fr "$n" "t-$t")"; return 1; fi
 }
 
-# ensure_instance <tenant> <name> <image xr> [extra spec lines]: creates the VM, waits for Ready.
+# ensure_network <tenant> <name> [extra spec lines]: deploys a network of the tenant once, waits for Ready. A tenant comes
+# without one: the user deploys it, so every group that needs a VM goes through here.
+ensure_network() {
+  local t=$1 n=$2 extra=${3:-}
+  K -n "t-$t" get networks.phorge.fr "$n" >/dev/null 2>&1 && return 0
+  local out; out=$(cat <<EOF | K apply -f - 2>&1
+apiVersion: phorge.fr/v1alpha1
+kind: Network
+metadata: {name: $n, namespace: t-$t, labels: {$LABEL: "$RUN_ID"}}
+spec:
+  description: e2e network
+$extra
+EOF
+) || { fail "network $n in $t is created" "$out"; return 1; }
+  if wait_ready networks.phorge.fr "t-$t" "$n" 240; then pass "network $n in $t reaches Ready"
+  else fail "network $n in $t reaches Ready" "$(why networks.phorge.fr "$n" "t-$t")"; return 1; fi
+}
+
+# ensure_instance <tenant> <name> <image xr> [extra spec lines]: creates the VM, waits for Ready. Unless the extra lines say
+# otherwise, it is attached to the network "net" of the tenant (deployed here if need be) and has a custom size: 1 vCPU,
+# 1024 MiB, 10 GiB, each of them only when the extra lines do not give it (a size is a profile or the three values).
 ensure_instance() {
   local t=$1 n=$2 img=$3 extra=${4:-}
   K -n "t-$t" get instances.phorge.fr "$n" >/dev/null 2>&1 && return 0
+  if [[ $extra != *"network:"* ]]; then
+    ensure_network "$t" net || return 1
+    extra="  network: net"$'\n'"$extra"
+  fi
+  if [[ $extra != *"profile:"* ]]; then
+    [[ $extra == *"cpu:"* ]] || extra="$extra"$'\n'"  cpu: 1"
+    [[ $extra == *"memoryMiB:"* ]] || extra="$extra"$'\n'"  memoryMiB: 1024"
+    [[ $extra == *"diskGiB:"* ]] || extra="$extra"$'\n'"  diskGiB: 10"
+  fi
   local out; out=$(cat <<EOF | K apply -f - 2>&1
 apiVersion: phorge.fr/v1alpha1
 kind: Instance
@@ -139,8 +169,8 @@ EOF
 }
 
 # The tenant's OVN network: "10.x.y.1/24", its /24 prefix "10.x.y", and the checks on it.
-tenant_net() { INCUS network get default ipv4.address --project "t-$1"; }
-net_prefix() { local c; c=$(tenant_net "$1"); echo "${c%.*}"; }
+tenant_net() { INCUS network get "${2:-net}" ipv4.address --project "t-$1"; }
+net_prefix() { local c; c=$(tenant_net "$@"); echo "${c%.*}"; }
 # in_phorge_range <cidr>: the subnet is one of the router's VLANs (or the containers' / LAN ranges).
 in_phorge_range() {
   local p="${1%.*}"
@@ -157,14 +187,14 @@ cleanup() {
   local t k x
   for x in "${TRACK_XR[@]}"; do K delete ${x%% *}.phorge.fr -n "$(cut -d' ' -f2 <<<"$x")" "$(cut -d' ' -f3 <<<"$x")" --wait=false >/dev/null 2>&1; done
   for t in "${TRACK_TENANTS[@]}"; do
-    for k in instances memberships images; do
+    for k in instances memberships images networks; do
       K -n "t-$t" delete "$k.phorge.fr" -l "$LABEL=$RUN_ID" --wait=false >/dev/null 2>&1
     done
   done
   # The keys are a person's, not a tenant's: they are in their own namespace.
   K -n phorge-keys delete apikeys.phorge.fr -l "$LABEL=$RUN_ID" --wait=false >/dev/null 2>&1
   for t in "${TRACK_TENANTS[@]}"; do
-    wait_until 300 "children of $t" bash -c "K() { kubectl --context $E2E_CONTEXT \"\$@\"; }; [[ -z \$(K -n t-$t get instances.phorge.fr,images.phorge.fr -o name 2>/dev/null) ]]"
+    wait_until 300 "children of $t" bash -c "K() { kubectl --context $E2E_CONTEXT \"\$@\"; }; [[ -z \$(K -n t-$t get instances.phorge.fr,images.phorge.fr,networks.phorge.fr,memberships.phorge.fr -o name 2>/dev/null) ]]"
     K -n phorge-system delete tenants.phorge.fr "$t" --wait=false >/dev/null 2>&1
   done
   for t in "${TRACK_TENANTS[@]}"; do wait_until 600 "tenant $t gone" gone tenants.phorge.fr "$t" phorge-system || echo "cleanup: tenant $t is still being deleted"; done

@@ -19,14 +19,14 @@ metadata:
     name: phorge-api
 rules:
     - apiGroups: ["phorge.fr"]
-      resources: ["tenants", "images", "instances", "apikeys"]
+      resources: ["tenants", "images", "instances", "networks", "apikeys"]
       verbs: ["get", "list", "watch", "create", "patch", "delete"]
     - apiGroups: ["phorge.fr"]
       resources: ["memberships"]
       verbs: ["get", "list", "watch", "create", "delete"]
     # Read the status the compositions write (Ready, problems, state, ipv4, expired).
     - apiGroups: ["phorge.fr"]
-      resources: ["tenants/status", "images/status", "instances/status", "memberships/status", "apikeys/status"]
+      resources: ["tenants/status", "images/status", "instances/status", "networks/status", "memberships/status", "apikeys/status"]
       verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

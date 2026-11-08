@@ -29,6 +29,8 @@ resources:
     - composition-tenant.yml
     - xrd-image.yml
     - composition-image.yml
+    - xrd-network.yml
+    - composition-network.yml
     - xrd-instance.yml
     - composition-instance.yml
     - xrd-membership.yml

@@ -30,11 +30,13 @@ back from OpenFGA and run real `check` calls in the `access` group.
 | Group | Needs | What it covers |
 |---|---|---|
 | `admission` | API server | Every XRD rule by server-side dry run: bounds, enums, patterns, defaults, name rules, set uniqueness |
-| `guards` | controllers | XRs in the wrong namespace are refused and never reach Incus' `default` project; a `t-*` namespace without a tenant |
-| `tenant` | Incus | What a Tenant composes: namespace, project limits per plan, every `restricted.*` key, OVN network, profile, owner tuple, 28-character name, odd owner emails, and that the subnets Incus picks are distinct and outside the router's VLANs |
+| `guards` | controllers | XRs (tenants, images, networks, instances, memberships, keys) in the wrong namespace are refused and never reach Incus' `default` project; a `t-*` namespace without a tenant |
+| `tenant` | Incus | What a Tenant composes: namespace, project limits per plan, every `restricted.*` key, the three profiles s, m and l and no network, owner tuple, 28-character name, odd owner emails |
 | `image` | Incus, Internet | Pull, fingerprint, aliases, per-project isolation, deletion, an image that does not exist |
-| `instance` | Incus, Internet | A running VM end to end (limits, disk, cloud-init key, guest check), stopped and nested VMs, plan quota, disk over quota, missing image |
+| `instance` | Incus, Internet | A running VM end to end (limits, disk, network device, cloud-init key, guest check), stopped and nested VMs, plan quota, disk over quota, missing image |
+| `sizes` | Incus, Internet | An instance from a profile (what Incus gets, what the guest gets), a profile above the plan, a profile that does not exist, from custom values to a profile in place |
 | `access` | OpenFGA | Membership roles and subjects, duplicates, role change, deletion; ApiKey (opt-in, `E2E_APIKEYS=1`): service account, one tuple per tenant and scope, expiry in OpenFGA, deletion; optional real `check` calls |
+| `networks` | Incus | The Network kind: deployed by the user, NAT, in-place change, the plan's limit, subnets across tenants, refused deletion while a VM uses it and replay, an instance on a network that does not exist |
 | `network` | Incus, Internet | Addressing, routing, DNS, Internet access, path MTU, what is blocked (other VLANs, router), isolation between tenants, nothing exposed |
 | `update` | Incus | Plan, description and owner changes; alias; live cpu, memory, disk, ssh keys; stop/start without recreation |
 | `deletion` | Incus | Deleting a tenant with a running VM: the namespace waits for its children, order, timing, orphan window; an object removed behind Crossplane's back; an Image still in use |

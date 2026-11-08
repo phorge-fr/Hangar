@@ -27,16 +27,19 @@ flowchart TB
     end
     subgraph ns["namespace t-demo"]
         image["Image"]
+        network["Network"]
         instance["Instance"]
         member["Membership"]
     end
     tenant -->|creates| ns
     tenant -->|composes| project["Incus project t-demo"]
-    tenant -->|composes| net["OVN network default"]
-    tenant -->|composes| profile["profile phorge"]
+    tenant -->|composes| profiles["profiles s, m, l"]
     tenant -->|composes| owner["tuple: owner is admin"]
     image -->|composes| iimg["Incus image"]
+    network -->|composes| inet["Incus OVN network"]
     instance -->|imageRef| image
+    instance -->|network| network
+    instance -->|profile| profiles
     instance -->|composes| ivm["Incus VM"]
     member -->|composes| tuple["OpenFGA tuple"]
 ```
@@ -44,9 +47,9 @@ flowchart TB
 | Kind | Scope | Lives in |
 |---|---|---|
 | `Tenant` | Namespaced | `phorge-system` only |
-| `Image`, `Instance`, `Membership` | Namespaced | the tenant's namespace `t-<name>` only |
+| `Image`, `Network`, `Instance`, `Membership` | Namespaced | the tenant's namespace `t-<name>` only |
 
-A tenant `demo` is the namespace `t-demo` and the Incus project `t-demo`. Creating an `Image`, `Instance` or `Membership` anywhere else, or a `Tenant` outside `phorge-system`, fails with `Synced=False` and a message that names the namespace. This guard exists because the namespace is used as the Incus project name: an `Instance` in `default` would otherwise target the real `default` project.
+A tenant `demo` is the namespace `t-demo` and the Incus project `t-demo`. Creating an `Image`, `Network`, `Instance` or `Membership` anywhere else, or a `Tenant` outside `phorge-system`, fails with `Synced=False` and a message that names the namespace. This guard exists because the namespace is used as the Incus project name: an `Instance` in `default` would otherwise target the real `default` project.
 
 Every kind reports the standard Crossplane conditions (`Synced`, `Ready`). `Ready=True` means every composed resource is up.
 
@@ -70,7 +73,15 @@ Plans, enforced by Incus as project limits:
 | `medium` | 3 | 4 | 8 GiB | 100 GiB | 2 |
 | `large` | 6 | 8 | 16 GiB | 250 GiB | 3 |
 
-Composes: a Kubernetes namespace, an Incus project, an OVN network `default` of its own on the `UPLINK` (NATed), a profile `phorge` (root disk on the `remote` pool, `eth0` on that network) and the owner's tuple.
+Composes: a Kubernetes namespace, an Incus project, the three profiles `s`, `m` and `l`, and the owner's tuples. Nothing else: **a tenant comes without a network**, the user deploys theirs (see `Network`).
+
+| Profile | vCPU | Memory | Root disk |
+|---|---|---|---|
+| `s` | 1 | 2 GiB | 64 GiB |
+| `m` | 2 | 4 GiB | 128 GiB |
+| `l` | 4 | 8 GiB | 256 GiB |
+
+The root disk is on the `remote` pool and part of the profile, so an instance from a profile needs nothing else but its network. The profiles are the tenant's own, created with it. The project also has its own empty `default` profile, which Incus makes. The plan limits above apply to the sum of the instances, and today the plans and the profiles are not aligned: the disk of `s` (64 GiB) is above the `small` plan (20 GiB), the disk of `m` (128 GiB) is above `small` and `medium`, and the disk of `l` (256 GiB) is above every plan, so Incus refuses an instance that asks for them (`Reached maximum aggregate value ... limits.disk`). Aligning the plans is tracked with the quotas.
 
 ```yaml
 apiVersion: phorge.fr/v1alpha1
@@ -98,6 +109,19 @@ An image pulled into the tenant's project. Instances start from an `Image`, neve
 
 The architecture default matters: the Incus provider runs on the arm64 control nodes and Incus otherwise pulls the image for the client's architecture, which no compute node can run. Pulling a VM image takes a few minutes.
 
+## Network
+
+An OVN network the user deploys in the tenant's project, NATed on the `UPLINK`. A tenant has none until the user makes one.
+
+| Field | Type | Rule |
+|---|---|---|
+| `metadata.name` | string | 1 to 15 characters: lowercase letters, digits and hyphens, starting with a letter (the Incus network name) |
+| `spec.description` | string | Up to 200 characters |
+
+It is always NATed: a tenant cannot route its own subnet, and an OVN network without NAT is created in the `Errored` state by Incus on this uplink. Its addresses are Incus's choice (a `/24` outside the router's VLANs). The provider does not report the range it chose, so the kind has no address in its status; an instance reports its own `status.ipv4`. The plan limits how many networks a tenant has (`small` 1, `medium` 2, `large` 3): the next one is refused by Incus with `Reached maximum number of networks`.
+
+Deleting a `Network` is refused while an instance uses it, see `Instance`.
+
 ## Instance
 
 A virtual machine in the tenant's project.
@@ -105,14 +129,20 @@ A virtual machine in the tenant's project.
 | Field | Type | Rule |
 |---|---|---|
 | `spec.imageRef.name` | string, required | An `Image` of the same tenant |
-| `spec.cpu` | integer | 1 to 16, default 1 |
-| `spec.memoryMiB` | integer | 256 to 65536, default 1024 |
-| `spec.diskGiB` | integer | 1 to 500, default 10 |
+| `spec.network` | string, required | A `Network` of the same tenant: the instance's `eth0` is attached to it |
+| `spec.profile` | string | A profile of the tenant (`s`, `m`, `l`), which carries the CPU, the memory and the root disk |
+| `spec.cpu` | integer | 1 to 16, with `memoryMiB` and `diskGiB`, when there is no profile |
+| `spec.memoryMiB` | integer | 256 to 65536, with `cpu` and `diskGiB` |
+| `spec.diskGiB` | integer | 1 to 500, with `cpu` and `memoryMiB` |
 | `spec.running` | boolean | Default `true` |
 | `spec.nesting` | boolean | Default `false`. Allows virtualization or containers inside the VM |
 | `spec.sshPublicKeys` | list of string | Injected with cloud-init, so the image must be a `cloud` variant |
 | `status.state` | string | Incus state, for example `Running` |
 | `status.ipv4` | string | Address on the tenant's network |
+
+A size is a profile **or** the three custom values, never both and never neither: the XRD refuses the others (`give a profile or cpu, memoryMiB and diskGiB, not both`, `without a profile, cpu, memoryMiB and diskGiB are all required`). There are no defaults. A profile that does not exist, or that does not fit the plan, leaves the instance `Synced=False` with Incus's message. A size can be changed in place, from custom values to a profile or back, on a stopped instance.
+
+A `Network` that an instance uses cannot be deleted: the request is refused with `in-use by` and the instance's name, and the `Network` goes by itself once the last instance is gone, without a second delete.
 
 The per-instance bounds are the XRD's. The plan's totals are enforced on top by the project: a second VM on a `small` tenant is refused by Incus with `Reached maximum number of instances`, and the instance stays `Synced=False` with that message.
 
@@ -138,9 +168,9 @@ A `Membership` writes two OpenFGA tuples:
 | Role | Meaning for the API |
 |---|---|
 | `admin` | Everything on the tenant, including memberships |
-| `operator` | Manage instances, images (and read the rest) |
+| `operator` | Manage instances, images and networks (and read the rest) |
 | `user` | Create and use instances |
-| `viewer` | Read-only |
+| `viewer` | Read-only. Networks are read with any role, written with `operator` and `admin`; no key scope covers them yet |
 
 There is one `Membership` per subject in a tenant: the tuples are named after a hash of the subject, so a second `Membership` for the same user or group (with any role) is not composed and stays `Ready=False`, instead of silently sharing, and on deletion removing, the tuple of the first. To change a role, delete the `Membership` and create another. A `Membership` for the tenant's owner is refused: the owner already has the `admin` role from the `Tenant`.
 
