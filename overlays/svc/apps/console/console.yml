@@ -40,7 +40,7 @@ spec:
                 - name: console
                   # Public image of phorge-fr/phorge-console, built for arm64 and amd64 on every push to main. The tag is
                   # floating and the digest is what runs: Renovate bumps the digest when the tag moves.
-                  image: ghcr.io/phorge-fr/phorge-console:latest@sha256:bcdfb3017649fd4009e419a937e608e540c9bdb2d80fda0bcbad595a728e5958
+                  image: ghcr.io/phorge-fr/phorge-console:latest@sha256:e7189718b32b4e67680192550b49e2237d710b4de707e029a3e124ae8c7246d0
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: http
@@ -53,6 +53,10 @@ spec:
                         value: 49a1375b-c52a-4a59-b3cb-8d4f5e392d85
                       - name: API_URL
                         value: https://api.phorge.fr
+                      # The address people reach the console on. The websocket of the terminal is accepted only from a page of this
+                      # origin, since the cookie of the session goes with it whatever page opens it.
+                      - name: ORIGIN
+                        value: https://console.phorge.fr
                   readinessProbe:
                       httpGet:
                           path: /healthz
