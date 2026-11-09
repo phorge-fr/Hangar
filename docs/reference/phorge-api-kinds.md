@@ -165,6 +165,8 @@ A size is a profile **or** the three custom values, never both and never neither
 
 A `Network` that an instance uses cannot be deleted: the request is refused with `in-use by` and the instance's name, and the `Network` goes by itself once the last instance is gone, without a second delete.
 
+A CPU or memory that Incus adds to a running VM is only added: the guest has to put it online. The Debian cloud image has no rule for it, so the Instance composition writes the udev rule `40-vm-hotadd.rules` with cloud-init at the first boot, for every instance, and a VM resized live then uses all it was given. Measured on the platform: the CPU count changes live in both directions (the guest follows, no reboot) and a memory increase is applied live; **lowering the memory of a running VM is refused by Incus** (`failed to resize memfd`) and stays a problem of the instance until the VM is stopped. Instances created before the rule exist keep their first-boot configuration: a person onlines a CPU by hand (`echo 1 > /sys/devices/system/cpu/cpuN/online`) or restarts after writing the rule.
+
 The per-instance bounds are the XRD's. The plan's totals are enforced on top by the project: a third VM on a `small` tenant is refused by Incus with `Reached maximum number of instances`, and the instance stays `Synced=False` with that message.
 
 ## Membership

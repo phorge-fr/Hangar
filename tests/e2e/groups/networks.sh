@@ -79,6 +79,8 @@ YAML
   ensure_image "$TA" deb "$IMG_DEBIAN" e2e-deb || return
   ensure_instance "$TA" netvm deb "  running: false" || return
   eq "the VM is on the network it asked for" net "$(INCUS config device get netvm eth0 network --project "$a")"
+  # a CPU or memory added to a running VM must come online by itself: the rule is written at the first boot (Hangar#435)
+  match "the VM carries the udev rule that onlines a hot-added CPU and memory" '40-vm-hotadd.rules' "$(INCUS config get netvm cloud-init.user-data --project "$a")"
   local out; out=$(K -n "$a" delete networks.phorge.fr net --wait=false 2>&1)
   match "deleting a network that a VM uses is refused, and names the VM" 'in-use by.*Instance/netvm' "$out"
   eq "the network is still there" net "$(sget networks.phorge.fr "$a" net '{.metadata.name}')"
