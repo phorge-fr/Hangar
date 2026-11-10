@@ -30,6 +30,21 @@ group_networks() {
   eq "a network the user gave no address says none, Incus chose one" "" "$(sget networks.phorge.fr "$a" net '{.status.ipv4}')"
   eq "a network is NATed, there is no way to turn it off" true "$(INCUS network get second ipv4.nat --project "$a")"
   eq "and Incus made it in the Created state" CREATED "$(INCUS network list --project "$a" -f csv -c n,s | grep '^second,' | cut -d, -f2)"
+  # the range and the local IPv6 can be changed in place (nothing is attached to this network: VMs on it lose their IPv4 until their
+  # DHCP runs again, which is why the API guards the change of a network in use)
+  K -n "$a" patch networks.phorge.fr second --type merge -p '{"spec":{"ipv4":"10.77.2.1/24","ipv6":"fd00:7:8:9::1/64"}}' >/dev/null
+  wait_until 150 "range changed" bash -c "ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus network get second ipv4.address --project $a' | grep -qx 10.77.2.1/24"
+  eq "a new range is applied in place" 10.77.2.1/24 "$(INCUS network get second ipv4.address --project "$a")"
+  wait_until 150 "ipv6 set" bash -c "ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus network get second ipv6.address --project $a' | grep -qx 'fd00:7:8:9::1/64'"
+  eq "a local IPv6 range is applied in place" "fd00:7:8:9::1/64" "$(INCUS network get second ipv6.address --project "$a")"
+  eq "and the status says both" "10.77.2.1/24 fd00:7:8:9::1/64" "$(sget networks.phorge.fr "$a" second '{.status.ipv4} {.status.ipv6}')"
+  eq "IPv6 stays NATed" true "$(INCUS network get second ipv6.nat --project "$a")"
+  eq "and the network stays Ready" True "$(cond networks.phorge.fr second "$a" Ready)"
+  local bad
+  for bad in "2001:db8:1::1/64" "fd00:7:8::1/48" "fd00:7:8:9::2/64"; do
+    out=$(K -n "$a" patch networks.phorge.fr second --type merge -p "{\"spec\":{\"ipv6\":\"$bad\"}}" 2>&1)
+    match "an IPv6 of $bad is refused (Incus would take it)" 'should match' "$out"
+  done
   # the medium plan allows 2 networks: the 3rd is refused by Incus and says why
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1

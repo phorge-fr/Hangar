@@ -122,10 +122,14 @@ An OVN network the user deploys in the tenant's project, NATed on the `UPLINK`. 
 |---|---|---|
 | `metadata.name` | string | 1 to 15 characters: lowercase letters, digits and hyphens, starting with a letter (the Incus network name) |
 | `spec.description` | string | Up to 200 characters |
-| `spec.ipv4` | string | The address of the network and its prefix in the form Incus takes, the gateway's: `10.77.1.1/24`, prefix 16 to 29. Optional, and it cannot change. Without it Incus chooses |
+| `spec.ipv4` | string | The address of the network and its prefix in the form Incus takes, the gateway's: `10.77.1.1/24`, prefix 16 to 29. Optional, and it can change. Without it Incus chooses |
+| `spec.ipv6` | string | The local IPv6 range, the gateway's address in a unique local range with a `/64` prefix and the host part `::1`: `fd00:7:8:9::1/64`. Optional, and it can change. Without it Incus chooses a range of its own (every network has one) |
 | `status.ipv4` | string | The address that was asked for, empty when Incus chose |
+| `status.ipv6` | string | The IPv6 range that was asked for, empty when Incus chose |
 
 It is always NATed: a tenant cannot route its own subnet, and an OVN network without NAT is created in the `Errored` state by Incus on this uplink. Its address is the user's choice (`spec.ipv4`); without one Incus chooses a `/24`. The provider does not report the range Incus chose, so the status only says an address that was asked for; an instance reports its own `status.ipv4`. **Incus does not refuse two networks on the same range** (measured), so what keeps them apart is the API, which checks the overlaps. The plan limits how many networks a tenant has (`small` 1, `medium` 2, `large` 3): the next one is refused by Incus with `Reached maximum number of networks`.
+
+**Changing a range** (measured on the platform, on a network with a running VM): Incus accepts a new `ipv4` or `ipv6` on a network that VMs use, and checks nothing: a global prefix, a `/48` or a range of the router would all be taken, which is why the XRD checks the form of `ipv6` and the API checks the overlaps. The VMs are disturbed differently. After a new `ipv4` they **lose their IPv4 and their gateway** (no route out) until their DHCP client asks again: renewing the lease does not do it, a fresh request does (`networkctl reconfigure` on a systemd-networkd guest, or a restart) and the VM then takes an address of the new range. After a new `ipv6` the VMs take the new prefix from the router advertisement within a minute with no cut, and keep the old address next to it until it expires. A VM that is stopped takes the new range at its next boot. The provider puts back any change made by hand, so the field is the way.
 
 Deleting a `Network` is refused while an instance uses it, see `Instance`.
 

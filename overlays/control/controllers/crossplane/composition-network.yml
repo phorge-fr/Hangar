@@ -98,6 +98,10 @@ spec:
                             {{- if $spec.ipv4 }}
                             ipv4.address: {{ $spec.ipv4 | quote }}
                             {{- end }}
+                            ipv6.nat: "true"
+                            {{- if $spec.ipv6 }}
+                            ipv6.address: {{ $spec.ipv6 | quote }}
+                            {{- end }}
                       ---
                       apiVersion: protection.crossplane.io/v1beta1
                       kind: Usage
@@ -125,4 +129,5 @@ spec:
                       kind: Network
                       status:
                         ipv4: {{ default "" $spec.ipv4 | quote }}
+                        ipv6: {{ default "" $spec.ipv6 | quote }}
                         problems: {{ join " | " $problems | trunc 800 | quote }}
