@@ -1,7 +1,7 @@
 # An Instance is a virtual machine in a tenant's Incus project (containers are blocked). It runs from an
 # Image of the same tenant (spec.imageRef), never from a bare image name, see xrd-image.yml.
 # Its size is a profile of the tenant (spec.profile) or custom cpu, memory and disk, and it is attached to
-# a Network of the tenant (spec.network), see xrd-network.yml. The cpu, memory and disk bounds are per
+# Networks of the tenant (spec.networks, one NIC each), see xrd-network.yml. The cpu, memory and disk bounds are per
 # instance, the tenant's plan (Tenant.spec.plan) limits are enforced on top of them by the Incus project
 # limits.
 #
@@ -55,9 +55,23 @@ spec:
                                   type: string
                                   pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$'
                               network:
-                                  description: Network of the same tenant that the instance is attached to (eth0).
+                                  description: >-
+                                      Deprecated, give networks. The one network of the same tenant that the instance is
+                                      attached to (eth0), the same as networks with this single name.
                                   type: string
                                   pattern: '^[a-z][a-z0-9-]{0,14}$'
+                              networks:
+                                  description: >-
+                                      Networks of the same tenant that the instance is attached to, one NIC each in this
+                                      order (eth0, eth1, ...), without duplicate. The tenant's plan limits how many networks
+                                      the tenant has, not how many an instance joins.
+                                  type: array
+                                  minItems: 1
+                                  maxItems: 8
+                                  x-kubernetes-list-type: set
+                                  items:
+                                      type: string
+                                      pattern: '^[a-z][a-z0-9-]{0,14}$'
                               cpu:
                                   description: Custom size, with memoryMiB and diskGiB, when there is no profile.
                                   type: integer
@@ -92,9 +106,10 @@ spec:
                                 message: "give a profile or cpu, memoryMiB and diskGiB, not both"
                               - rule: "has(self.profile) || (has(self.cpu) && has(self.memoryMiB) && has(self.diskGiB))"
                                 message: "without a profile, cpu, memoryMiB and diskGiB are all required"
+                              - rule: "has(self.network) != has(self.networks)"
+                                message: "give networks (or the deprecated network), one of the two"
                           required:
                               - imageRef
-                              - network
                       status:
                           type: object
                           properties:
@@ -105,3 +120,15 @@ spec:
                                   type: string
                               ipv4:
                                   type: string
+                              networks:
+                                  description: The address of the instance on each network, in the order of spec.networks.
+                                  type: array
+                                  items:
+                                      type: object
+                                      properties:
+                                          network:
+                                              type: string
+                                          ipv4:
+                                              type: string
+                                          ipv6:
+                                              type: string

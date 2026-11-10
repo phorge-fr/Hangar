@@ -3,9 +3,9 @@
 # - Its size is a profile of the tenant (spec.profile: s, m, l, or one the user made), which carries the
 #   CPU, the memory and the root disk, or custom values (spec.cpu, memoryMiB, diskGiB) that are set on the
 #   instance itself, with the project's own empty "default" profile. The XRD refuses both and neither.
-# - Its only network device is eth0 on a Network of the tenant (spec.network): a tenant has no network of its
-#   own, so the instance is unreachable until the user has deployed one. A Usage keeps that Network while the
-#   instance exists.
+# - Its network devices are eth0, eth1, ... one per Network of the tenant (spec.networks, or the deprecated
+#   spec.network, which is the same as a list of one): a tenant has no network of its own, so the instance is
+#   unreachable until the user has deployed one. A Usage per Network keeps it while the instance exists.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -67,6 +67,8 @@ spec:
                       {{- $spec := $xr.spec -}}
                       {{- $obs := default (dict) .observed.resources -}}
                       {{- $inst := default (dict) (index $obs "instance") -}}
+                      {{- $nets := list -}}
+                      {{- if $spec.networks }}{{ $nets = $spec.networks }}{{ else }}{{ $nets = list $spec.network }}{{ end -}}
                       {{- $ud := "#cloud-config\nssh_authorized_keys:\n" -}}
                       {{- range $spec.sshPublicKeys }}{{ $ud = printf "%s  - %s\n" $ud (toJson .) }}{{ end -}}
                       apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
@@ -113,11 +115,13 @@ spec:
                                 pool: remote
                                 size: {{ printf "%dGiB" (int $spec.diskGiB) | quote }}
                             {{- end }}
-                            - name: eth0
+                            {{- range $i, $n := $nets }}
+                            - name: eth{{ $i }}
                               type: nic
                               properties:
-                                network: {{ $spec.network }}
-                                name: eth0
+                                network: {{ $n }}
+                                name: eth{{ $i }}
+                            {{- end }}
                       ---
                       {{- /* The Image cannot be deleted while this Instance exists: Incus lets an image go even
                                when a VM was created from it, and the VM could then not be recreated. The Usage is
@@ -171,14 +175,15 @@ spec:
                           resourceRef:
                             name: {{ $name }}
                       {{- end }}
+                      {{- range $n := $nets }}
                       ---
                       apiVersion: protection.crossplane.io/v1beta1
                       kind: Usage
                       metadata:
-                        name: {{ $name }}-uses-network
+                        name: {{ $name }}-uses-network-{{ $n }}
                         annotations:
-                          gotemplating.fn.crossplane.io/composition-resource-name: network-usage
-                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs "network-usage")) }}"
+                          gotemplating.fn.crossplane.io/composition-resource-name: network-usage-{{ $n }}
+                          gotemplating.fn.crossplane.io/ready: "{{ template "ready" (default (dict) (index $obs (printf "network-usage-%s" $n))) }}"
                       spec:
                         replayDeletion: true
                         reason: "Instance {{ $name }} is attached to this network"
@@ -186,12 +191,13 @@ spec:
                           apiVersion: phorge.fr/v1alpha1
                           kind: Network
                           resourceRef:
-                            name: {{ $spec.network }}
+                            name: {{ $n }}
                         by:
                           apiVersion: instance.incus.m.crossplane.io/v1alpha1
                           kind: Instance
                           resourceRef:
                             name: {{ $name }}
+                      {{- end }}
                       ---
                       {{- /* The namespace of the tenant waits for the Incus Instance: Kubernetes deletes the content of a
                                terminating namespace, ProviderConfigUsage objects included, and provider-incus cannot create
@@ -223,4 +229,15 @@ spec:
                       status:
                         state: {{ dig "resource" "status" "atProvider" "status" "" $inst | quote }}
                         ipv4: {{ dig "resource" "status" "atProvider" "ipv4Address" "" $inst | quote }}
+                        networks:
+                        {{- range $i, $n := $nets }}
+                        {{- $v4 := "" }}{{ $v6 := "" }}
+                        {{- range (dig "resource" "status" "atProvider" "interfaces" (printf "eth%d" $i) "ipAddresses" (list) $inst) }}
+                        {{- if and (eq .scope "global") (eq .family "inet") (not $v4) }}{{ $v4 = .address }}{{ end }}
+                        {{- if and (eq .scope "global") (eq .family "inet6") (not $v6) }}{{ $v6 = .address }}{{ end }}
+                        {{- end }}
+                          - network: {{ $n }}
+                            ipv4: {{ $v4 | quote }}
+                            ipv6: {{ $v6 | quote }}
+                        {{- end }}
                         problems: {{ join " | " $problems | trunc 800 | quote }}

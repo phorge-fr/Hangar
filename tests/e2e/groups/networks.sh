@@ -92,6 +92,37 @@ YAML
   eq "and it goes from Incus too" "" "$(INCUS network list --project "$a" -f csv -c n | grep -x net)"
   ensure_network "$TA" net || return
 
+  section "networks: an instance on several networks"
+  ensure_network "$TA" net || return
+  ensure_network "$TA" other || return
+  ensure_instance "$TA" multi deb "  networks: [net, other]
+  running: false" || return
+  eq "the first network is eth0" net "$(INCUS config device get multi eth0 network --project "$a")"
+  eq "the second one is eth1" other "$(INCUS config device get multi eth1 network --project "$a")"
+  eq "each network has its own Usage" "multi-uses-network-net multi-uses-network-other" "$(K -n "$a" get usages.protection.crossplane.io multi-uses-network-net multi-uses-network-other -o name 2>/dev/null | sed 's#.*/##' | tr '\n' ' ' | sed 's/ $//')"
+  eq "the status lists the networks in order" "net other" "$(sget instances.phorge.fr "$a" multi '{.status.networks[*].network}')"
+  out=$(K -n "$a" delete networks.phorge.fr other --wait=false 2>&1)
+  match "deleting the second network of a VM is refused, and names the VM" 'in-use by.*Instance/multi' "$out"
+  out=$(cat <<YAML | K apply -f - 2>&1
+apiVersion: phorge.fr/v1alpha1
+kind: Instance
+metadata: {name: dup, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
+spec: {imageRef: {name: deb}, networks: [net, net], profile: s, running: false}
+YAML
+)
+  match "the same network twice is refused" 'Duplicate value' "$out"
+  out=$(cat <<YAML | K apply -f - 2>&1
+apiVersion: phorge.fr/v1alpha1
+kind: Instance
+metadata: {name: both, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
+spec: {imageRef: {name: deb}, network: net, networks: [net], profile: s, running: false}
+YAML
+)
+  match "network and networks together are refused" 'one of the two' "$out"
+  K -n "$a" delete instances.phorge.fr multi --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
+  check "the VM is deleted in the foreground" gone instances.phorge.fr multi "$a"
+  wait_until 180 "other gone" gone networks.phorge.fr other "$a"
+
   section "networks: an instance on a network that does not exist"
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1

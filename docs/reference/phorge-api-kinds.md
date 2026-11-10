@@ -150,7 +150,8 @@ A virtual machine in the tenant's project.
 | Field | Type | Rule |
 |---|---|---|
 | `spec.imageRef.name` | string, required | An `Image` of the same tenant |
-| `spec.network` | string, required | A `Network` of the same tenant: the instance's `eth0` is attached to it |
+| `spec.networks` | list of string, 1 to 8 | `Network`s of the same tenant, without duplicate: one NIC each, `eth0`, `eth1`, ... in this order |
+| `spec.network` | string | **Deprecated**, the same as `networks` with this one name. Give `networks` or `network`, one of the two |
 | `spec.profile` | string | A profile of the tenant (`s`, `m`, `l`, or a `Profile` the user made), which carries the CPU, the memory and the root disk |
 | `spec.cpu` | integer | 1 to 16, with `memoryMiB` and `diskGiB`, when there is no profile |
 | `spec.memoryMiB` | integer | 256 to 65536, with `cpu` and `diskGiB` |
@@ -159,11 +160,12 @@ A virtual machine in the tenant's project.
 | `spec.nesting` | boolean | Default `false`. Allows virtualization or containers inside the VM |
 | `spec.sshPublicKeys` | list of string | Injected with cloud-init, so the image must be a `cloud` variant |
 | `status.state` | string | Incus state, for example `Running` |
-| `status.ipv4` | string | Address on the tenant's network |
+| `status.ipv4` | string | Address on the first network |
+| `status.networks` | list | The `network`, `ipv4` and `ipv6` of the instance on each network, in the order of `spec.networks` |
 
 A size is a profile **or** the three custom values, never both and never neither: the XRD refuses the others (`give a profile or cpu, memoryMiB and diskGiB, not both`, `without a profile, cpu, memoryMiB and diskGiB are all required`). There are no defaults. A profile that does not exist, or that does not fit the plan, leaves the instance `Synced=False` with Incus's message. A size can be changed in place, from custom values to a profile or back, on a stopped instance.
 
-A `Network` that an instance uses cannot be deleted: the request is refused with `in-use by` and the instance's name, and the `Network` goes by itself once the last instance is gone, without a second delete.
+A `Network` that an instance uses cannot be deleted, whichever of its networks it is: each network of an instance has a `Usage` of its own, so the request is refused with `in-use by` and the instance's name, and the `Network` goes by itself once the last instance is gone, without a second delete.
 
 The per-instance bounds are the XRD's. The plan's totals are enforced on top by the project: a third VM on a `small` tenant is refused by Incus with `Reached maximum number of instances`, and the instance stays `Synced=False` with that message.
 

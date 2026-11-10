@@ -162,7 +162,7 @@ EOF
 ensure_instance() {
   local t=$1 n=$2 img=$3 extra=${4:-}
   K -n "t-$t" get instances.phorge.fr "$n" >/dev/null 2>&1 && return 0
-  if [[ $extra != *"network:"* ]]; then
+  if [[ $extra != *"network:"* && $extra != *"networks:"* ]]; then
     ensure_network "$t" net || return 1
     extra="  network: net"$'\n'"$extra"
   fi
