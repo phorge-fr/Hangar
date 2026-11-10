@@ -40,6 +40,8 @@ group_networks() {
   eq "and the status says both" "10.77.2.1/24 fd00:7:8:9::1/64" "$(sget networks.phorge.fr "$a" second '{.status.ipv4} {.status.ipv6}')"
   eq "IPv6 stays NATed" true "$(INCUS network get second ipv6.nat --project "$a")"
   eq "and the network stays Ready" True "$(cond networks.phorge.fr second "$a" Ready)"
+  out=$(K -n "$a" patch networks.phorge.fr second --type merge -p '{"spec":{"ipv6":null}}' 2>&1)
+  match "a range that was given cannot be removed (Incus would keep it)" 'cannot be removed once given' "$out"
   local bad
   for bad in "2001:db8:1::1/64" "fd00:7:8::1/48" "fd00:7:8:9::2/64"; do
     out=$(K -n "$a" patch networks.phorge.fr second --type merge -p "{\"spec\":{\"ipv6\":\"$bad\"}}" 2>&1)

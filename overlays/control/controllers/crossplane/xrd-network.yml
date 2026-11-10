@@ -34,6 +34,13 @@ spec:
                   properties:
                       spec:
                           type: object
+                          # What was given to Incus stays there when the field is taken out (measured: the provider does not unset it,
+                          # and the status would then say "Incus chose"), so a range can be changed and never removed.
+                          x-kubernetes-validations:
+                              - rule: "!has(oldSelf.ipv4) || has(self.ipv4)"
+                                message: "ipv4 cannot be removed once given, give another range or delete the network"
+                              - rule: "!has(oldSelf.ipv6) || has(self.ipv6)"
+                                message: "ipv6 cannot be removed once given, give another range or delete the network"
                           properties:
                               description:
                                   type: string
