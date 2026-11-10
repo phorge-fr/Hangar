@@ -46,7 +46,7 @@ spec:
                 - name: phorge-api
                   # The release v0.5.0 of phorge-fr/phorge-api. Tag and digest together: the digest is what runs, the tag lets
                   # Renovate see a new release and bump both in one pull request.
-                  image: ghcr.io/phorge-fr/phorge-api:0.11.1@sha256:d9a15d8238bf8b0ecf5b4495016344eaf0be91cf1f4d2da5cef8b555f4403137
+                  image: ghcr.io/phorge-fr/phorge-api:0.12.0@sha256:c199cbb4f1c0bb25e7d2302ba304760cb0db82f6fb73c7fd559493bcf3437621
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: http
