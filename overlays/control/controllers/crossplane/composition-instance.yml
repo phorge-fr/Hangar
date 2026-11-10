@@ -67,7 +67,19 @@ spec:
                       {{- $spec := $xr.spec -}}
                       {{- $obs := default (dict) .observed.resources -}}
                       {{- $inst := default (dict) (index $obs "instance") -}}
-                      {{- $ud := "#cloud-config\nssh_authorized_keys:\n" -}}
+                      {{- /* The user-data of cloud-init, for every instance: a CPU or memory that Incus adds to a running VM is only added, the guest
+                               has to put it online, and the Debian cloud image has no udev rule for it (measured: a VM resized from 1 to 2 vCPUs
+                               kept `nproc` at 1 and showed the second CPU offline in htop). The rule is written at the first boot, before any
+                               resize; the SSH keys, when there are some, come after. */}}
+                      {{- $ud := `#cloud-config
+                      write_files:
+                        - path: /etc/udev/rules.d/40-vm-hotadd.rules
+                          permissions: "0644"
+                          content: |
+                            SUBSYSTEM=="cpu", ACTION=="add", TEST=="online", ATTR{online}=="0", ATTR{online}="1"
+                            SUBSYSTEM=="memory", ACTION=="add", TEST=="state", ATTR{state}=="offline", ATTR{state}="online"
+                      ` -}}
+                      {{- if $spec.sshPublicKeys }}{{ $ud = printf "%sssh_authorized_keys:\n" $ud }}{{ end -}}
                       {{- range $spec.sshPublicKeys }}{{ $ud = printf "%s  - %s\n" $ud (toJson .) }}{{ end -}}
                       apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
                       kind: ExtraResources
@@ -101,9 +113,7 @@ spec:
                             limits.cpu: {{ $spec.cpu | quote }}
                             limits.memory: {{ printf "%dMiB" (int $spec.memoryMiB) | quote }}
                             {{- end }}
-                            {{- if $spec.sshPublicKeys }}
                             cloud-init.user-data: {{ $ud | quote }}
-                            {{- end }}
                           device:
                             {{- if not $spec.profile }}
                             - name: root
