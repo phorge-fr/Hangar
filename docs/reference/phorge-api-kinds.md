@@ -165,6 +165,8 @@ A virtual machine in the tenant's project.
 
 A size is a profile **or** the three custom values, never both and never neither: the XRD refuses the others (`give a profile or cpu, memoryMiB and diskGiB, not both`, `without a profile, cpu, memoryMiB and diskGiB are all required`). There are no defaults. A profile that does not exist, or that does not fit the plan, leaves the instance `Synced=False` with Incus's message. A size can be changed in place, from custom values to a profile or back, on a stopped instance.
 
+The networks of a running instance can be changed in place, and the instance is neither stopped nor restarted (measured on a Debian cloud image): a network added to the list appears as a new NIC in the guest within about 20 seconds, and a network taken out of the list loses its NIC within about 6 seconds and its `Usage` goes with it. A hot-plugged NIC is `down` in the guest until the guest configures it (the image's own network setup runs at boot, so a restart brings it up); the instance's other NICs are not touched. The NICs are named after the position in the list, so removing a network that is not the last renames what follows it after the next boot.
+
 A `Network` that an instance uses cannot be deleted, whichever of its networks it is: each network of an instance has a `Usage` of its own, so the request is refused with `in-use by` and the instance's name, and the `Network` goes by itself once the last instance is gone, without a second delete.
 
 The per-instance bounds are the XRD's. The plan's totals are enforced on top by the project: a third VM on a `small` tenant is refused by Incus with `Reached maximum number of instances`, and the instance stays `Synced=False` with that message.
