@@ -56,15 +56,16 @@ group_admission() {
   _n "  profile: m" | accept "instance with a profile"
   _c | accept "instance with a custom size"
   _c | defaulted "running defaults to true" '.spec.running' true
-  # No default for these three: the profile can carry them, and a default written into the object would override it. The
-  # composition applies the defaults, status.nesting, status.secureBoot and status.sshPublicKeys say what is in force.
-  _c | defaulted "nesting has no default: the instance did not say" '.spec.nesting // "unset"' unset
+  _c | defaulted "nesting defaults to false: it is the instance's alone, a profile cannot carry it" '.spec.nesting' false
+  # No default for these two: the profile can carry them, and a default written into the object would override it. The
+  # composition applies the defaults, status.secureBoot and status.sshPublicKeys say what is in force.
   _c | defaulted "secureBoot has no default: the instance did not say" '.spec.secureBoot // "unset"' unset
   _c | defaulted "sshPublicKeys have no default: the instance did not say" '.spec.sshPublicKeys // "unset"' unset
   _n "  profile: m
-  nesting: false
   secureBoot: true
-  sshPublicKeys: []" | defaulted "what the instance says stays as it is (false, true, an empty list)" '[.spec.nesting, .spec.secureBoot, .spec.sshPublicKeys] | tostring' '[false,true,[]]'
+  sshPublicKeys: []" | defaulted "what the instance says stays as it is (true, an empty list)" '[.spec.secureBoot, .spec.sshPublicKeys] | tostring' '[true,[]]'
+  _n "  profile: m
+  secureBoot: false" | defaulted "an instance that says false keeps it" '.spec.secureBoot' false
   _n "  profile: m" | defaulted "a profile leaves cpu unset (the profile decides)" '.spec.cpu // "unset"' unset
   _n "  profile: m" | defaulted "a profile leaves memoryMiB unset" '.spec.memoryMiB // "unset"' unset
   _n "  profile: m" | defaulted "a profile leaves diskGiB unset" '.spec.diskGiB // "unset"' unset
@@ -161,16 +162,17 @@ group_admission() {
   memoryMiB: 1024
   diskGiB: 10'
   _p web "$p3
-  nesting: true
   secureBoot: false
-  sshPublicKeys: ['$k1', '$k2']" | accept "a profile with nesting, secure boot and ssh keys"
+  sshPublicKeys: ['$k1', '$k2']" | accept "a profile with secure boot and ssh keys"
   _p web "$p3
   sshPublicKeys: []" | accept "a profile with an empty list of keys"
-  _p web "$p3" | defaulted "nesting has no default on a profile" '.spec.nesting // "unset"' unset
   _p web "$p3" | defaulted "secureBoot has no default on a profile" '.spec.secureBoot // "unset"' unset
   _p web "$p3" | defaulted "sshPublicKeys have no default on a profile" '.spec.sshPublicKeys // "unset"' unset
+  # Nesting is not offered on a profile: the tenant's projects have restricted.containers.nesting: block and a profile has no
+  # instance type, so Incus refused security.nesting on a profile ("Container nesting is forbidden", measured). It stays a
+  # setting of the Instance, a VM, for which the project allows it. The strict schema refuses the field.
   _p web "$p3
-  nesting: yes please" | reject "a nesting that is not a boolean" 'nesting'
+  nesting: true" | reject "nesting on a profile: the project blocks it there, it is the instance's" 'unknown field|nesting'
   _p web "$p3
   secureBoot: 1" | reject "a secureBoot that is not a boolean" 'secureBoot'
   _p web "$p3

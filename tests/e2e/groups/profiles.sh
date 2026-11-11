@@ -46,60 +46,61 @@ group_profiles() {
   wait_until 120 "profile gone from Incus" bash -c "! ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus profile list --project $a -f csv -c n' | grep -qx web"
   eq "and from Incus" "default l m s" "$(INCUS profile list --project "$a" -f csv -c n | sort | tr '\n' ' ' | sed 's/ $//')"
 
-  # The settings of an instance that are not about the network. The keys only have the shape of keys: the VMs stay stopped.
+  # The settings of an instance that are not about the network: secure boot and the SSH keys. Never nesting: the project blocks
+  # security.nesting on a profile (restricted.containers.nesting: block, a profile has no instance type), measured: "Container
+  # nesting is forbidden". The keys only have the shape of keys: the VMs stay stopped.
   local k1='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE2eUpdatedKeyOnly' k2='ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7 laptop@home'
   section "profiles: the settings of an instance"
-  ensure_profile "$TA" dev 1 1024 12 "  nesting: true
-  secureBoot: false
+  ensure_profile "$TA" dev 1 1024 12 "  secureBoot: false
   sshPublicKeys: ['$k1']" || return
-  eq "the profile has security.nesting" true "$(INCUS profile get dev security.nesting --project "$a")"
-  eq "and security.secureboot" false "$(INCUS profile get dev security.secureboot --project "$a")"
+  eq "the profile has security.secureboot" false "$(INCUS profile get dev security.secureboot --project "$a")"
   has "and the key in its cloud-init user data" "$k1" "$(INCUS profile get dev cloud-init.user-data --project "$a")"
   match "which is a #cloud-config document" '^#cloud-config' "$(INCUS profile get dev cloud-init.user-data --project "$a")"
+  eq "it has no nesting: that is the instance's" "" "$(INCUS profile get dev security.nesting --project "$a")"
   eq "a profile with settings still has no network device: that is the instance's" "" "$(INCUS profile device list dev --project "$a" | grep -vx root)"
-  eq "the profiles of the tenant have none of them" "" "$(INCUS profile get s security.nesting --project "$a")$(INCUS profile get m security.secureboot --project "$a")$(INCUS profile get l cloud-init.user-data --project "$a")"
+  eq "the profiles of the tenant have none of them" "" "$(INCUS profile get s security.secureboot --project "$a")$(INCUS profile get m security.nesting --project "$a")$(INCUS profile get l cloud-init.user-data --project "$a")"
 
   ensure_instance "$TA" sin deb "  profile: dev
   running: false" || return
-  eq "an instance that says nothing has no setting of its own in Incus" "" "$(INCUS config get sin security.nesting --project "$a")$(INCUS config get sin security.secureboot --project "$a")$(INCUS config get sin cloud-init.user-data --project "$a")"
-  eq "it has the profile's nesting" true "$(INCUS config get sin security.nesting --project "$a" --expanded)"
-  eq "and its secure boot" false "$(INCUS config get sin security.secureboot --project "$a" --expanded)"
+  eq "an instance that says nothing has neither secure boot nor keys of its own in Incus" "" "$(INCUS config get sin security.secureboot --project "$a")$(INCUS config get sin cloud-init.user-data --project "$a")"
+  eq "it has the profile's secure boot" false "$(INCUS config get sin security.secureboot --project "$a" --expanded)"
   has "and its keys" "$k1" "$(INCUS config get sin cloud-init.user-data --project "$a" --expanded)"
-  eq "status says the same: nesting" true "$(sget instances.phorge.fr "$a" sin '{.status.nesting}')"
-  eq "secure boot" false "$(sget instances.phorge.fr "$a" sin '{.status.secureBoot}')"
+  eq "status says the same: secure boot" false "$(sget instances.phorge.fr "$a" sin '{.status.secureBoot}')"
   eq "and keys" "$k1" "$(sget instances.phorge.fr "$a" sin '{.status.sshPublicKeys[*]}')"
-  eq "the instance's own spec holds none of the three" "" "$(sget instances.phorge.fr "$a" sin '{.spec.nesting}{.spec.secureBoot}{.spec.sshPublicKeys}')"
+  eq "the instance's own spec holds neither of them" "" "$(sget instances.phorge.fr "$a" sin '{.spec.secureBoot}{.spec.sshPublicKeys}')"
+  eq "nesting is the instance's own, off by default" "false false" "$(INCUS config get sin security.nesting --project "$a" --expanded) $(sget instances.phorge.fr "$a" sin '{.status.nesting}')"
 
   ensure_instance "$TA" own deb "  profile: dev
   running: false
-  nesting: false
+  nesting: true
   secureBoot: true
   sshPublicKeys: ['$k2']" || return
-  eq "an instance that says its own nesting wins over the profile's" false "$(INCUS config get own security.nesting --project "$a" --expanded)"
-  eq "and its own secure boot" true "$(INCUS config get own security.secureboot --project "$a" --expanded)"
+  eq "an instance that says its own secure boot wins over the profile's" true "$(INCUS config get own security.secureboot --project "$a" --expanded)"
   has "and its own keys, which replace the profile's" "laptop@home" "$(INCUS config get own cloud-init.user-data --project "$a" --expanded)"
   nomatch "the profile's key is not among them" 'UpdatedKeyOnly' "$(INCUS config get own cloud-init.user-data --project "$a" --expanded)"
-  eq "status: nesting" false "$(sget instances.phorge.fr "$a" own '{.status.nesting}')"
+  eq "its own nesting is in Incus: a VM may have it, the profile may not" true "$(INCUS config get own security.nesting --project "$a" --expanded)"
   eq "status: secure boot" true "$(sget instances.phorge.fr "$a" own '{.status.secureBoot}')"
   eq "status: keys" "$k2" "$(sget instances.phorge.fr "$a" own '{.status.sshPublicKeys[*]}')"
+  eq "status: nesting" true "$(sget instances.phorge.fr "$a" own '{.status.nesting}')"
 
   ensure_instance "$TA" nokey deb "  profile: dev
   running: false
   sshPublicKeys: []" || return
   nomatch "an instance that says an empty list has none of the profile's keys" 'UpdatedKeyOnly' "$(INCUS config get nokey cloud-init.user-data --project "$a" --expanded)"
-  eq "and its nesting is still the profile's" true "$(INCUS config get nokey security.nesting --project "$a" --expanded)"
+  eq "and its secure boot is still the profile's" false "$(INCUS config get nokey security.secureboot --project "$a" --expanded)"
   eq "status: no keys" "" "$(sget instances.phorge.fr "$a" nokey '{.status.sshPublicKeys[*]}')"
 
-  # a change of the profile reaches the instance that did not say: Incus resolves the profile, the instance is not touched
-  K -n "$a" patch profiles.phorge.fr dev --type merge -p '{"spec":{"nesting":false}}' >/dev/null
-  wait_until 150 "profile nesting false" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus profile get dev security.nesting --project $a') == false ]]"
-  eq "a profile changed in place changes its setting in Incus" false "$(INCUS profile get dev security.nesting --project "$a")"
-  eq "the instance that did not say follows" false "$(INCUS config get sin security.nesting --project "$a" --expanded)"
   # an instance that has said its value, and then takes it back, follows the profile again
   K -n "$a" patch instances.phorge.fr own --type merge -p '{"spec":{"secureBoot":null}}' >/dev/null
   wait_until 150 "own secure boot dropped" bash -c "[[ -z \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus config get own security.secureboot --project $a') ]]"
   eq "an instance that takes its value back follows the profile" false "$(INCUS config get own security.secureboot --project "$a" --expanded)"
   eq "and its status says it" false "$(sget instances.phorge.fr "$a" own '{.status.secureBoot}')"
+  # a change of the profile reaches the instances that did not say: Incus resolves the profile, the instances are not touched
+  K -n "$a" patch profiles.phorge.fr dev --type merge -p '{"spec":{"secureBoot":true}}' >/dev/null
+  wait_until 150 "profile secure boot true" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus profile get dev security.secureboot --project $a') == true ]]"
+  eq "a profile changed in place changes its setting in Incus" true "$(INCUS profile get dev security.secureboot --project "$a")"
+  eq "the instance that did not say follows" true "$(INCUS config get sin security.secureboot --project "$a" --expanded)"
+  eq "and so does the one that took its value back" true "$(INCUS config get own security.secureboot --project "$a" --expanded)"
 
   local d
   for d in sin own nokey; do K -n "$a" delete instances.phorge.fr "$d" --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1; done

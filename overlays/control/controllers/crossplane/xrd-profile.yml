@@ -1,10 +1,15 @@
 # A Profile is a size a user makes in their tenant's Incus project, next to the three every tenant is created with
 # (s, m and l, see composition-tenant.yml): CPU, memory and a root disk, and optionally the settings of an instance that are not
-# about the network (nesting, secure boot, SSH public keys). An Instance names it in spec.profile.
+# about the network (secure boot, SSH public keys). An Instance names it in spec.profile.
 #
-# Never a network device: a profile is a size and settings, the network is the instance's. The three settings have no default here:
+# Never a network device: a profile is a size and settings, the network is the instance's. The two settings have no default here:
 # what a profile does not say is not in the Incus profile, so the instance's own value, or Incus's default, applies. An Instance
 # that says one of them itself wins over the profile.
+#
+# Never nesting either: the tenant's Incus projects block nesting for containers (restricted.containers.nesting: block, see
+# composition-tenant.yml) and a profile has no instance type, so Incus checks security.nesting on a profile against that
+# restriction and refuses it ("Container nesting is forbidden", measured). Nesting stays a setting of the Instance, a VM, for
+# which the project allows it. The strict schema refuses the field on a Profile.
 #
 # Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name. The names of the profiles a tenant is
 # created with, and "default" (the project's own empty profile), are taken: a Profile of that name would make the Incus profile
@@ -50,11 +55,6 @@ spec:
                                   type: integer
                                   minimum: 1
                                   maximum: 500
-                              nesting:
-                                  description: >-
-                                      Allow running VMs or containers inside the instances that have this profile
-                                      (security.nesting). An instance that says its own value wins.
-                                  type: boolean
                               secureBoot:
                                   description: >-
                                       UEFI secure boot of the instances that have this profile (security.secureboot). Some

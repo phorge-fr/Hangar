@@ -5,10 +5,11 @@
 # instance, the tenant's plan (Tenant.spec.plan) limits are enforced on top of them by the Incus project
 # limits.
 #
-# Nesting, secure boot and the SSH keys have no default here, on purpose: the profile (spec.profile) can carry them (xrd-profile.yml),
-# and a default of the XRD would be written into every Instance and override the profile's. What the instance says wins; what it
-# does not say is the profile's, and without one, the default of the composition (nesting off, secure boot on, no key). The
-# values in force are in status.nesting, status.secureBoot and status.sshPublicKeys.
+# Secure boot and the SSH keys have no default here, on purpose: the profile (spec.profile) can carry them (xrd-profile.yml), and a
+# default of the XRD would be written into every Instance and override the profile's. What the instance says wins; what it does
+# not say is the profile's, and without one, the default of the composition (secure boot on, no key). Nesting keeps its default
+# (false) and is the instance's alone: the tenant's project blocks it on a profile. The values in force are in status.nesting,
+# status.secureBoot and status.sshPublicKeys.
 #
 # Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
 apiVersion: apiextensions.crossplane.io/v2
@@ -43,9 +44,10 @@ spec:
                                       - name
                               nesting:
                                   description: >-
-                                      Allow running VMs or containers inside this VM (security.nesting). Without it, the
-                                      profile's, and without one, false. See status.nesting for the value in force.
+                                      Allow running VMs or containers inside this VM (security.nesting). Not a setting of a
+                                      profile: the tenant's project does not allow it there.
                                   type: boolean
+                                  default: false
                               secureBoot:
                                   description: >-
                                       UEFI secure boot (security.secureboot). Some cloud images do not boot with it
@@ -128,7 +130,7 @@ spec:
                                   type: string
                               nesting:
                                   description: >-
-                                      Nesting in force: the instance's, else its profile's, else false.
+                                      Nesting in force: the instance's, false by default.
                                   type: boolean
                               secureBoot:
                                   description: >-
