@@ -40,7 +40,7 @@ spec:
                 - name: console
                   # Public image of phorge-fr/phorge-console, built for arm64 and amd64 on every push to main. The tag is
                   # floating and the digest is what runs: Renovate bumps the digest when the tag moves.
-                  image: ghcr.io/phorge-fr/phorge-console:latest@sha256:2733aea9f88fa9eb9ab6bba8a48b028861d43b5a8799763495f43f87a7ef9ded
+                  image: ghcr.io/phorge-fr/phorge-console:latest@sha256:b847496a63f82682a46eb47c6103fb11cbeabb8d7c15d3bac4209c5c2a9bd8c4
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: http
