@@ -6,12 +6,12 @@
 can_connect() { vm_sh "$1" "$2" "timeout 6 bash -c '</dev/tcp/$3/$4'" >/dev/null 2>&1; }
 
 group_network() {
-  ensure_tenant "$TA" medium owner-a@example.org || return
-  ensure_tenant "$TB" small owner-b@example.org || return
+  ensure_tenant "$TA" owner-a@example.org || return
+  ensure_tenant "$TB" owner-b@example.org || return
   local a="t-$TA" b="t-$TB"
   ensure_image "$TA" deb "$IMG_DEBIAN" e2e-deb || return
   ensure_image "$TB" deb "$IMG_DEBIAN" || return
-  ensure_instance "$TA" vm1 deb "  cpu: 2
+  ensure_instance "$TA" vm1 deb "  cpu: 1
   memoryMiB: 1536" || return
   ensure_instance "$TB" b1 deb || return
   wait_until 300 "vm1 agent" vm_up "$a" vm1 || { fail "VM in A answers over the incus agent"; return; }

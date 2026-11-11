@@ -11,12 +11,13 @@ IMG_DEBIAN=${IMG_DEBIAN:-debian/13/cloud}
 IMG_ALPINE=${IMG_ALPINE:-alpine/3.22/cloud}
 
 # One tenant per role.
-TA="e2e-$RUN_ID-a"   # medium: instances, images, access, networks
-TB="e2e-$RUN_ID-b"   # small: quota and cross-tenant isolation
+# Every tenant has the same limits (2 VMs, 2 vCPU, 4 GiB, 128 GiB, 2 networks): there is no choice of plan.
+TA="e2e-$RUN_ID-a"   # instances, images, access, networks
+TB="e2e-$RUN_ID-b"   # cross-tenant isolation (the tenant group creates it with the deprecated plan large: same limits)
 TE="e2e-$RUN_ID-abcdefghijklmnopqr"  # 28 characters, the longest name allowed
 TD="e2e-$RUN_ID-d"   # deleted while it holds a running VM
 TX="e2e-$RUN_ID-x"   # deleted in the background while it is empty
-TN="e2e-$RUN_ID-n"   # small: networks of a third tenant, to compare subnets
+TN="e2e-$RUN_ID-n"   # networks of a third tenant, to compare subnets
 
 shopt -s lastpipe   # so `printf ... | accept` counts in this shell, not in a subshell
 PASS=0; FAIL=0; SKIP=0; FAILED=()
@@ -81,7 +82,7 @@ wait_ready() { # kind ns name timeout
 }
 sget() { K -n "$2" get "$1" "$3" -o jsonpath="$4" 2>/dev/null; }   # sget <kind> <ns> <name> <jsonpath>
 
-tenant_yaml() { # name owner plan [displayName] [namespace]
+tenant_yaml() { # name owner [plan] [displayName] [namespace]: plan is deprecated and ignored, empty leaves it out
   cat <<EOF
 apiVersion: phorge.fr/v1alpha1
 kind: Tenant
@@ -91,18 +92,19 @@ metadata:
   labels: {$LABEL: "$RUN_ID"}
 spec:
   owner: $2
-  plan: $3
-${4:+  displayName: $4}
+${3:+  plan: $3
+}${4:+  displayName: $4}
 EOF
 }
 
-# ensure_tenant <name> <plan> [owner]: creates the tenant once and waits for Ready.
+# ensure_tenant <name> [owner] [plan]: creates the tenant once and waits for Ready. The plan is deprecated and ignored (every
+# tenant has the same limits): it is only given to check that it is still accepted and changes nothing.
 ensure_tenant() {
-  local n=$1 plan=$2 owner=${3:-e2e@example.org}
+  local n=$1 owner=${2:-e2e@example.org} plan=${3:-}
   K -n phorge-system get tenants.phorge.fr "$n" >/dev/null 2>&1 && return 0
   TRACK_TENANTS+=("$n")
   local out; out=$(tenant_yaml "$n" "$owner" "$plan" | K apply -f - 2>&1) || { fail "tenant $n is created" "$out"; return 1; }
-  if wait_ready tenants.phorge.fr phorge-system "$n" 300; then pass "tenant $n ($plan) reaches Ready"
+  if wait_ready tenants.phorge.fr phorge-system "$n" 300; then pass "tenant $n${plan:+ (plan $plan)} reaches Ready"
   else fail "tenant $n reaches Ready" "$(why tenants.phorge.fr "$n" phorge-system)"; return 1; fi
 }
 

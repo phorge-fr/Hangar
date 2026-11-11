@@ -2,7 +2,7 @@
 
 group_profiles() {
   section "profiles: a profile the user makes"
-  ensure_tenant "$TA" medium owner-a@example.org || return
+  ensure_tenant "$TA" owner-a@example.org || return
   local a="t-$TA"
   ensure_profile "$TA" web 1 1024 12 || return
   eq "Synced=True" True "$(cond profiles.phorge.fr web "$a" Synced)"
@@ -60,16 +60,8 @@ group_profiles() {
   eq "a profile with settings still has no network device: that is the instance's" "" "$(INCUS profile device list dev --project "$a" | grep -vx root)"
   eq "the profiles of the tenant have none of them" "" "$(INCUS profile get s security.secureboot --project "$a")$(INCUS profile get m security.nesting --project "$a")$(INCUS profile get l cloud-init.user-data --project "$a")"
 
-  ensure_instance "$TA" sin deb "  profile: dev
-  running: false" || return
-  eq "an instance that says nothing has neither secure boot nor keys of its own in Incus" "" "$(INCUS config get sin security.secureboot --project "$a")$(INCUS config get sin cloud-init.user-data --project "$a")"
-  eq "it has the profile's secure boot" false "$(INCUS config get sin security.secureboot --project "$a" --expanded)"
-  has "and its keys" "$k1" "$(INCUS config get sin cloud-init.user-data --project "$a" --expanded)"
-  eq "status says the same: secure boot" false "$(sget instances.phorge.fr "$a" sin '{.status.secureBoot}')"
-  eq "and keys" "$k1" "$(sget instances.phorge.fr "$a" sin '{.status.sshPublicKeys[*]}')"
-  eq "the instance's own spec holds neither of them" "" "$(sget instances.phorge.fr "$a" sin '{.spec.secureBoot}{.spec.sshPublicKeys}')"
-  eq "nesting is the instance's own, off by default" "false false" "$(INCUS config get sin security.nesting --project "$a" --expanded) $(sget instances.phorge.fr "$a" sin '{.status.nesting}')"
-
+  # A tenant has 2 VMs in all and 2 vCPU, and the vm1 of the other groups may be one of them: the instances of this section come one at a
+  # time, each one deleted before the next.
   ensure_instance "$TA" own deb "  profile: dev
   running: false
   nesting: true
@@ -82,14 +74,6 @@ group_profiles() {
   eq "status: secure boot" true "$(sget instances.phorge.fr "$a" own '{.status.secureBoot}')"
   eq "status: keys" "$k2" "$(sget instances.phorge.fr "$a" own '{.status.sshPublicKeys[*]}')"
   eq "status: nesting" true "$(sget instances.phorge.fr "$a" own '{.status.nesting}')"
-
-  ensure_instance "$TA" nokey deb "  profile: dev
-  running: false
-  sshPublicKeys: []" || return
-  nomatch "an instance that says an empty list has none of the profile's keys" 'UpdatedKeyOnly' "$(INCUS config get nokey cloud-init.user-data --project "$a" --expanded)"
-  eq "and its secure boot is still the profile's" false "$(INCUS config get nokey security.secureboot --project "$a" --expanded)"
-  eq "status: no keys" "" "$(sget instances.phorge.fr "$a" nokey '{.status.sshPublicKeys[*]}')"
-
   # an instance that has said its value, and then takes it back, follows the profile again
   K -n "$a" patch instances.phorge.fr own --type merge -p '{"spec":{"secureBoot":null}}' >/dev/null
   wait_until 150 "own secure boot dropped" bash -c "[[ -z \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus config get own security.secureboot --project $a') ]]"
@@ -99,11 +83,35 @@ group_profiles() {
   K -n "$a" patch profiles.phorge.fr dev --type merge -p '{"spec":{"secureBoot":true}}' >/dev/null
   wait_until 150 "profile secure boot true" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus profile get dev security.secureboot --project $a') == true ]]"
   eq "a profile changed in place changes its setting in Incus" true "$(INCUS profile get dev security.secureboot --project "$a")"
-  eq "the instance that did not say follows" true "$(INCUS config get sin security.secureboot --project "$a" --expanded)"
-  eq "and so does the one that took its value back" true "$(INCUS config get own security.secureboot --project "$a" --expanded)"
+  eq "the one that took its value back follows" true "$(INCUS config get own security.secureboot --project "$a" --expanded)"
+  K -n "$a" delete instances.phorge.fr own --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
+  check "the instance with its own settings is deleted" gone instances.phorge.fr own "$a"
+  K -n "$a" patch profiles.phorge.fr dev --type merge -p '{"spec":{"secureBoot":false}}' >/dev/null
+  wait_until 150 "profile secure boot false" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus profile get dev security.secureboot --project $a') == false ]]"
 
-  local d
-  for d in sin own nokey; do K -n "$a" delete instances.phorge.fr "$d" --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1; done
+  ensure_instance "$TA" nokey deb "  profile: dev
+  running: false
+  sshPublicKeys: []" || return
+  nomatch "an instance that says an empty list has none of the profile's keys" 'UpdatedKeyOnly' "$(INCUS config get nokey cloud-init.user-data --project "$a" --expanded)"
+  eq "and its secure boot is still the profile's" false "$(INCUS config get nokey security.secureboot --project "$a" --expanded)"
+  eq "status: no keys" "" "$(sget instances.phorge.fr "$a" nokey '{.status.sshPublicKeys[*]}')"
+  K -n "$a" delete instances.phorge.fr nokey --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
+  check "the instance with an empty list of keys is deleted" gone instances.phorge.fr nokey "$a"
+
+  ensure_instance "$TA" sin deb "  profile: dev
+  running: false" || return
+  eq "an instance that says nothing has neither secure boot nor keys of its own in Incus" "" "$(INCUS config get sin security.secureboot --project "$a")$(INCUS config get sin cloud-init.user-data --project "$a")"
+  eq "it has the profile's secure boot" false "$(INCUS config get sin security.secureboot --project "$a" --expanded)"
+  has "and its keys" "$k1" "$(INCUS config get sin cloud-init.user-data --project "$a" --expanded)"
+  eq "status says the same: secure boot" false "$(sget instances.phorge.fr "$a" sin '{.status.secureBoot}')"
+  eq "and keys" "$k1" "$(sget instances.phorge.fr "$a" sin '{.status.sshPublicKeys[*]}')"
+  eq "the instance's own spec holds neither of them" "" "$(sget instances.phorge.fr "$a" sin '{.spec.secureBoot}{.spec.sshPublicKeys}')"
+  eq "nesting is the instance's own, off by default" "false false" "$(INCUS config get sin security.nesting --project "$a" --expanded) $(sget instances.phorge.fr "$a" sin '{.status.nesting}')"
+  K -n "$a" patch profiles.phorge.fr dev --type merge -p '{"spec":{"secureBoot":true}}' >/dev/null
+  wait_until 150 "profile secure boot true" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus profile get dev security.secureboot --project $a') == true ]]"
+  eq "the instance that did not say follows a change of the profile" true "$(INCUS config get sin security.secureboot --project "$a" --expanded)"
+  K -n "$a" delete instances.phorge.fr sin --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
+  check "the instance that says nothing is deleted" gone instances.phorge.fr sin "$a"
   K -n "$a" delete profiles.phorge.fr dev --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
   # the Usage of the last instance is released a few seconds after the instance is gone: the first deletion is refused and
   # Crossplane replays it by itself, so the profile has to be waited for
@@ -118,7 +126,7 @@ spec: {cpu: 1, memoryMiB: 1024, diskGiB: 10}
 YAML
   eq "the profile s of the tenant is untouched" 2GiB "$(INCUS profile get s limits.memory --project "$a")"
 
-  section "profiles: a profile above the plan is a definition, the instance is what the plan refuses"
+  section "profiles: a profile above the limits is a definition, the instance is what the limits refuse"
   ensure_profile "$TA" huge 4 16384 300 || return
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1
@@ -127,7 +135,7 @@ metadata: {name: toobig, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
 spec: {imageRef: {name: deb}, network: net, profile: huge, running: false}
 YAML
   sleep 60
-  eq "an instance whose profile is above the plan is never Ready" "" "$(cond instances.phorge.fr toobig "$a" Ready | grep -x True)"
+  eq "an instance whose profile is above the limits is never Ready" "" "$(cond instances.phorge.fr toobig "$a" Ready | grep -x True)"
   match "and Incus says which limit" 'limits' "$(mr_msgs "$a" toobig)"
   K -n "$a" delete instances.phorge.fr toobig --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
   K -n "$a" delete profiles.phorge.fr huge --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1

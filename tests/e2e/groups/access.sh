@@ -61,7 +61,7 @@ tuples_gone() {
 }
 
 group_access() {
-  ensure_tenant "$TA" medium owner-a@example.org || return
+  ensure_tenant "$TA" owner-a@example.org || return
   local a="t-$TA" s ps h; s=$(iaas_store); ps=$(api_store)
   local obj="project:$a" tobj="tenant:$TA"
   local fga_on=0; [[ -n ${FGA_URL:-} && -n ${FGA_TOKEN:-} ]] && fga_on=1

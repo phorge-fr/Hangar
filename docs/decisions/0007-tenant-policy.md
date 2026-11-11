@@ -25,17 +25,17 @@ Each `Tenant` gets an Incus project. Which capabilities do tenants get, and whic
 Chosen option: "deny by default", encoded in the `Tenant` composition. Check these values before changing tenant limits:
 
 * Instances: virtual machines only; nesting allowed in VMs only.
-* Network: several OVN networks per tenant (limit per plan), uplinks restricted. Egress to the Internet is free but not to internal networks, which the router enforces, not an Incus ACL.
+* Network: up to 2 OVN networks per tenant, uplinks restricted. Egress to the Internet is free but not to internal networks, which the router enforces, not an Incus ACL.
 * Images: only the public `linuxcontainers.org` source, through the managed `Image` kind; no upload.
 * Direct Incus access for tenant users is read-only; writes go through the Phorge API.
 * Storage: data volumes, snapshots and backups; no S3 buckets for now.
 * Devices: GPU, PCI, USB, unix devices and InfiniBand blocked; disk and NIC `managed`.
-* Plans (instances / vCPU / memory GiB / disk GiB / networks): S 1/2/4/20/1, M 3/4/8/100/2, L 6/8/16/250/3.
+* Limits, the same for every tenant (instances / vCPU / memory GiB / disk GiB / networks): 2/2/4/128/2, see [the Tenant reference](../reference/phorge-api-kinds.md#tenant). There is no choice of plan any more.
 * Placement is imposed by the platform. Public exposure (`Expose`) is deferred ([0005](0005-no-ingress-outside-the-cluster.md)).
 
 ### Consequences
 
-* Good, because a tenant cannot reach beyond its plan.
+* Good, because a tenant cannot reach beyond its limits.
 * Bad, because each new capability needs a decision and a composition change.
 
 ## Pros and cons of the options
