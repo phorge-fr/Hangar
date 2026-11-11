@@ -22,24 +22,29 @@ H64=$(printf 'a%.0s' {1..64})
 group_admission() {
   section "admission: Tenant"
   local ok='  owner: a@b.fr'
-  _t demo "$ok" | accept "minimal tenant"
-  _t demo "$ok
+  # A dry run of an apply merges into the object of the same name when there is one, so a name a real tenant may have
+  # (demo, a1) would collide with it: "owner cannot change", and "no owner" accepted because the real tenant has one.
+  # The names here carry the run id, as the tenants the suite creates do, and none of them is ever created.
+  local td="e2e-$RUN_ID-adm"
+  local t28; t28=$(printf '%-28.28s' "$td" | tr ' ' z)   # 28 characters, the longest name allowed
+  _t "$td" "$ok" | accept "minimal tenant"
+  _t "$td" "$ok
   plan: large
   displayName: Demo" | accept "tenant with every field, the deprecated plan included"
   _t a1 "$ok" | accept "2 characters is the shortest name allowed"
-  _t demo "  plan: small" | reject "no owner" 'spec.owner'
-  _t demo "  owner: alice" | reject "owner that is not an email" 'spec.owner'
-  _t demo "  owner: 'a b@c.fr'" | reject "owner with a space" 'spec.owner'
-  _t demo "$ok
+  _t "$td" "  plan: small" | reject "no owner" 'spec.owner'
+  _t "$td" "  owner: alice" | reject "owner that is not an email" 'spec.owner'
+  _t "$td" "  owner: 'a b@c.fr'" | reject "owner with a space" 'spec.owner'
+  _t "$td" "$ok
   plan: xl" | reject "unknown plan (the deprecated field keeps its enum)" 'spec.plan'
-  _t demo "$ok
+  _t "$td" "$ok
   displayName: $(printf 'x%.0s' {1..101})" | reject "displayName over 100 characters" 'displayName'
   _t "a" "$ok" | reject "1 character name" 'must be 2 to 28'
   _t "1abc" "$ok" | reject "name starting with a digit" 'must be 2 to 28'
   _t "$(printf 'a%.0s' {1..29})" "$ok" | reject "29 characters name" 'must be 2 to 28'
-  _t "$(printf 'a%.0s' {1..28})" "$ok" | accept "28 characters name"
+  _t "$t28" "$ok" | accept "28 characters name"
   _t "Demo" "$ok" | reject "uppercase name" 'RFC 1123|must be'
-  _t demo "$ok" | defaulted "the deprecated plan still defaults to small, as the API expects" '.spec.plan' small
+  _t "$td" "$ok" | defaulted "the deprecated plan still defaults to small, as the API expects" '.spec.plan' small
 
   section "admission: Image"
   _i "  source: {name: debian/13/cloud}" | accept "image with a name only"
@@ -88,7 +93,7 @@ group_admission() {
   _n "  profile: s" | accept "profile s"
   _n "  profile: l" | accept "profile l"
   _n "  profile: team.small_1" | accept "a profile name with a dot, an underscore and a digit"
-  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  profile: m\n' | reject "no network" 'spec.network'
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  profile: m\n' | reject "no network" 'give networks \(or the deprecated network\), one of the two'
   printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  network: ""\n  profile: m\n' | reject "an empty network" 'network'
   printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  network: Net\n  profile: m\n' | reject "a network name in uppercase" 'network'
   printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec: {profile: m, network: net}\n' | reject "no imageRef" 'imageRef'

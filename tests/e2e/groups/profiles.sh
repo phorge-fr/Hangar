@@ -113,7 +113,9 @@ group_profiles() {
   K -n "$a" delete instances.phorge.fr sin --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
   check "the instance that says nothing is deleted" gone instances.phorge.fr sin "$a"
   K -n "$a" delete profiles.phorge.fr dev --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
-  check "the profile with settings is deleted once its instances are gone" gone profiles.phorge.fr dev "$a"
+  # the Usage of the last instance is released a few seconds after the instance is gone: the first deletion is refused and
+  # Crossplane replays it by itself, so the profile has to be waited for
+  check "the profile with settings is deleted once its instances are gone" wait_until 180 "profile dev gone" gone profiles.phorge.fr dev "$a"
 
   section "profiles: a name that is taken, a profile that does not exist"
   cat <<YAML | K apply --dry-run=server -f - 2>&1 | grep -q 'every tenant has' && pass "s, m, l and default cannot be made again" || fail "s, m, l and default cannot be made again"
@@ -137,5 +139,6 @@ YAML
   match "and Incus says which limit" 'limits' "$(mr_msgs "$a" toobig)"
   K -n "$a" delete instances.phorge.fr toobig --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
   K -n "$a" delete profiles.phorge.fr huge --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
-  check "the profile is deleted in the foreground" gone profiles.phorge.fr huge "$a"
+  # same wait as above: the refused deletion is replayed once the Usage of the instance is released
+  check "the profile is deleted in the foreground" wait_until 180 "profile huge gone" gone profiles.phorge.fr huge "$a"
 }
