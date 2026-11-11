@@ -48,7 +48,7 @@ no_leftovers() { # <tenant>
 
 group_deletion() {
   section "deletion: a tenant that holds an image and a running VM, deleted in the foreground, children deleted while it waits"
-  ensure_tenant "$TD" small owner-d@example.org || return
+  ensure_tenant "$TD" owner-d@example.org || return
   local d="t-$TD"
   # Debian, not Alpine: alpine/3.22/cloud is not secure-boot compatible, Incus refuses to start it
   # ("incompatible with secureboot") and the Instance kind has no way to turn secureboot off.
@@ -81,7 +81,7 @@ group_deletion() {
   no_leftovers "$TD"
 
   section "deletion: the same, in the default (background) mode"
-  ensure_tenant "$TX" small x@example.org || return
+  ensure_tenant "$TX" x@example.org || return
   delete_timeline "$TX"
   timeline_note "background delete"
   if (( ORPHAN )); then note "background delete: the Tenant object is gone ${T_K8S}s after the command while its resources lasted ${T_MR}s and the Incus project ${T_PROJ}s: absence of the Tenant does NOT mean it is deleted"
@@ -89,7 +89,7 @@ group_deletion() {
   no_leftovers "$TX"
 
   section "deletion: an object removed behind Crossplane's back"
-  ensure_tenant "$TA" medium owner-a@example.org || return
+  ensure_tenant "$TA" owner-a@example.org || return
   local a="t-$TA"
   ensure_image "$TA" deb "$IMG_DEBIAN" e2e-deb || return
   ensure_instance "$TA" oob deb "  running: false" || return

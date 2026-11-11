@@ -2,7 +2,7 @@
 
 group_networks() {
   section "networks: a network deployed by the user"
-  ensure_tenant "$TA" medium owner-a@example.org || return
+  ensure_tenant "$TA" owner-a@example.org || return
   local a="t-$TA"
   ensure_network "$TA" net || return
   eq "Synced=True" True "$(cond networks.phorge.fr net "$a" Synced)"
@@ -19,7 +19,7 @@ group_networks() {
   local ext; ext=$(INCUS network get net volatile.network.ipv4.address --project "$a")
   match "its OVN router took an external address in 10.11.0.10-250" '^10\.11\.0\.([1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|250)$' "$ext"
 
-  section "networks: changed in place, and the plan's limit"
+  section "networks: changed in place, and the limit of the tenant"
   K -n "$a" patch networks.phorge.fr net --type merge -p '{"spec":{"description":"e2e renamed"}}' >/dev/null
   wait_until 150 "description" bash -c "ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus network show net --project $a' | grep -q 'e2e renamed'"
   has "a new description is applied in place" "e2e renamed" "$(INCUS network show net --project "$a")"
@@ -47,15 +47,15 @@ group_networks() {
     out=$(K -n "$a" patch networks.phorge.fr second --type merge -p "{\"spec\":{\"ipv6\":\"$bad\"}}" 2>&1)
     match "an IPv6 of $bad is refused (Incus would take it)" 'should match' "$out"
   done
-  # the medium plan allows 2 networks: the 3rd is refused by Incus and says why
+  # a tenant is allowed 2 networks: the 3rd is refused by Incus and says why
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1
 kind: Network
 metadata: {name: third, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
-spec: {description: over the plan}
+spec: {description: over the limit}
 YAML
   wait_until 120 "third synced=False" bash -c "[[ \$(kubectl --context $E2E_CONTEXT -n $a get networks.phorge.fr third -o jsonpath='{.status.conditions[?(@.type==\"Synced\")].status}') == False ]]"
-  eq "the 3rd network of a medium plan is never Ready" "" "$(cond networks.phorge.fr third "$a" Ready | grep -x True)"
+  eq "the 3rd network of a tenant is never Ready" "" "$(cond networks.phorge.fr third "$a" Ready | grep -x True)"
   match "and Incus says the networks limit is reached" 'Networks limit has been reached' "$(mr_msgs "$a" third)"
   eq "nothing was created in Incus for it" "" "$(INCUS network list --project "$a" -f csv -c n | grep -x third)"
   K -n "$a" delete networks.phorge.fr third --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1
@@ -75,8 +75,8 @@ YAML
   check "and the network is deleted without the image" gone networks.phorge.fr deb "$a"
 
   section "networks: subnets chosen by Incus, across tenants"
-  ensure_tenant "$TB" small owner-b@example.org || return
-  ensure_tenant "$TN" small n@example.org || return
+  ensure_tenant "$TB" owner-b@example.org || return
+  ensure_tenant "$TN" n@example.org || return
   ensure_network "$TB" net || return
   ensure_network "$TN" net || return
   local t seen="" dup=0 bad=0 c
@@ -90,7 +90,7 @@ YAML
   eq "none of them is in a router VLAN or the LAN/containers ranges" 0 "$bad"
   nomatch "tenant B sees none of A's networks (separate projects)" "$(net_prefix "$TA" net)" "$(INCUS network list --project "t-$TB" -f csv -c n,4)"
   eq "a network of the same name in two tenants is two Incus networks" 2 "$(INCUS network list --all-projects -f csv -c e,n | grep -cE "^t-($TA|$TB),net$")"
-  eq "a small plan holds one network: the one just made" 1 "$(INCUS network list --project "t-$TB" -f csv -c n | grep -c .)"
+  eq "a tenant of the one set of limits has the one network just made here" 1 "$(INCUS network list --project "t-$TB" -f csv -c n | grep -c .)"
 
   section "networks: an instance that uses it"
   ensure_image "$TA" deb "$IMG_DEBIAN" e2e-deb || return

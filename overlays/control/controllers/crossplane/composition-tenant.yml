@@ -1,5 +1,11 @@
 # Renders the resources of a Tenant (namespace, project, three profiles, two tuples), see xrd-tenant.yml.
 #
+# - Every tenant has the same project limits, there is no choice of plan: 2 VMs (limits.instances and
+#   limits.virtual-machines), 2 vCPU, 4 GiB of memory, 128 GiB of disk (plus the state of each VM, see below) and 2
+#   networks. The profiles are not an Incus limit: the API enforces its 2 profiles. spec.plan is still accepted by the
+#   XRD, so that nothing that exists or that the API still writes is refused, and is ignored here (phorge-fr/Hangar#461).
+#   An existing tenant gets these limits when its Tenant reconciles, without anything being recreated. The built-in
+#   profiles s, m and l below are the same whatever the limits.
 # - The Project is deny-by-default: restricted=true and every restricted.* key set explicitly, so a
 #   default changing in a later Incus release cannot silently open something. Allowed on purpose:
 #   VMs (with nesting), managed disks and NICs, the "remote" pool, the UPLINK as network uplink,
@@ -95,8 +101,9 @@ spec:
                       {{- fail (printf "a Tenant belongs in phorge-system, not %q" $xr.metadata.namespace) -}}
                       {{- end -}}
                       {{- $name := $xr.metadata.name -}}
-                      {{- $plans := dict "small" (dict "vms" 2 "cpu" 2 "mem" 4 "disk" 128 "nets" 1) "medium" (dict "vms" 4 "cpu" 4 "mem" 8 "disk" 256 "nets" 2) "large" (dict "vms" 6 "cpu" 8 "mem" 16 "disk" 512 "nets" 3) -}}
-                      {{- $p := index $plans $xr.spec.plan -}}
+                      {{- /* The one set of limits of every tenant, whatever spec.plan says (the field is deprecated and no longer read).
+                               The same numbers are in the API (internal/quota) and in docs/reference/phorge-api-kinds.md: keep them equal. */ -}}
+                      {{- $p := dict "vms" 2 "cpu" 2 "mem" 4 "disk" 128 "nets" 2 -}}
                       {{- /* The sizes a tenant starts with, as Incus profiles of its project. A tenant is only its project and
                                these three profiles: the network and everything else is the user's to deploy. */ -}}
                       {{- $sizes := dict "s" (dict "cpu" 1 "mem" 2 "disk" 64) "m" (dict "cpu" 2 "mem" 4 "disk" 128) "l" (dict "cpu" 4 "mem" 8 "disk" 256) -}}
@@ -145,8 +152,8 @@ spec:
                             limits.cpu: {{ $p.cpu | quote }}
                             limits.memory: {{ printf "%dGiB" (int $p.mem) | quote }}
                             {{- /* Incus counts, for a virtual machine, the size of its root disk plus size.state (500 MiB by default) in
-                                     limits.disk: a VM with the whole plan disk as root would be refused. The limit is the plan disk plus 512 MiB for
-                                     each VM the plan holds, so that the disk the plan says can be used; the API keeps checking the plan exactly. */}}
+                                     limits.disk: a VM with the whole disk as root would be refused. The limit is the disk plus 512 MiB for
+                                     each VM the tenant may hold, so that the disk the tenant is given can be used; the API keeps checking it exactly. */}}
                             limits.disk: {{ printf "%dMiB" (add (mul (int $p.disk) 1024) (mul (int $p.vms) 512)) | quote }}
                             limits.networks: {{ $p.nets | quote }}
                             restricted.cluster.target: block

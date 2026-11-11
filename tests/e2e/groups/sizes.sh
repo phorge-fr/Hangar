@@ -6,7 +6,7 @@ root_size() { INCUS config show "$2" --project "$1" --expanded | awk '/^  root:/
 
 group_sizes() {
   section "sizes: an instance from a profile"
-  ensure_tenant "$TA" medium owner-a@example.org || return
+  ensure_tenant "$TA" owner-a@example.org || return
   local a="t-$TA"
   ensure_image "$TA" deb "$IMG_DEBIAN" e2e-deb || return
   ensure_instance "$TA" psmall deb "  profile: s
@@ -34,9 +34,9 @@ group_sizes() {
   K -n "$a" delete instances.phorge.fr psmall --cascade=foreground --wait=true --timeout=300s >/dev/null 2>&1
   check "it is deleted in the foreground" gone instances.phorge.fr psmall "$a"
 
-  section "sizes: a profile that does not fit the plan, a profile that does not exist"
-  # A profile of the user that is above the medium plan (16 GiB of memory and 300 GiB of disk against 8 and 256): Incus refuses the VM,
-  # the plan decides. The three profiles every tenant has fit their own plan, which holds two of its size.
+  section "sizes: a profile that does not fit the limits, a profile that does not exist"
+  # A profile of the user that is above the limits of the tenant (4 vCPU, 16 GiB of memory and 300 GiB of disk against 2, 4 and 128): Incus
+  # refuses the VM, the limits decide. The profile l (4 vCPU, 8 GiB, 256 GiB) is above them too, and the tenant keeps it, untouched.
   ensure_profile "$TA" huge 4 16384 300 || return
   cat <<YAML | K apply -f - >/dev/null
 apiVersion: phorge.fr/v1alpha1
@@ -51,9 +51,9 @@ metadata: {name: noprof, namespace: $a, labels: {$LABEL: "$RUN_ID"}}
 spec: {imageRef: {name: deb}, network: net, profile: does-not-exist, running: false}
 YAML
   sleep 60
-  eq "an instance whose profile is above the plan is never Ready" "" "$(cond instances.phorge.fr toobig "$a" Ready | grep -x True)"
-  match "and it is a limit of the plan that refuses it" 'limits' "$(mr_msgs "$a" toobig)"
-  note "a profile above the medium plan: $(mr_msgs "$a" toobig | cut -c1-240)"
+  eq "an instance whose profile is above the limits is never Ready" "" "$(cond instances.phorge.fr toobig "$a" Ready | grep -x True)"
+  match "and it is a limit of the tenant that refuses it" 'limits' "$(mr_msgs "$a" toobig)"
+  note "a profile above the limits of the tenant: $(mr_msgs "$a" toobig | cut -c1-240)"
   eq "an instance whose profile does not exist is never Ready" "" "$(cond instances.phorge.fr noprof "$a" Ready | grep -x True)"
   eq "and no VM is created in Incus for either" "" "$(INCUS list --project "$a" -f csv -c n | grep -xE 'toobig|noprof')"
   K -n "$a" delete instances.phorge.fr toobig noprof --cascade=foreground --wait=true --timeout=200s >/dev/null 2>&1

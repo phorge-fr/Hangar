@@ -25,13 +25,13 @@ group_admission() {
   _t demo "$ok" | accept "minimal tenant"
   _t demo "$ok
   plan: large
-  displayName: Demo" | accept "tenant with every field"
+  displayName: Demo" | accept "tenant with every field, the deprecated plan included"
   _t a1 "$ok" | accept "2 characters is the shortest name allowed"
   _t demo "  plan: small" | reject "no owner" 'spec.owner'
   _t demo "  owner: alice" | reject "owner that is not an email" 'spec.owner'
   _t demo "  owner: 'a b@c.fr'" | reject "owner with a space" 'spec.owner'
   _t demo "$ok
-  plan: xl" | reject "unknown plan" 'spec.plan'
+  plan: xl" | reject "unknown plan (the deprecated field keeps its enum)" 'spec.plan'
   _t demo "$ok
   displayName: $(printf 'x%.0s' {1..101})" | reject "displayName over 100 characters" 'displayName'
   _t "a" "$ok" | reject "1 character name" 'must be 2 to 28'
@@ -39,7 +39,7 @@ group_admission() {
   _t "$(printf 'a%.0s' {1..29})" "$ok" | reject "29 characters name" 'must be 2 to 28'
   _t "$(printf 'a%.0s' {1..28})" "$ok" | accept "28 characters name"
   _t "Demo" "$ok" | reject "uppercase name" 'RFC 1123|must be'
-  _t demo "$ok" | defaulted "plan defaults to small" '.spec.plan' small
+  _t demo "$ok" | defaulted "the deprecated plan still defaults to small, as the API expects" '.spec.plan' small
 
   section "admission: Image"
   _i "  source: {name: debian/13/cloud}" | accept "image with a name only"

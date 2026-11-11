@@ -64,19 +64,21 @@ The isolation and quota boundary. `metadata.name` is the tenant slug: 2 to 28 ch
 |---|---|---|
 | `spec.owner` | string, required, immutable | Email of the owner, the OIDC claim Incus identifies users by. Gets the Incus `admin` role on the project. To hand a tenant over, add a `Membership` with the `admin` role |
 | `spec.displayName` | string | Up to 100 characters. Used as the project description |
-| `spec.plan` | enum | `small` (default), `medium`, `large` |
+| `spec.plan` | enum | **Deprecated and ignored.** `small` (default), `medium`, `large`. There is no choice of plan: every tenant has the same limits, whatever it says. The XRD still accepts the field and its three values so that nothing that exists, or that the API still writes, is refused. It is removed once the API and the console no longer use it |
 | `status.namespace` | string | `t-<name>` |
 | `status.incusProject` | string | `t-<name>` |
 
-Plans, enforced by Incus as project limits:
+Limits, the same for every tenant, new or existing, enforced by Incus as project limits:
 
-| Plan | VMs | vCPU | Memory | Disk | Networks |
-|---|---|---|---|---|---|
-| `small` | 2 | 2 | 4 GiB | 128 GiB | 1 |
-| `medium` | 4 | 4 | 8 GiB | 256 GiB | 2 |
-| `large` | 6 | 8 | 16 GiB | 512 GiB | 3 |
+| VMs | vCPU | Memory | Disk | Networks |
+|---|---|---|---|---|
+| 2 | 2 | 4 GiB | 128 GiB | 2 |
 
-The CPU, the memory and the disk of each plan hold two instances of its own profile size: `small` two `s`, `medium` two `m`, `large` two `l`. The count of instances is the plan's own (2, 4 and 6), for smaller instances than the profile. The Incus project limit of the disk is the plan disk plus 512 MiB for each VM of the plan (`small` 132096 MiB, `medium` 264192 MiB, `large` 527360 MiB): Incus counts the state of a VM (500 MiB by default) on top of its root disk, so without that margin a VM with the whole plan disk as root, or two `s` on a `small` plan, would be refused. The API checks the plan exactly; Incus stays the second line.
+The count is `limits.instances` and `limits.virtual-machines`; the other keys are `limits.cpu`, `limits.memory`, `limits.disk` and `limits.networks`. The CPU, the memory and the disk hold exactly two instances of the profile size `s`, or one of `m`. The Incus project limit of the disk is the 128 GiB plus 512 MiB for each VM (132096 MiB): Incus counts the state of a VM (500 MiB by default) on top of its root disk, so without that margin a VM with the whole 128 GiB as root, or two `s`, would be refused. The API checks the numbers exactly; Incus stays the second line. The same numbers are in the API (`internal/quota`): keep them equal.
+
+A tenant also has at most **2 profiles of its own** (the three below do not count). Incus has no limit on profiles: the API enforces it, so a third `Profile` applied directly in Kubernetes is not refused by the platform.
+
+The limits are not read from `spec.plan`: an existing tenant gets them when its composition reconciles, without anything being deleted or recreated, and a tenant created with any plan, or with none, gets the same ones. Before this change a tenant was `small` (2 VMs, 2 vCPU, 4 GiB, 128 GiB, 1 network), `medium` (4, 4, 8 GiB, 256 GiB, 2) or `large` (6, 8, 16 GiB, 512 GiB, 3).
 
 Composes: a Kubernetes namespace, an Incus project, the three profiles `s`, `m` and `l`, and the owner's tuples. Nothing else: **a tenant comes without a network**, the user deploys theirs (see `Network`).
 
@@ -86,7 +88,7 @@ Composes: a Kubernetes namespace, an Incus project, the three profiles `s`, `m` 
 | `m` | 2 | 4 GiB | 128 GiB |
 | `l` | 4 | 8 GiB | 256 GiB |
 
-The root disk is on the `remote` pool and part of the profile, so an instance from a profile needs nothing else but its network. The profiles are the tenant's own, created with it. The project also has its own empty `default` profile, which Incus makes. The plan limits above apply to the sum of the instances: the resources of a plan hold two instances of its own profile size, and a profile bigger than what is left (a `l` on a `small` plan, or a third `s` on it) is refused by Incus with the limit it passes (`Reached maximum aggregate value ... limits.disk`).
+The root disk is on the `remote` pool and part of the profile, so an instance from a profile needs nothing else but its network. The profiles are the tenant's own, created with it. The project also has its own empty `default` profile, which Incus makes. The limits above apply to the sum of the instances, and the three profiles are the same whatever the limits: a profile bigger than what is left (a `l`, which asks for 4 vCPU against 2, or a third `s`) is refused by Incus when an instance uses it, with the limit it passes (`Reached maximum aggregate value ... limits.cpu`).
 
 ```yaml
 apiVersion: phorge.fr/v1alpha1
@@ -96,7 +98,6 @@ metadata:
   namespace: phorge-system
 spec:
   owner: alice@example.org
-  plan: small
 ```
 
 ## Image
@@ -127,7 +128,7 @@ An OVN network the user deploys in the tenant's project, NATed on the `UPLINK`. 
 | `status.ipv4` | string | The address that was asked for, empty when Incus chose |
 | `status.ipv6` | string | The IPv6 range that was asked for, empty when Incus chose |
 
-It is always NATed: a tenant cannot route its own subnet, and an OVN network without NAT is created in the `Errored` state by Incus on this uplink. Its address is the user's choice (`spec.ipv4`); without one Incus chooses a `/24`. The provider does not report the range Incus chose, so the status only says an address that was asked for; an instance reports its own `status.ipv4`. **Incus does not refuse two networks on the same range** (measured), so what keeps them apart is the API, which checks the overlaps. The plan limits how many networks a tenant has (`small` 1, `medium` 2, `large` 3): the next one is refused by Incus with `Reached maximum number of networks`.
+It is always NATed: a tenant cannot route its own subnet, and an OVN network without NAT is created in the `Errored` state by Incus on this uplink. Its address is the user's choice (`spec.ipv4`); without one Incus chooses a `/24`. The provider does not report the range Incus chose, so the status only says an address that was asked for; an instance reports its own `status.ipv4`. **Incus does not refuse two networks on the same range** (measured), so what keeps them apart is the API, which checks the overlaps. A tenant has at most 2 networks (`limits.networks`): the third is refused by Incus with `Reached maximum number of networks`.
 
 **Changing a range** (measured on the platform, on a network with a running VM): Incus accepts a new `ipv4` or `ipv6` on a network that VMs use, and checks nothing: a global prefix, a `/48` or a range of the router would all be taken, which is why the XRD checks the form of `ipv6` and the API checks the overlaps. The VMs are disturbed differently. After a new `ipv4` they **lose their IPv4 and their gateway** (no route out) until their DHCP client asks again: renewing the lease does not do it, a fresh request does (`networkctl reconfigure` on a systemd-networkd guest, or a restart) and the VM then takes an address of the new range. After a new `ipv6` the VMs take the new prefix from the router advertisement within a minute with no cut, and keep the old address next to it until it expires. A VM that is stopped takes the new range at its next boot. The provider puts back any change made by hand, so the field is the way. A range that was given **cannot be taken out** of the object (the XRD refuses it): measured, Incus keeps the last value when the field goes, and the status would say it chose.
 
@@ -151,7 +152,7 @@ A profile never has a network device: it is a size and settings, the network is 
 
 An instance takes the settings of its profile and what the instance says itself wins, see `Instance`.
 
-A profile can be changed in place. Deleting one is refused while an instance has it (`in-use by` and the instance's name) and goes by itself once the last instance is gone, without a second delete. Deleting a tenant waits for its profiles, as for its networks and images. A profile above the plan is a definition: it is the instance that Incus refuses, with the plan's limit.
+A profile can be changed in place. Deleting one is refused while an instance has it (`in-use by` and the instance's name) and goes by itself once the last instance is gone, without a second delete. Deleting a tenant waits for its profiles, as for its networks and images. A profile above the limits of the tenant is a definition: it is the instance that Incus refuses, with the limit it passes.
 
 ## Instance
 
@@ -184,13 +185,13 @@ The secure boot and the SSH keys come from the instance when it says them, else 
 - Without a profile, or with `s`, `m`, `l` (which carry none of these settings), the composition writes the defaults on the Incus instance, as it always did.
 - An `Instance` created before the profiles carried settings has `secureBoot` and `sshPublicKeys` in its `spec`, written by the defaults the XRD then had (`true`, an empty list). They are what that instance says, so they win over a profile that later gets settings and nothing changes for it. To make such an instance follow its profile, remove the fields (`kubectl patch ... --type merge -p '{"spec":{"secureBoot":null,"sshPublicKeys":null}}'`).
 
-A size is a profile **or** the three custom values, never both and never neither: the XRD refuses the others (`give a profile or cpu, memoryMiB and diskGiB, not both`, `without a profile, cpu, memoryMiB and diskGiB are all required`). There are no defaults. A profile that does not exist, or that does not fit the plan, leaves the instance `Synced=False` with Incus's message. A size can be changed in place, from custom values to a profile or back, on a stopped instance.
+A size is a profile **or** the three custom values, never both and never neither: the XRD refuses the others (`give a profile or cpu, memoryMiB and diskGiB, not both`, `without a profile, cpu, memoryMiB and diskGiB are all required`). There are no defaults. A profile that does not exist, or that does not fit the limits of the tenant, leaves the instance `Synced=False` with Incus's message. A size can be changed in place, from custom values to a profile or back, on a stopped instance.
 
 The networks of a running instance can be changed in place, and the instance is neither stopped nor restarted (measured on a Debian cloud image): a network added to the list appears as a new NIC in the guest within about 20 seconds, and a network taken out of the list loses its NIC within about 6 seconds and its `Usage` goes with it. A hot-plugged NIC is `down` in the guest until the guest configures it (the image's own network setup runs at boot, so a restart brings it up); the instance's other NICs are not touched. The NICs are named after the position in the list, so removing a network that is not the last renames what follows it after the next boot.
 
 A `Network` that an instance uses cannot be deleted, whichever of its networks it is: each network of an instance has a `Usage` of its own, so the request is refused with `in-use by` and the instance's name, and the `Network` goes by itself once the last instance is gone, without a second delete.
 
-The per-instance bounds are the XRD's. The plan's totals are enforced on top by the project: a third VM on a `small` tenant is refused by Incus with `Reached maximum number of instances`, and the instance stays `Synced=False` with that message.
+The per-instance bounds are the XRD's. The totals of the tenant are enforced on top by the project: a third VM is refused by Incus with `Reached maximum number of instances`, and the instance stays `Synced=False` with that message.
 
 ## Membership
 
@@ -239,7 +240,7 @@ A service account of Authentik that holds a key, for a person's scripts and tool
 | `status.secretName` | string | The Secret that receives the key, `<name>-token`, in `phorge-keys` |
 | `status.expired` | boolean | True once `expiresAt` has passed |
 
-**A key is only what OpenFGA holds for it.** The composition writes one tuple per tenant and scope in the `phorge-api` store (`key_<resource>_<action>` on `tenant:<name>`), each with the condition `not_expired` and `expires_at` in its context, and the API sends the current time with every question. From `expiresAt` OpenFGA refuses the key by itself, at the second and without anything being deleted. A key has no groups, so it is never a platform administrator: it cannot create a tenant for someone else nor choose a plan. The scopes are `tenants:read|write`, `instances:read|write`, `images:read|write`, `networks:read|write`, `profiles:read|write` and `memberships:read|write`; `tenants:write` renames the tenant it is given on and deletes it.
+**A key is only what OpenFGA holds for it.** The composition writes one tuple per tenant and scope in the `phorge-api` store (`key_<resource>_<action>` on `tenant:<name>`), each with the condition `not_expired` and `expires_at` in its context, and the API sends the current time with every question. From `expiresAt` OpenFGA refuses the key by itself, at the second and without anything being deleted. A key has no groups, so it is never a platform administrator: it cannot create a tenant for someone else. The scopes are `tenants:read|write`, `instances:read|write`, `images:read|write`, `networks:read|write`, `profiles:read|write` and `memberships:read|write`; `tenants:write` renames the tenant it is given on and deletes it.
 
 **The identity does not expire.** The service account and its token are created in Authentik by a `provider-http` `Request`, with an identity that can only add users and manage tokens (`blueprint-crossplane.yml`). The key is generated by Authentik and lands in the Secret `status.secretName`; the Request owns that Secret. The API shows the key once and deletes the Secret, after which provider-http recreates it empty, so a Secret without a `token` means the key was already handed over.
 
@@ -255,7 +256,7 @@ The project is deny-by-default: `restricted=true` and every `restricted.*` key s
 |---|---|
 | VMs, with optional nesting | Containers (`limits.containers=0`) |
 | Disks on the `remote` pool, managed NICs | GPU, PCI, USB, proxy, infiniband, unix devices |
-| Several OVN networks, up to the plan, on the `UPLINK` | Choosing a cluster node (placement is Incus's) |
+| Up to 2 OVN networks per tenant, on the `UPLINK` | Choosing a cluster node (placement is Incus's) |
 | Data volumes, snapshots, backups | Forwards and load balancers (no public exposure yet) |
 | Images through the `Image` kind | Custom image upload |
 

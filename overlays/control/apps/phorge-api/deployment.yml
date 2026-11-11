@@ -101,7 +101,7 @@ spec:
                       # How many profiles the users of a tenant may make (the three every tenant has do not count). 0 is no limit.
                       - name: MAX_PROFILES_PER_TENANT
                         value: "20"
-                      # How many tenants a person may own: every person signed in creates their own, with the small plan. 0 is no limit.
+                      # How many tenants a person may own: every person signed in creates their own, with the one set of limits. 0 is no limit.
                       - name: MAX_TENANTS_PER_USER
                         value: "3"
                       # The terminal of an instance (docs/decisions/0013 in this repository): the API trades the token of a person at

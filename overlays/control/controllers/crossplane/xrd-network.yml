@@ -7,7 +7,7 @@
 # spec.ipv6), or Incus's when none is given: the provider does not report the range Incus chose, so the status only says an
 # address that was asked for. Both can change in place, which Incus accepts on a network that VMs use; the VMs on it are
 # disturbed (docs/reference/phorge-api-kinds.md says how), so what guards that is the API.
-# The tenant's plan limits how many networks there can be.
+# A tenant has at most 2 networks (limits.networks in composition-tenant.yml).
 #
 # Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
 apiVersion: apiextensions.crossplane.io/v2
