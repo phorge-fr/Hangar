@@ -6,6 +6,12 @@
 # - Its network devices are eth0, eth1, ... one per Network of the tenant (spec.networks, or the deprecated
 #   spec.network, which is the same as a list of one): a tenant has no network of its own, so the instance is
 #   unreachable until the user has deployed one. A Usage per Network keeps it while the instance exists.
+# - Nesting, secure boot and the SSH keys are the instance's own when it says them, else its profile's (a Profile the user made
+#   can carry them, see xrd-profile.yml), else a default (nesting off, secure boot on, no key). The XRD has no default for them,
+#   so an absent field means "the instance did not say", and a false or an empty list means "the instance said".
+#   An Incus instance takes the keys of its profile unless it has the key itself, so the composition writes on the Incus
+#   Instance only what the instance says; and, when the profile is not one that can carry settings (s, m, l, none), the
+#   default too, as it always did. The settings in force are in status.nesting, status.secureBoot and status.sshPublicKeys.
 apiVersion: apiextensions.crossplane.io/v1
 kind: Composition
 metadata:
@@ -69,8 +75,32 @@ spec:
                       {{- $inst := default (dict) (index $obs "instance") -}}
                       {{- $nets := list -}}
                       {{- if $spec.networks }}{{ $nets = $spec.networks }}{{ else }}{{ $nets = list $spec.network }}{{ end -}}
+                      {{- /* The settings of the profile, when it is a Profile the user made: s, m and l are Incus's own
+                               objects created with the tenant and carry none, and a custom instance has the project's empty
+                               default profile. The Profile is asked for through ExtraResources; unresolved or absent, the
+                               profile says nothing. */ -}}
+                      {{- $madeProfile := and $spec.profile (not (has $spec.profile (list "s" "m" "l" "default"))) -}}
+                      {{- $profSpec := dict -}}
+                      {{- if $madeProfile -}}
+                      {{- $profItems := dig "items" (list) (default (dict) (index $found "profile")) -}}
+                      {{- if $profItems -}}{{- $profSpec = dig "resource" "spec" (dict) (first $profItems) -}}{{- end -}}
+                      {{- end -}}
+                      {{- /* What the instance says, else its profile says, else the default. */ -}}
+                      {{- $nesting := false -}}
+                      {{- if hasKey $spec "nesting" }}{{ $nesting = $spec.nesting }}{{ else if hasKey $profSpec "nesting" }}{{ $nesting = $profSpec.nesting }}{{ end -}}
+                      {{- $secureBoot := true -}}
+                      {{- if hasKey $spec "secureBoot" }}{{ $secureBoot = $spec.secureBoot }}{{ else if hasKey $profSpec "secureBoot" }}{{ $secureBoot = $profSpec.secureBoot }}{{ end -}}
+                      {{- $ownKeys := default (list) $spec.sshPublicKeys -}}
+                      {{- $profKeys := default (list) (dig "sshPublicKeys" (list) $profSpec) -}}
+                      {{- $keys := $profKeys -}}
+                      {{- if hasKey $spec "sshPublicKeys" }}{{ $keys = $ownKeys }}{{ end -}}
+                      {{- /* Keys of the instance replace the profile's. An instance that says "no key" while its profile
+                               has some says it with an empty list in the user data. */ -}}
+                      {{- $dropProfileKeys := and (hasKey $spec "sshPublicKeys") (not $ownKeys) $profKeys -}}
+                      {{- /* With a profile the user made and nothing said, the Incus Instance has no config at all. */ -}}
+                      {{- $hasConfig := or (not $madeProfile) (hasKey $spec "nesting") (hasKey $spec "secureBoot") $ownKeys $dropProfileKeys -}}
                       {{- $ud := "#cloud-config\nssh_authorized_keys:\n" -}}
-                      {{- range $spec.sshPublicKeys }}{{ $ud = printf "%s  - %s\n" $ud (toJson .) }}{{ end -}}
+                      {{- range $ownKeys }}{{ $ud = printf "%s  - %s\n" $ud (toJson .) }}{{ end -}}
                       apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
                       kind: ExtraResources
                       requirements:
@@ -79,6 +109,13 @@ spec:
                           kind: Tenant
                           matchName: {{ $tenantName }}
                           namespace: phorge-system
+                        {{- if $madeProfile }}
+                        profile:
+                          apiVersion: phorge.fr/v1alpha1
+                          kind: Profile
+                          matchName: {{ $spec.profile }}
+                          namespace: {{ $xr.metadata.namespace }}
+                        {{- end }}
                       ---
                       apiVersion: instance.incus.m.crossplane.io/v1alpha1
                       kind: Instance
@@ -96,16 +133,24 @@ spec:
                             name: {{ $spec.imageRef.name }}
                           profiles:
                             - {{ default "default" $spec.profile }}
+                          {{- if $hasConfig }}
                           config:
-                            security.nesting: {{ $spec.nesting | quote }}
-                            security.secureboot: {{ $spec.secureBoot | quote }}
+                            {{- if or (hasKey $spec "nesting") (not $madeProfile) }}
+                            security.nesting: {{ $nesting | quote }}
+                            {{- end }}
+                            {{- if or (hasKey $spec "secureBoot") (not $madeProfile) }}
+                            security.secureboot: {{ $secureBoot | quote }}
+                            {{- end }}
                             {{- if not $spec.profile }}
                             limits.cpu: {{ $spec.cpu | quote }}
                             limits.memory: {{ printf "%dMiB" (int $spec.memoryMiB) | quote }}
                             {{- end }}
-                            {{- if $spec.sshPublicKeys }}
+                            {{- if $ownKeys }}
                             cloud-init.user-data: {{ $ud | quote }}
+                            {{- else if $dropProfileKeys }}
+                            cloud-init.user-data: "#cloud-config\nssh_authorized_keys: []\n"
                             {{- end }}
+                          {{- end }}
                           device:
                             {{- if not $spec.profile }}
                             - name: root
@@ -228,6 +273,9 @@ spec:
                       kind: Instance
                       status:
                         state: {{ dig "resource" "status" "atProvider" "status" "" $inst | quote }}
+                        nesting: {{ $nesting }}
+                        secureBoot: {{ $secureBoot }}
+                        sshPublicKeys: {{ toJson $keys }}
                         ipv4: {{ dig "resource" "status" "atProvider" "ipv4Address" "" $inst | quote }}
                         networks:
                         {{- range $i, $n := $nets }}

@@ -135,7 +135,7 @@ Deleting a `Network` is refused while an instance uses it, see `Instance`.
 
 ## Profile
 
-A size the user makes in the tenant's project, next to the three every tenant is created with (`s`, `m` and `l`): CPU, memory and a root disk, in Incus. An instance names it in `spec.profile`.
+A size the user makes in the tenant's project, next to the three every tenant is created with (`s`, `m` and `l`): CPU, memory and a root disk, in Incus, and optionally the settings of an instance that are not about the network. An instance names it in `spec.profile`.
 
 | Field | Type | Rule |
 |---|---|---|
@@ -144,6 +144,13 @@ A size the user makes in the tenant's project, next to the three every tenant is
 | `spec.memoryMiB` | integer, required | 256 to 65536 |
 | `spec.diskGiB` | integer, required | 1 to 500 |
 | `spec.description` | string | Up to 200 characters. Without one it says what the profile comes to |
+| `spec.nesting` | boolean | `security.nesting` of the instances that have the profile. No default |
+| `spec.secureBoot` | boolean | `security.secureboot` of the instances that have the profile. No default |
+| `spec.sshPublicKeys` | list of string, up to 20 | Injected with cloud-init into the instances that have the profile (`cloud-init.user-data`), so their image must be a `cloud` variant. Same shape and same admission rule as on an `Instance` |
+
+A profile never has a network device: it is a size and settings, the network is the instance's (`spec.networks`), and a field for one is refused. The three settings have no default, and a setting the profile does not say is not written in the Incus profile, so the instance's own value, or Incus's default, applies.
+
+An instance takes the settings of its profile and what the instance says itself wins, see `Instance`.
 
 A profile can be changed in place. Deleting one is refused while an instance has it (`in-use by` and the instance's name) and goes by itself once the last instance is gone, without a second delete. Deleting a tenant waits for its profiles, as for its networks and images. A profile above the plan is a definition: it is the instance that Incus refuses, with the plan's limit.
 
@@ -161,11 +168,22 @@ A virtual machine in the tenant's project.
 | `spec.memoryMiB` | integer | 256 to 65536, with `cpu` and `diskGiB` |
 | `spec.diskGiB` | integer | 1 to 500, with `cpu` and `memoryMiB` |
 | `spec.running` | boolean | Default `true` |
-| `spec.nesting` | boolean | Default `false`. Allows virtualization or containers inside the VM |
-| `spec.sshPublicKeys` | list of string | Injected with cloud-init, so the image must be a `cloud` variant |
+| `spec.nesting` | boolean | Allows virtualization or containers inside the VM. No default: see below |
+| `spec.secureBoot` | boolean | UEFI secure boot. No default: see below. Some cloud images do not boot with it (`alpine/3.22/cloud`): say `false` for those |
+| `spec.sshPublicKeys` | list of string, up to 20 | Injected with cloud-init, so the image must be a `cloud` variant. Each key is checked by the XRD. No default: see below |
+| `status.nesting` | boolean | The nesting in force: the instance's, else its profile's, else `false` |
+| `status.secureBoot` | boolean | The secure boot in force: the instance's, else its profile's, else `true` |
+| `status.sshPublicKeys` | list of string | The keys in force: the instance's, else its profile's, else none |
 | `status.state` | string | Incus state, for example `Running` |
 | `status.ipv4` | string | Address on the first network |
 | `status.networks` | list | The `network`, `ipv4` and `ipv6` of the instance on each network, in the order of `spec.networks` |
+
+The nesting, the secure boot and the SSH keys come from the instance when it says them, else from its profile when that is a `Profile` the user made, else from a default: nesting off, secure boot on, no key. The XRD gives them **no default** on purpose: a default written into every `Instance` would override the profile's, and an absent field is what tells "the instance did not say" from "the instance said `false`" (or an empty list). The composition applies the defaults, and `status.nesting`, `status.secureBoot` and `status.sshPublicKeys` say what is in force. In Incus, an instance takes the key of its profile unless it has the key itself, so the composition writes on the Incus instance only what the instance says (with a profile the user made), and a change of the profile reaches the instances that did not say. Four rules follow:
+
+- Keys given by the instance **replace** the profile's, they do not add to them.
+- An empty `sshPublicKeys` list is "no key": the instance then has none of the profile's.
+- Without a profile, or with `s`, `m`, `l` (which carry none of these settings), the composition writes the defaults on the Incus instance, as it always did.
+- An `Instance` created before the profiles carried settings has the three fields in its `spec`, written by the defaults the XRD then had (`false`, `true`, an empty list). They are what that instance says, so they win over a profile that later gets settings and nothing changes for it. To make such an instance follow its profile, remove the fields (`kubectl patch ... --type merge -p '{"spec":{"nesting":null,"secureBoot":null,"sshPublicKeys":null}}'`).
 
 A size is a profile **or** the three custom values, never both and never neither: the XRD refuses the others (`give a profile or cpu, memoryMiB and diskGiB, not both`, `without a profile, cpu, memoryMiB and diskGiB are all required`). There are no defaults. A profile that does not exist, or that does not fit the plan, leaves the instance `Synced=False` with Incus's message. A size can be changed in place, from custom values to a profile or back, on a stopped instance.
 

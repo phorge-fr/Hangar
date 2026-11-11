@@ -1,6 +1,10 @@
 # Renders the Incus profile of a Profile, see xrd-profile.yml: the CPU and the memory as limits and the root disk with its size, as the
 # profiles s, m and l of the Tenant composition are made. The project is the namespace's own name.
 #
+# The settings of an instance that are not about the network (security.nesting, security.secureboot, cloud-init.user-data) are
+# written only when the Profile says them: an Incus instance takes the keys of its profile unless it has the key itself, which is
+# how an Instance that says its own value wins. There is never a network device here.
+#
 # A Usage keeps the tenant's namespace while the Incus profile exists, as for the networks and the images: provider-incus cannot reach
 # Incus once the namespace terminates (phorge-fr/Hangar#185). An instance's own Usage keeps the profile while the instance uses it.
 apiVersion: apiextensions.crossplane.io/v1
@@ -64,6 +68,8 @@ spec:
                       {{- $spec := $xr.spec -}}
                       {{- $obs := default (dict) .observed.resources -}}
                       {{- $prof := default (dict) (index $obs "profile") -}}
+                      {{- $ud := "#cloud-config\nssh_authorized_keys:\n" -}}
+                      {{- range $spec.sshPublicKeys }}{{ $ud = printf "%s  - %s\n" $ud (toJson .) }}{{ end -}}
                       apiVersion: meta.gotemplating.fn.crossplane.io/v1alpha1
                       kind: ExtraResources
                       requirements:
@@ -88,6 +94,15 @@ spec:
                           config:
                             limits.cpu: {{ $spec.cpu | quote }}
                             limits.memory: {{ printf "%dMiB" (int $spec.memoryMiB) | quote }}
+                            {{- if hasKey $spec "nesting" }}
+                            security.nesting: {{ $spec.nesting | quote }}
+                            {{- end }}
+                            {{- if hasKey $spec "secureBoot" }}
+                            security.secureboot: {{ $spec.secureBoot | quote }}
+                            {{- end }}
+                            {{- if $spec.sshPublicKeys }}
+                            cloud-init.user-data: {{ $ud | quote }}
+                            {{- end }}
                           device:
                             - name: root
                               type: disk

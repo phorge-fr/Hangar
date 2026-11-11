@@ -28,6 +28,8 @@ group_instance() {
   eq "limits.cpu" 2 "$(INCUS config get vm1 limits.cpu --project "$a")"
   eq "limits.memory" 1536MiB "$(INCUS config get vm1 limits.memory --project "$a")"
   eq "security.nesting off by default" false "$(INCUS config get vm1 security.nesting --project "$a")"
+  eq "security.secureboot on by default" true "$(INCUS config get vm1 security.secureboot --project "$a")"
+  eq "status.nesting and status.secureBoot say what is in force when the instance did not say" "false true" "$(sget instances.phorge.fr "$a" vm1 '{.status.nesting} {.status.secureBoot}')"
   eq "root disk size" 12GiB "$(INCUS config device get vm1 root size --project "$a")"
   eq "root disk pool" remote "$(INCUS config device get vm1 root pool --project "$a")"
   eq "a custom instance uses the project's empty default profile" default "$(INCUS list vm1 --project "$a" -f csv -c P)"

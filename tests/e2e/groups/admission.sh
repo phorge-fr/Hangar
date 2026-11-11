@@ -56,9 +56,15 @@ group_admission() {
   _n "  profile: m" | accept "instance with a profile"
   _c | accept "instance with a custom size"
   _c | defaulted "running defaults to true" '.spec.running' true
-  _c | defaulted "nesting defaults to false" '.spec.nesting' false
-  _c | defaulted "secureBoot defaults to true" '.spec.secureBoot' true
-  _c | defaulted "sshPublicKeys default to empty" '.spec.sshPublicKeys | length' 0
+  # No default for these three: the profile can carry them, and a default written into the object would override it. The
+  # composition applies the defaults, status.nesting, status.secureBoot and status.sshPublicKeys say what is in force.
+  _c | defaulted "nesting has no default: the instance did not say" '.spec.nesting // "unset"' unset
+  _c | defaulted "secureBoot has no default: the instance did not say" '.spec.secureBoot // "unset"' unset
+  _c | defaulted "sshPublicKeys have no default: the instance did not say" '.spec.sshPublicKeys // "unset"' unset
+  _n "  profile: m
+  nesting: false
+  secureBoot: true
+  sshPublicKeys: []" | defaulted "what the instance says stays as it is (false, true, an empty list)" '[.spec.nesting, .spec.secureBoot, .spec.sshPublicKeys] | tostring' '[false,true,[]]'
   _n "  profile: m" | defaulted "a profile leaves cpu unset (the profile decides)" '.spec.cpu // "unset"' unset
   _n "  profile: m" | defaulted "a profile leaves memoryMiB unset" '.spec.memoryMiB // "unset"' unset
   _n "  profile: m" | defaulted "a profile leaves diskGiB unset" '.spec.diskGiB // "unset"' unset
@@ -151,6 +157,36 @@ group_admission() {
   cpu: 1
   memoryMiB: 1024
   diskGiB: 10" | reject "a description over 200 characters" 'description'
+  local p3='  cpu: 1
+  memoryMiB: 1024
+  diskGiB: 10'
+  _p web "$p3
+  nesting: true
+  secureBoot: false
+  sshPublicKeys: ['$k1', '$k2']" | accept "a profile with nesting, secure boot and ssh keys"
+  _p web "$p3
+  sshPublicKeys: []" | accept "a profile with an empty list of keys"
+  _p web "$p3" | defaulted "nesting has no default on a profile" '.spec.nesting // "unset"' unset
+  _p web "$p3" | defaulted "secureBoot has no default on a profile" '.spec.secureBoot // "unset"' unset
+  _p web "$p3" | defaulted "sshPublicKeys have no default on a profile" '.spec.sshPublicKeys // "unset"' unset
+  _p web "$p3
+  nesting: yes please" | reject "a nesting that is not a boolean" 'nesting'
+  _p web "$p3
+  secureBoot: 1" | reject "a secureBoot that is not a boolean" 'secureBoot'
+  _p web "$p3
+  sshPublicKeys: [a, b]" | reject "profile ssh keys that are not keys" 'each key must be'
+  _p web "$p3
+  sshPublicKeys: [\"$k1\\nruncmd: [reboot]\"]" | reject "a profile ssh key with a line break (cloud-init injection)" 'each key must be'
+  _p web "$p3
+  sshPublicKeys: ['$k1 note: x']" | reject "a profile ssh key whose comment has a colon" 'each key must be'
+  _p web "$p3
+  sshPublicKeys: ['$k1 two words']" | reject "a profile ssh key with a two word comment" 'each key must be'
+  _p web "$p3
+  sshPublicKeys: [$(printf "'$k1', %.0s" {1..20})'$k1']" | reject "21 ssh keys in a profile" 'sshPublicKeys'
+  _p web "$p3
+  network: net" | reject "a network in a profile: that is the instance's" 'unknown field|network'
+  _p web "$p3
+  networks: [net]" | reject "networks in a profile" 'unknown field|networks'
 
   section "admission: Network"
   _w net1 | accept "a network with a description"
