@@ -1,5 +1,15 @@
 # A Profile is a size a user makes in their tenant's Incus project, next to the three every tenant is created with
-# (s, m and l, see composition-tenant.yml): CPU, memory and a root disk. An Instance names it in spec.profile.
+# (s, m and l, see composition-tenant.yml): CPU, memory and a root disk, and optionally the settings of an instance that are not
+# about the network (secure boot, SSH public keys). An Instance names it in spec.profile.
+#
+# Never a network device: a profile is a size and settings, the network is the instance's. The two settings have no default here:
+# what a profile does not say is not in the Incus profile, so the instance's own value, or Incus's default, applies. An Instance
+# that says one of them itself wins over the profile.
+#
+# Never nesting either: the tenant's Incus projects block nesting for containers (restricted.containers.nesting: block, see
+# composition-tenant.yml) and a profile has no instance type, so Incus checks security.nesting on a profile against that
+# restriction and refuses it ("Container nesting is forbidden", measured). Nesting stays a setting of the Instance, a VM, for
+# which the project allows it. The strict schema refuses the field on a Profile.
 #
 # Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name. The names of the profiles a tenant is
 # created with, and "default" (the project's own empty profile), are taken: a Profile of that name would make the Incus profile
@@ -45,6 +55,26 @@ spec:
                                   type: integer
                                   minimum: 1
                                   maximum: 500
+                              secureBoot:
+                                  description: >-
+                                      UEFI secure boot of the instances that have this profile (security.secureboot). Some
+                                      cloud images do not boot with it (alpine/3.22/cloud): an instance of such an image says
+                                      false itself. An instance that says its own value wins.
+                                  type: boolean
+                              sshPublicKeys:
+                                  description: >-
+                                      Injected with cloud-init into the instances that have this profile, so their image must be
+                                      a cloud variant. An instance that gives its own keys replaces these, it does not add to them.
+                                  type: array
+                                  maxItems: 20
+                                  items:
+                                      type: string
+                                      maxLength: 1024
+                                      # Same rule as the Instance kind (xrd-instance.yml): a key is written into the cloud-init
+                                      # user data, so a line break or a stray YAML character must never get through.
+                                      x-kubernetes-validations:
+                                          - rule: "self.matches('^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh[.]com|sk-ecdsa-sha2-nistp256@openssh[.]com) [A-Za-z0-9+/]{16,}={0,3}( [A-Za-z0-9@._+=/-]{1,100})?$')"
+                                            message: "each key must be '<type> <base64 key>' with at most a one word comment of letters, digits and @._+=/-"
                           required:
                               - cpu
                               - memoryMiB

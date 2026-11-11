@@ -5,6 +5,12 @@
 # instance, the tenant's plan (Tenant.spec.plan) limits are enforced on top of them by the Incus project
 # limits.
 #
+# Secure boot and the SSH keys have no default here, on purpose: the profile (spec.profile) can carry them (xrd-profile.yml), and a
+# default of the XRD would be written into every Instance and override the profile's. What the instance says wins; what it does
+# not say is the profile's, and without one, the default of the composition (secure boot on, no key). Nesting keeps its default
+# (false) and is the instance's alone: the tenant's project blocks it on a profile. The values in force are in status.nesting,
+# status.secureBoot and status.sshPublicKeys.
+#
 # Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
 apiVersion: apiextensions.crossplane.io/v2
 kind: CompositeResourceDefinition
@@ -37,16 +43,18 @@ spec:
                                   required:
                                       - name
                               nesting:
-                                  description: Allow running VMs or containers inside this VM (security.nesting).
+                                  description: >-
+                                      Allow running VMs or containers inside this VM (security.nesting). Not a setting of a
+                                      profile: the tenant's project does not allow it there.
                                   type: boolean
                                   default: false
                               secureBoot:
                                   description: >-
                                       UEFI secure boot (security.secureboot). Some cloud images do not boot with it
                                       (Incus then refuses to start them: "incompatible with secureboot", seen with
-                                      alpine/3.22/cloud): set it to false for those.
+                                      alpine/3.22/cloud): set it to false for those. Without it, the profile's, and without
+                                      one, true. See status.secureBoot for the value in force.
                                   type: boolean
-                                  default: true
                               profile:
                                   description: >-
                                       Size of the instance: a profile of the tenant (s, m, l, or one the user made), which
@@ -89,7 +97,10 @@ spec:
                                   type: boolean
                                   default: true
                               sshPublicKeys:
-                                  description: Injected with cloud-init, so the image must be a cloud variant (e.g. debian/13/cloud).
+                                  description: >-
+                                      Injected with cloud-init, so the image must be a cloud variant (e.g. debian/13/cloud).
+                                      Keys given here replace the profile's, they do not add to them. Without the field, the
+                                      profile's keys, and without one, none. See status.sshPublicKeys for the keys in force.
                                   type: array
                                   maxItems: 20
                                   items:
@@ -100,7 +111,6 @@ spec:
                                       x-kubernetes-validations:
                                           - rule: "self.matches('^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh[.]com|sk-ecdsa-sha2-nistp256@openssh[.]com) [A-Za-z0-9+/]{16,}={0,3}( [A-Za-z0-9@._+=/-]{1,100})?$')"
                                             message: "each key must be '<type> <base64 key>' with at most a one word comment of letters, digits and @._+=/-"
-                                  default: []
                           x-kubernetes-validations:
                               - rule: "!has(self.profile) || !(has(self.cpu) || has(self.memoryMiB) || has(self.diskGiB))"
                                 message: "give a profile or cpu, memoryMiB and diskGiB, not both"
@@ -118,6 +128,20 @@ spec:
                                   description: What is wrong with the composed resources, empty when everything is up.
                               state:
                                   type: string
+                              nesting:
+                                  description: >-
+                                      Nesting in force: the instance's, false by default.
+                                  type: boolean
+                              secureBoot:
+                                  description: >-
+                                      Secure boot in force: the instance's, else its profile's, else true.
+                                  type: boolean
+                              sshPublicKeys:
+                                  description: >-
+                                      SSH public keys in force: the instance's, else its profile's, else none.
+                                  type: array
+                                  items:
+                                      type: string
                               ipv4:
                                   type: string
                               networks:

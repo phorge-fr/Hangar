@@ -141,15 +141,20 @@ EOF
   else fail "network $n in $t reaches Ready" "$(why networks.phorge.fr "$n" "t-$t")"; return 1; fi
 }
 
-# ensure_profile <tenant> <name> <cpu> <memoryMiB> <diskGiB>: makes a profile of the tenant once, waits for Ready.
+# ensure_profile <tenant> <name> <cpu> <memoryMiB> <diskGiB> [extra spec lines]: makes a profile of the tenant once, waits for Ready.
+# The extra lines (indented by two spaces) are the settings: nesting, secureBoot, sshPublicKeys.
 ensure_profile() {
-  local t=$1 n=$2 cpu=$3 mem=$4 disk=$5
+  local t=$1 n=$2 cpu=$3 mem=$4 disk=$5 extra=${6:-}
   K -n "t-$t" get profiles.phorge.fr "$n" >/dev/null 2>&1 && return 0
   local out; out=$(cat <<EOF | K apply -f - 2>&1
 apiVersion: phorge.fr/v1alpha1
 kind: Profile
 metadata: {name: $n, namespace: t-$t, labels: {$LABEL: "$RUN_ID"}}
-spec: {cpu: $cpu, memoryMiB: $mem, diskGiB: $disk}
+spec:
+  cpu: $cpu
+  memoryMiB: $mem
+  diskGiB: $disk
+${extra:+$extra}
 EOF
 ) || { fail "profile $n in $t is created" "$out"; return 1; }
   if wait_ready profiles.phorge.fr "t-$t" "$n" 240; then pass "profile $n in $t reaches Ready"
