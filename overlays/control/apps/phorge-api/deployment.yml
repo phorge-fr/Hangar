@@ -46,7 +46,7 @@ spec:
                 - name: phorge-api
                   # The release v0.5.0 of phorge-fr/phorge-api. Tag and digest together: the digest is what runs, the tag lets
                   # Renovate see a new release and bump both in one pull request.
-                  image: ghcr.io/phorge-fr/phorge-api:0.14.0@sha256:6753c17fac3eca62a766f5cfc79cc50c67d5f693b419eb7f6241b37e192a713c
+                  image: ghcr.io/phorge-fr/phorge-api:0.15.0@sha256:1e49defa447f79d588468d15b0dc0976fa77365f6ebae5cc6931a4bbd2a932e9
                   imagePullPolicy: IfNotPresent
                   ports:
                       - name: http
@@ -97,9 +97,6 @@ spec:
                         value: "10"
                       # How many images a tenant may hold (an image is a pull of a few hundred megabytes into the shared pool). 0 is no limit.
                       - name: MAX_IMAGES_PER_TENANT
-                        value: "20"
-                      # How many profiles the users of a tenant may make (the three every tenant has do not count). 0 is no limit.
-                      - name: MAX_PROFILES_PER_TENANT
                         value: "20"
                       # How many tenants a person may own: every person signed in creates their own, with the one set of limits. 0 is no limit.
                       - name: MAX_TENANTS_PER_USER
