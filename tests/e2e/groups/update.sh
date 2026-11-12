@@ -1,10 +1,11 @@
 # Changing a live object: the change must reach Incus without recreating anything.
 
 group_update() {
-  ensure_tenant "$TA" medium owner-a@example.org || return
+  ensure_tenant "$TA" owner-a@example.org || return
   local a="t-$TA"
   ensure_image "$TA" deb "$IMG_DEBIAN" e2e-deb || return
-  ensure_instance "$TA" vm1 deb "  cpu: 2
+  # 1 vCPU: the tenant has 2 in all, and the live change below gives vm1 the second one
+  ensure_instance "$TA" vm1 deb "  cpu: 1
   memoryMiB: 1536
   diskGiB: 12" || return
   local inc="instance.instance.incus.m.crossplane.io"
@@ -13,14 +14,15 @@ group_update() {
   K -n phorge-system patch tenants.phorge.fr "$TA" --type merge -p '{"spec":{"displayName":"E2E renamed"}}' >/dev/null
   wait_until 150 "description" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus project get $a user.x; LC_ALL=C incus project show $a' | grep -c 'E2E renamed') -ge 1 ]]"
   match "displayName becomes the project description" 'E2E renamed' "$(INCUS project show "$a")"
+  # The plan is deprecated and ignored: changing it must change no limit, and touch nothing
   K -n phorge-system patch tenants.phorge.fr "$TA" --type merge -p '{"spec":{"plan":"large"}}' >/dev/null
-  wait_until 180 "large limits" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus project get $a limits.cpu') == 8 ]]"
-  check_plan_limits "$a" large
+  sleep 20
+  check_limits "$a" "after the plan is patched to large"
   eq "the tenant stays Ready through the change" True "$(cond tenants.phorge.fr "$TA" phorge-system Ready)"
   eq "the running VM was not touched" Running "$(INCUS list vm1 --project "$a" -f csv -c s | tr 'a-z' 'A-Z' | sed 's/RUNNING/Running/')"
-  K -n phorge-system patch tenants.phorge.fr "$TA" --type merge -p '{"spec":{"plan":"medium"}}' >/dev/null
-  wait_until 180 "medium limits" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus project get $a limits.cpu') == 4 ]]"
-  check_plan_limits "$a" medium
+  K -n phorge-system patch tenants.phorge.fr "$TA" --type merge -p '{"spec":{"plan":"small"}}' >/dev/null
+  sleep 20
+  check_limits "$a" "after the plan is patched back to small"
 
   # The owner is a tuple, which cannot be edited: the change is either applied or refused up front.
   # What must not happen is a Tenant that reads Ready while the old owner is still admin.
@@ -44,9 +46,9 @@ group_update() {
 
   section "update: Instance, live"
   local before; before=$(INCUS config get vm1 volatile.uuid --project "$a")
-  K -n "$a" patch instances.phorge.fr vm1 --type merge -p '{"spec":{"cpu":3,"memoryMiB":2048}}' >/dev/null
-  wait_until 150 "cpu" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus config get vm1 limits.cpu --project $a') == 3 ]]"
-  eq "cpu change reaches Incus" 3 "$(INCUS config get vm1 limits.cpu --project "$a")"
+  K -n "$a" patch instances.phorge.fr vm1 --type merge -p '{"spec":{"cpu":2,"memoryMiB":2048}}' >/dev/null
+  wait_until 150 "cpu" bash -c "[[ \$(ssh -o BatchMode=yes root@$INCUS_HOST 'LC_ALL=C incus config get vm1 limits.cpu --project $a') == 2 ]]"
+  eq "cpu change reaches Incus" 2 "$(INCUS config get vm1 limits.cpu --project "$a")"
   eq "memory change reaches Incus" 2048MiB "$(INCUS config get vm1 limits.memory --project "$a")"
   eq "it is the same VM (same uuid), not a recreation" "$before" "$(INCUS config get vm1 volatile.uuid --project "$a")"
   K -n "$a" patch instances.phorge.fr vm1 --type merge -p '{"spec":{"diskGiB":14}}' >/dev/null

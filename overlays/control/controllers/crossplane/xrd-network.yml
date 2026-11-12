@@ -3,9 +3,11 @@
 # tenant (Instance.spec.network), which is what makes them reachable. The network is NATed on the
 # UPLINK and there is no field to turn that off: a tenant cannot route its own subnet (the project blocks
 # restricted.networks.subnets), and an OVN network without NAT on this uplink is created in the "Errored" state by
-# Incus while Crossplane reads Ready (verified live 2026-11-08). Its address is the user's choice (spec.ipv4), or Incus's
-# when none is given: the provider does not report the range Incus chose, so the status only says an address that was asked for.
-# The tenant's plan limits how many networks there can be.
+# Incus while Crossplane reads Ready (verified live 2026-11-08). Its addresses are the user's choice (spec.ipv4, and the local
+# spec.ipv6), or Incus's when none is given: the provider does not report the range Incus chose, so the status only says an
+# address that was asked for. Both can change in place, which Incus accepts on a network that VMs use; the VMs on it are
+# disturbed (docs/reference/phorge-api-kinds.md says how), so what guards that is the API.
+# A tenant has at most 2 networks (limits.networks in composition-tenant.yml).
 #
 # Lives in the tenant's own namespace ("t-<name>"), the Incus project is that same name.
 apiVersion: apiextensions.crossplane.io/v2
@@ -32,6 +34,13 @@ spec:
                   properties:
                       spec:
                           type: object
+                          # What was given to Incus stays there when the field is taken out (measured: the provider does not unset it,
+                          # and the status would then say "Incus chose"), so a range can be changed and never removed.
+                          x-kubernetes-validations:
+                              - rule: "!has(oldSelf.ipv4) || has(self.ipv4)"
+                                message: "ipv4 cannot be removed once given, give another range or delete the network"
+                              - rule: "!has(oldSelf.ipv6) || has(self.ipv6)"
+                                message: "ipv6 cannot be removed once given, give another range or delete the network"
                           properties:
                               description:
                                   type: string
@@ -43,9 +52,14 @@ spec:
                                       Incus does not refuse two networks on the same range: the API does.
                                   type: string
                                   pattern: '^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])[.]){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])/(1[6-9]|2[0-9])$'
-                                  x-kubernetes-validations:
-                                      - rule: "self == oldSelf"
-                                        message: "ipv4 cannot change: delete the network and make another"
+                              ipv6:
+                                  description: >-
+                                      The local IPv6 range of the network, as the address of the gateway in a unique local
+                                      range (fd00::/8) with a /64 prefix: "fd00:7:8:9::1/64". Without it Incus chooses one. Incus
+                                      accepts any address here, so the form is checked by this rule: a global prefix or another
+                                      prefix length would be taken and break the network.
+                                  type: string
+                                  pattern: '^fd[0-9a-f]{2}:[0-9a-f]{1,4}:[0-9a-f]{1,4}:[0-9a-f]{1,4}::1/64$'
                       status:
                           type: object
                           properties:
@@ -55,3 +69,6 @@ spec:
                               ipv4:
                                   type: string
                                   description: The address that was asked for (spec.ipv4), empty when Incus chose.
+                              ipv6:
+                                  type: string
+                                  description: The IPv6 range that was asked for (spec.ipv6), empty when Incus chose.

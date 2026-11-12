@@ -22,24 +22,29 @@ H64=$(printf 'a%.0s' {1..64})
 group_admission() {
   section "admission: Tenant"
   local ok='  owner: a@b.fr'
-  _t demo "$ok" | accept "minimal tenant"
-  _t demo "$ok
+  # A dry run of an apply merges into the object of the same name when there is one, so a name a real tenant may have
+  # (demo, a1) would collide with it: "owner cannot change", and "no owner" accepted because the real tenant has one.
+  # The names here carry the run id, as the tenants the suite creates do, and none of them is ever created.
+  local td="e2e-$RUN_ID-adm"
+  local t28; t28=$(printf '%-28.28s' "$td" | tr ' ' z)   # 28 characters, the longest name allowed
+  _t "$td" "$ok" | accept "minimal tenant"
+  _t "$td" "$ok
   plan: large
-  displayName: Demo" | accept "tenant with every field"
+  displayName: Demo" | accept "tenant with every field, the deprecated plan included"
   _t a1 "$ok" | accept "2 characters is the shortest name allowed"
-  _t demo "  plan: small" | reject "no owner" 'spec.owner'
-  _t demo "  owner: alice" | reject "owner that is not an email" 'spec.owner'
-  _t demo "  owner: 'a b@c.fr'" | reject "owner with a space" 'spec.owner'
-  _t demo "$ok
-  plan: xl" | reject "unknown plan" 'spec.plan'
-  _t demo "$ok
+  _t "$td" "  plan: small" | reject "no owner" 'spec.owner'
+  _t "$td" "  owner: alice" | reject "owner that is not an email" 'spec.owner'
+  _t "$td" "  owner: 'a b@c.fr'" | reject "owner with a space" 'spec.owner'
+  _t "$td" "$ok
+  plan: xl" | reject "unknown plan (the deprecated field keeps its enum)" 'spec.plan'
+  _t "$td" "$ok
   displayName: $(printf 'x%.0s' {1..101})" | reject "displayName over 100 characters" 'displayName'
   _t "a" "$ok" | reject "1 character name" 'must be 2 to 28'
   _t "1abc" "$ok" | reject "name starting with a digit" 'must be 2 to 28'
   _t "$(printf 'a%.0s' {1..29})" "$ok" | reject "29 characters name" 'must be 2 to 28'
-  _t "$(printf 'a%.0s' {1..28})" "$ok" | accept "28 characters name"
+  _t "$t28" "$ok" | accept "28 characters name"
   _t "Demo" "$ok" | reject "uppercase name" 'RFC 1123|must be'
-  _t demo "$ok" | defaulted "plan defaults to small" '.spec.plan' small
+  _t "$td" "$ok" | defaulted "the deprecated plan still defaults to small, as the API expects" '.spec.plan' small
 
   section "admission: Image"
   _i "  source: {name: debian/13/cloud}" | accept "image with a name only"
@@ -56,9 +61,16 @@ group_admission() {
   _n "  profile: m" | accept "instance with a profile"
   _c | accept "instance with a custom size"
   _c | defaulted "running defaults to true" '.spec.running' true
-  _c | defaulted "nesting defaults to false" '.spec.nesting' false
-  _c | defaulted "secureBoot defaults to true" '.spec.secureBoot' true
-  _c | defaulted "sshPublicKeys default to empty" '.spec.sshPublicKeys | length' 0
+  _c | defaulted "nesting defaults to false: it is the instance's alone, a profile cannot carry it" '.spec.nesting' false
+  # No default for these two: the profile can carry them, and a default written into the object would override it. The
+  # composition applies the defaults, status.secureBoot and status.sshPublicKeys say what is in force.
+  _c | defaulted "secureBoot has no default: the instance did not say" '.spec.secureBoot // "unset"' unset
+  _c | defaulted "sshPublicKeys have no default: the instance did not say" '.spec.sshPublicKeys // "unset"' unset
+  _n "  profile: m
+  secureBoot: true
+  sshPublicKeys: []" | defaulted "what the instance says stays as it is (true, an empty list)" '[.spec.secureBoot, .spec.sshPublicKeys] | tostring' '[true,[]]'
+  _n "  profile: m
+  secureBoot: false" | defaulted "an instance that says false keeps it" '.spec.secureBoot' false
   _n "  profile: m" | defaulted "a profile leaves cpu unset (the profile decides)" '.spec.cpu // "unset"' unset
   _n "  profile: m" | defaulted "a profile leaves memoryMiB unset" '.spec.memoryMiB // "unset"' unset
   _n "  profile: m" | defaulted "a profile leaves diskGiB unset" '.spec.diskGiB // "unset"' unset
@@ -81,7 +93,7 @@ group_admission() {
   _n "  profile: s" | accept "profile s"
   _n "  profile: l" | accept "profile l"
   _n "  profile: team.small_1" | accept "a profile name with a dot, an underscore and a digit"
-  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  profile: m\n' | reject "no network" 'spec.network'
+  printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  profile: m\n' | reject "no network" 'give networks \(or the deprecated network\), one of the two'
   printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  network: ""\n  profile: m\n' | reject "an empty network" 'network'
   printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec:\n  imageRef: {name: i}\n  network: Net\n  profile: m\n' | reject "a network name in uppercase" 'network'
   printf 'apiVersion: phorge.fr/v1alpha1\nkind: Instance\nmetadata: {name: x, namespace: default}\nspec: {profile: m, network: net}\n' | reject "no imageRef" 'imageRef'
@@ -151,6 +163,37 @@ group_admission() {
   cpu: 1
   memoryMiB: 1024
   diskGiB: 10" | reject "a description over 200 characters" 'description'
+  local p3='  cpu: 1
+  memoryMiB: 1024
+  diskGiB: 10'
+  _p web "$p3
+  secureBoot: false
+  sshPublicKeys: ['$k1', '$k2']" | accept "a profile with secure boot and ssh keys"
+  _p web "$p3
+  sshPublicKeys: []" | accept "a profile with an empty list of keys"
+  _p web "$p3" | defaulted "secureBoot has no default on a profile" '.spec.secureBoot // "unset"' unset
+  _p web "$p3" | defaulted "sshPublicKeys have no default on a profile" '.spec.sshPublicKeys // "unset"' unset
+  # Nesting is not offered on a profile: the tenant's projects have restricted.containers.nesting: block and a profile has no
+  # instance type, so Incus refused security.nesting on a profile ("Container nesting is forbidden", measured). It stays a
+  # setting of the Instance, a VM, for which the project allows it. The strict schema refuses the field.
+  _p web "$p3
+  nesting: true" | reject "nesting on a profile: the project blocks it there, it is the instance's" 'unknown field|nesting'
+  _p web "$p3
+  secureBoot: 1" | reject "a secureBoot that is not a boolean" 'secureBoot'
+  _p web "$p3
+  sshPublicKeys: [a, b]" | reject "profile ssh keys that are not keys" 'each key must be'
+  _p web "$p3
+  sshPublicKeys: [\"$k1\\nruncmd: [reboot]\"]" | reject "a profile ssh key with a line break (cloud-init injection)" 'each key must be'
+  _p web "$p3
+  sshPublicKeys: ['$k1 note: x']" | reject "a profile ssh key whose comment has a colon" 'each key must be'
+  _p web "$p3
+  sshPublicKeys: ['$k1 two words']" | reject "a profile ssh key with a two word comment" 'each key must be'
+  _p web "$p3
+  sshPublicKeys: [$(printf "'$k1', %.0s" {1..20})'$k1']" | reject "21 ssh keys in a profile" 'sshPublicKeys'
+  _p web "$p3
+  network: net" | reject "a network in a profile: that is the instance's" 'unknown field|network'
+  _p web "$p3
+  networks: [net]" | reject "networks in a profile" 'unknown field|networks'
 
   section "admission: Network"
   _w net1 | accept "a network with a description"

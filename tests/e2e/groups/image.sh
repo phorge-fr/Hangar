@@ -4,8 +4,8 @@ img_fp() { INCUS image list --project "$1" -f csv -c l,F | grep -F "$2," | cut -
 
 group_image() {
   section "image: pull, fingerprint, aliases"
-  ensure_tenant "$TA" medium owner-a@example.org || return
-  ensure_tenant "$TB" small owner-b@example.org || return
+  ensure_tenant "$TA" owner-a@example.org || return
+  ensure_tenant "$TB" owner-b@example.org || return
   local a="t-$TA" b="t-$TB"
   eq "tenant B has no image before it asks for one" 0 "$(INCUS image list --project "$b" -f csv -c F | grep -c .)"
 
