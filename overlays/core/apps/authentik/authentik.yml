@@ -25,7 +25,7 @@ spec:
             sourceRef:
                 kind: HelmRepository
                 name: authentik
-            version: 2026.8.5
+            version: 2026.8.6
     interval: 1m0s
     timeout: 10m0s
     valuesFrom:
@@ -329,7 +329,7 @@ spec:
                 resourcesPreset: none
                 image:
                     repository: prometheuscommunity/postgres-exporter
-                    tag: v0.20.1
+                    tag: v0.21.1
         redis:
             enabled: true
         additionalObjects: []
