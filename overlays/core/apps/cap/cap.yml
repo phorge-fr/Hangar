@@ -125,7 +125,7 @@ spec:
                 fsGroup: 999
             containers:
                 - name: valkey
-                  image: valkey/valkey:9.1.3-alpine
+                  image: valkey/valkey:9.2.0-alpine
                   # noeviction: a full Valkey refuses writes instead of dropping site keys or tokens
                   args:
                       - valkey-server
