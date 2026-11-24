@@ -90,7 +90,7 @@ spec:
         spec:
             containers:
                 - name: mktxp
-                  image: ghcr.io/akpw/mktxp:2.1.0
+                  image: ghcr.io/akpw/mktxp:2.1.1
                   command:
                       - mktxp
                   args:
