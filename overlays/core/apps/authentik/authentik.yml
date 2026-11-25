@@ -55,7 +55,7 @@ spec:
                 allowInsecureImages: true
             image:
                 repository: ghcr.io/goauthentik/server
-                tag: 2026.8.6
+                tag: 2026.8.7
             addPrometheusAnnotations: false
             env:
                 # The client secret of the provider Crossview OAuth, read by blueprint-crossview.yml (!Env). The same value is in
